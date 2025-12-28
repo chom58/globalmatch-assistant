@@ -5,6 +5,7 @@ GlobalMatch Assistant - 人材紹介業務効率化アプリ
 """
 
 import streamlit as st
+import streamlit.components.v1
 from groq import Groq
 import time
 import re
@@ -14,6 +15,81 @@ from datetime import datetime
 MAX_INPUT_CHARS = 15000  # 最大入力文字数
 MIN_INPUT_CHARS = 100    # 最小入力文字数
 MAX_RETRIES = 3          # API最大リトライ回数
+
+# サンプルデータ
+SAMPLE_RESUME = """John Smith
+Senior Software Engineer
+
+Contact: john.smith@email.com | LinkedIn: linkedin.com/in/johnsmith | GitHub: github.com/jsmith
+Location: San Francisco, CA
+
+SUMMARY
+Experienced software engineer with 7+ years of expertise in building scalable web applications.
+Passionate about clean code and modern development practices. Fluent in Japanese (JLPT N2).
+
+WORK EXPERIENCE
+
+Google - Senior Software Engineer (2020 - Present)
+- Led development of microservices architecture serving 10M+ daily users
+- Reduced API latency by 40% through optimization and caching strategies
+- Mentored 5 junior engineers and conducted 100+ code reviews
+
+Amazon - Software Engineer (2017 - 2020)
+- Built real-time inventory management system using Python and AWS
+- Implemented CI/CD pipeline reducing deployment time by 60%
+- Collaborated with cross-functional teams across 3 time zones
+
+SKILLS
+Languages: Python, JavaScript, TypeScript, Go, Java
+Frameworks: React, Node.js, Django, FastAPI
+Cloud: AWS (certified), GCP, Docker, Kubernetes
+Database: PostgreSQL, MongoDB, Redis
+
+EDUCATION
+Stanford University - M.S. Computer Science (2017)
+UC Berkeley - B.S. Computer Science (2015)
+
+CERTIFICATIONS
+- AWS Solutions Architect Professional
+- Google Cloud Professional Data Engineer
+"""
+
+SAMPLE_JD = """【募集職種】
+バックエンドエンジニア（シニア）
+
+【会社概要】
+当社は2015年設立のFinTechスタートアップです。累計資金調達額50億円、従業員数120名。
+決済プラットフォーム事業を展開し、年間取扱高は1兆円を突破しました。
+
+【業務内容】
+・決済システムの設計・開発・運用
+・マイクロサービスアーキテクチャの構築
+・チームリーダーとして3-5名のメンバーマネジメント
+・技術的な意思決定への参画
+
+【必須スキル】
+・Python, Go, Javaいずれかでの開発経験5年以上
+・大規模システムの設計・開発経験
+・AWSまたはGCPでのインフラ構築経験
+・チームリーダー経験
+
+【歓迎スキル】
+・決済・金融システムの開発経験
+・Kubernetes運用経験
+・英語でのコミュニケーション能力
+
+【待遇】
+・年収：800万円〜1,500万円
+・フレックスタイム制（コアタイム11:00-15:00）
+・リモートワーク可（週2-3日出社）
+・ストックオプション制度あり
+
+【勤務地】
+東京都渋谷区（渋谷駅徒歩5分）
+
+【選考フロー】
+書類選考 → 技術面接 → 最終面接 → オファー
+"""
 
 # ページ設定
 st.set_page_config(
@@ -807,9 +883,20 @@ def main():
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            st.markdown("##### 入力：英語レジュメ")
+            # サンプルデータボタン
+            col_label, col_sample = st.columns([3, 1])
+            with col_label:
+                st.markdown("##### 入力：英語レジュメ")
+            with col_sample:
+                if st.button("📝 サンプル", key="sample_resume", help="サンプルレジュメを挿入"):
+                    st.session_state['sample_resume'] = True
+
+            # サンプルデータの初期値設定
+            default_resume = SAMPLE_RESUME if st.session_state.get('sample_resume') else ""
+
             resume_input = st.text_area(
                 "英語のレジュメをペースト",
+                value=default_resume,
                 height=400,
                 placeholder="Paste the English resume here...\n\nExample:\nJohn Doe\nSoftware Engineer with 5+ years of experience...",
                 label_visibility="collapsed"
@@ -855,11 +942,14 @@ def main():
                     else:
                         with st.spinner("🤖 AIがレジュメを解析・構造化しています..."):
                             try:
+                                start_time = time.time()
                                 prompt = get_resume_optimization_prompt(resume_input, anonymize)
                                 result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
 
                                 st.session_state['resume_result'] = result
-                                st.success("✅ 変換完了！")
+                                st.session_state['resume_time'] = elapsed_time
+                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
 
                             except ValueError as e:
                                 st.error(str(e))
@@ -868,7 +958,25 @@ def main():
 
             # 結果表示
             if 'resume_result' in st.session_state:
-                st.code(st.session_state['resume_result'], language="markdown")
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox("📖 整形表示", value=False, key="resume_formatted",
+                                                  help="Markdownをフォーマットして表示")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_resume", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        # JavaScriptでクリップボードにコピー
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{st.session_state['resume_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted:
+                    st.markdown(st.session_state['resume_result'])
+                else:
+                    st.code(st.session_state['resume_result'], language="markdown")
 
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
@@ -903,9 +1011,20 @@ def main():
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            st.markdown("##### 入力：日本語求人票")
+            # サンプルデータボタン
+            col_label, col_sample = st.columns([3, 1])
+            with col_label:
+                st.markdown("##### 入力：日本語求人票")
+            with col_sample:
+                if st.button("📝 サンプル", key="sample_jd", help="サンプル求人票を挿入"):
+                    st.session_state['sample_jd'] = True
+
+            # サンプルデータの初期値設定
+            default_jd = SAMPLE_JD if st.session_state.get('sample_jd') else ""
+
             jd_input = st.text_area(
                 "日本語の求人票をペースト",
+                value=default_jd,
                 height=400,
                 placeholder="求人票をここに貼り付けてください...\n\n例：\n【募集職種】バックエンドエンジニア\n【業務内容】自社サービスの開発...",
                 label_visibility="collapsed"
@@ -942,11 +1061,14 @@ def main():
                     else:
                         with st.spinner("🤖 AIが求人票を解析・魅力化しています..."):
                             try:
+                                start_time = time.time()
                                 prompt = get_jd_transformation_prompt(jd_input)
                                 result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
 
                                 st.session_state['jd_result'] = result
-                                st.success("✅ 変換完了！")
+                                st.session_state['jd_time'] = elapsed_time
+                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
 
                             except ValueError as e:
                                 st.error(str(e))
@@ -955,7 +1077,24 @@ def main():
 
             # 結果表示
             if 'jd_result' in st.session_state:
-                st.code(st.session_state['jd_result'], language="markdown")
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox("📖 整形表示", value=False, key="jd_formatted",
+                                                  help="Markdownをフォーマットして表示")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_jd", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{st.session_state['jd_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted:
+                    st.markdown(st.session_state['jd_result'])
+                else:
+                    st.code(st.session_state['jd_result'], language="markdown")
 
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
@@ -1051,12 +1190,13 @@ Full-stack Developer...
                 progress_bar = st.progress(0)
                 status_text = st.empty()
 
+                batch_start_time = time.time()
                 results = []
                 for i, resume in enumerate(resumes):
                     status_text.text(f"🔄 処理中... ({i + 1}/{len(resumes)})")
                     progress_bar.progress((i + 1) / len(resumes))
 
-                    result = {"index": i + 1, "status": "pending", "output": None, "error": None}
+                    result = {"index": i + 1, "status": "pending", "output": None, "error": None, "time": 0}
 
                     is_valid, error_msg = validate_input(resume, "resume")
                     if not is_valid:
@@ -1064,10 +1204,12 @@ Full-stack Developer...
                         result["error"] = error_msg
                     else:
                         try:
+                            item_start = time.time()
                             prompt = get_resume_optimization_prompt(resume, batch_anonymize)
                             output = call_groq_api(api_key, prompt)
                             result["status"] = "success"
                             result["output"] = output
+                            result["time"] = time.time() - item_start
                         except Exception as e:
                             result["status"] = "error"
                             result["error"] = str(e)
@@ -1075,8 +1217,10 @@ Full-stack Developer...
                     results.append(result)
                     time.sleep(1)  # レート制限対策
 
+                batch_elapsed = time.time() - batch_start_time
                 st.session_state['batch_results'] = results
-                status_text.text("✅ 処理完了！")
+                st.session_state['batch_time'] = batch_elapsed
+                status_text.text(f"✅ 処理完了！（合計 {batch_elapsed:.1f}秒）")
 
         # バッチ結果表示
         if 'batch_results' in st.session_state:
@@ -1094,9 +1238,26 @@ Full-stack Developer...
 
             # 個別結果
             for result in st.session_state['batch_results']:
-                with st.expander(f"レジュメ #{result['index']} - {'✅ 成功' if result['status'] == 'success' else '❌ エラー'}"):
+                time_str = f"（{result['time']:.1f}秒）" if result['time'] > 0 else ""
+                with st.expander(f"レジュメ #{result['index']} - {'✅ 成功' + time_str if result['status'] == 'success' else '❌ エラー'}"):
                     if result['status'] == 'success':
-                        st.code(result['output'], language="markdown")
+                        # 表示切替とコピーボタン
+                        col_view, col_copy = st.columns([2, 1])
+                        with col_view:
+                            show_formatted = st.checkbox("📖 整形表示", value=False, key=f"batch_fmt_{result['index']}")
+                        with col_copy:
+                            if st.button("📋 コピー", key=f"copy_batch_{result['index']}", use_container_width=True):
+                                st.toast("✅ クリップボードにコピーしました")
+                                st.components.v1.html(f"""
+                                    <script>
+                                    navigator.clipboard.writeText(`{result['output'].replace('`', '\\`').replace('$', '\\$')}`);
+                                    </script>
+                                """, height=0)
+
+                        if show_formatted:
+                            st.markdown(result['output'])
+                        else:
+                            st.code(result['output'], language="markdown")
 
                         # ダウンロードボタン
                         col_b1, col_b2 = st.columns(2)
