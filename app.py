@@ -1034,18 +1034,16 @@ def main():
                 with col_label:
                     st.markdown("##### 入力：英語レジュメ")
                 with col_sample:
-                    if st.button("📝 サンプル", key="sample_resume", help="サンプルレジュメを挿入"):
-                        st.session_state['sample_resume'] = True
+                    if st.button("📝 サンプル", key="sample_resume_btn", help="サンプルレジュメを挿入"):
+                        st.session_state['resume_text_input'] = SAMPLE_RESUME
 
-                # サンプルデータの初期値設定
-                default_resume = SAMPLE_RESUME if st.session_state.get('sample_resume') else ""
-
+                # テキストエリアの値を取得
                 resume_input = st.text_area(
                     "英語のレジュメをペースト",
-                    value=default_resume,
                     height=350,
                     placeholder="Paste the English resume here...\n\nExample:\nJohn Doe\nSoftware Engineer with 5+ years of experience...",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    key="resume_text_input"
                 )
 
             with input_tab2:
@@ -1190,14 +1188,11 @@ def main():
                 with col_label:
                     st.markdown("##### 入力：英語レジュメ")
                 with col_sample:
-                    if st.button("📝 サンプル", key="sample_resume_en", help="サンプルレジュメを挿入"):
-                        st.session_state['sample_resume_en'] = True
-
-                default_resume_en = SAMPLE_RESUME if st.session_state.get('sample_resume_en') else ""
+                    if st.button("📝 サンプル", key="sample_resume_en_btn", help="サンプルレジュメを挿入"):
+                        st.session_state['resume_en_text'] = SAMPLE_RESUME
 
                 resume_en_input = st.text_area(
                     "英語のレジュメをペースト",
-                    value=default_resume_en,
                     height=350,
                     placeholder="Paste the English resume here...",
                     label_visibility="collapsed",
@@ -1341,18 +1336,15 @@ def main():
             with col_label:
                 st.markdown("##### 入力：日本語求人票")
             with col_sample:
-                if st.button("📝 サンプル", key="sample_jd", help="サンプル求人票を挿入"):
-                    st.session_state['sample_jd'] = True
-
-            # サンプルデータの初期値設定
-            default_jd = SAMPLE_JD if st.session_state.get('sample_jd') else ""
+                if st.button("📝 サンプル", key="sample_jd_btn", help="サンプル求人票を挿入"):
+                    st.session_state['jd_text_input'] = SAMPLE_JD
 
             jd_input = st.text_area(
                 "日本語の求人票をペースト",
-                value=default_jd,
                 height=400,
                 placeholder="求人票をここに貼り付けてください...\n\n例：\n【募集職種】バックエンドエンジニア\n【業務内容】自社サービスの開発...",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                key="jd_text_input"
             )
 
             # 文字数カウンター
