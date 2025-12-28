@@ -251,6 +251,68 @@ st.markdown("""
     [data-testid="column"] {
         padding: 0 0.5rem;
     }
+
+    /* レスポンシブ対応 */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding: 1rem 1rem !important;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+        }
+
+        .stTextArea textarea {
+            font-size: 16px; /* iOS ズーム防止 */
+        }
+
+        .stButton > button {
+            padding: 0.5rem 1rem;
+            font-size: 13px;
+        }
+
+        .stDownloadButton > button {
+            font-size: 12px;
+            padding: 0.4rem 0.8rem;
+        }
+
+        [data-testid="column"] {
+            padding: 0 0.25rem;
+        }
+
+        /* 縦並びに変更 */
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap;
+        }
+
+        [data-testid="stHorizontalBlock"] > div {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            margin-bottom: 1rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .main .block-container {
+            padding: 0.75rem 0.75rem !important;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+        }
+
+        .stRadio > div {
+            padding: 0.5rem;
+        }
+
+        .stRadio label {
+            font-size: 13px;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
