@@ -10,11 +10,50 @@ from groq import Groq
 import time
 import re
 from datetime import datetime
+import pdfplumber
+import io
 
 # 定数
 MAX_INPUT_CHARS = 15000  # 最大入力文字数
 MIN_INPUT_CHARS = 100    # 最小入力文字数
 MAX_RETRIES = 3          # API最大リトライ回数
+MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
+
+
+def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
+    """PDFファイルからテキストを抽出
+
+    Returns:
+        tuple: (extracted_text, error_message)
+    """
+    try:
+        # ファイルサイズチェック
+        file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+        if file_size_mb > MAX_PDF_SIZE_MB:
+            return "", f"ファイルサイズが大きすぎます（{file_size_mb:.1f}MB）。{MAX_PDF_SIZE_MB}MB以下にしてください"
+
+        # PDFを読み込み
+        pdf_bytes = io.BytesIO(uploaded_file.getvalue())
+        text_parts = []
+
+        with pdfplumber.open(pdf_bytes) as pdf:
+            if len(pdf.pages) > 20:
+                return "", "ページ数が多すぎます（最大20ページ）"
+
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+
+        extracted_text = "\n\n".join(text_parts)
+
+        if not extracted_text.strip():
+            return "", "PDFからテキストを抽出できませんでした。画像ベースのPDFの可能性があります"
+
+        return extracted_text, ""
+
+    except Exception as e:
+        return "", f"PDF読み込みエラー: {str(e)[:100]}"
 
 # サンプルデータ
 SAMPLE_RESUME = """John Smith
@@ -490,6 +529,103 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 """
 
 
+def get_english_anonymization_prompt(resume_text: str, anonymize: str) -> str:
+    """英文レジュメを英文のまま匿名化するプロンプトを生成"""
+
+    if anonymize == "full":
+        anonymize_instruction = """
+【FULL ANONYMIZATION - REQUIRED】
+You MUST anonymize the following information:
+
+■ Personal Information → Use Initials
+- Full name → Convert to initials (e.g., John Smith → J.S., Maria Garcia → M.G.)
+- Email address → Do not include
+- Phone number → Do not include
+- Address → State/Country only (e.g., "California, USA" or "Tokyo, Japan")
+- LinkedIn, GitHub, Portfolio, Social media URLs → Do not include
+
+■ Company Information → Use Industry/Size Description
+- Specific company names → Convert to industry + size (e.g., "Google" → "Major US Tech Company", "Toyota" → "Leading Japanese Automotive Corporation")
+- Startups → "[Industry] Startup" (e.g., "FinTech Startup", "AI/ML Startup")
+- Consulting firms → "Global Consulting Firm", "Big 4 Consulting"
+- Specific product names → Generic descriptions (e.g., "Gmail" → "Large-scale Email Platform")
+
+■ Project Information → Generalize
+- Specific product names → "Large-scale E-commerce Platform", "Mobile Banking App", etc.
+- Client names → "Major Retail Client", "Fortune 500 Financial Services Company", etc.
+- Project codes or internal names → Remove
+
+■ Education
+- University names → "Top US University", "Prestigious Engineering School", "Ivy League University", etc.
+- Certification IDs/numbers → Remove (keep certification names)
+"""
+    elif anonymize == "light":
+        anonymize_instruction = """
+【LIGHT ANONYMIZATION - REQUIRED】
+Only anonymize personal contact information (keep company names):
+
+- Full name → Convert to initials (e.g., John Smith → J.S.)
+- Email address → Do not include
+- Phone number → Do not include
+- Detailed address → Keep only city/state level
+- LinkedIn, GitHub, Social media URLs → Do not include
+
+※ Keep company names, university names, and project names as-is.
+"""
+    else:
+        anonymize_instruction = "【NO ANONYMIZATION】Keep all information as-is."
+
+    return f"""You are an expert HR consultant.
+Anonymize the following English resume while keeping it in English and maintaining a professional format.
+
+{anonymize_instruction}
+
+【OUTPUT FORMAT - STRICTLY FOLLOW】
+Maintain the resume in English with this standardized structure:
+
+---
+
+## 1. Basic Information
+{"- Name: (Initials only, e.g., J.S.)\n- Contact: [Confidential]\n- Location: (State/Country only)" if anonymize in ["full", "light"] else "- Name:\n- Contact:\n- Location:"}
+
+## 2. Professional Summary
+*(2-3 sentences highlighting key qualifications and strengths)*
+
+## 3. Technical Skills
+| Category | Skills |
+|----------|--------|
+| Programming Languages | |
+| Frameworks & Libraries | |
+| Databases | |
+| Cloud & Infrastructure | |
+| Tools & Others | |
+
+## 4. Work Experience
+*(Most recent first)*
+
+### [Company Description] (Period: MMM YYYY – MMM YYYY)
+**Position/Role**
+
+**Key Responsibilities & Achievements:**
+- (Specific achievements with metrics where available)
+- (Impact and results)
+
+## 5. Education
+- **Degree** - [University Description], Year
+
+## 6. Certifications
+- Certification names (without ID numbers)
+
+---
+
+【INPUT RESUME】
+{resume_text}
+
+Parse the above resume and output in the specified format in English.
+Mark unknown items as "Not specified" or "To be confirmed".
+"""
+
+
 def get_jd_transformation_prompt(jd_text: str) -> str:
     """求人票変換用のプロンプトを生成"""
 
@@ -851,6 +987,7 @@ def main():
             "変換モードを選択",
             options=[
                 "レジュメ最適化（英→日）",
+                "レジュメ匿名化（英→英）",
                 "求人票魅力化（日→英）",
                 "📦 バッチ処理（複数レジュメ）"
             ],
@@ -864,9 +1001,14 @@ def main():
         with st.expander("📖 使い方"):
             st.markdown("""
             **レジュメ最適化（英→日）**
-            1. 英語のレジュメをペースト
+            1. 英語のレジュメをペーストまたはPDFをアップロード
             2. 匿名化オプションを設定
             3. 「変換実行」をクリック
+
+            **レジュメ匿名化（英→英）**
+            1. 英語のレジュメをペーストまたはPDFをアップロード
+            2. 匿名化レベルを選択
+            3. 英語のまま匿名化されたレジュメを取得
 
             **求人票魅力化（日→英）**
             1. 日本語の求人票をペースト
@@ -883,24 +1025,52 @@ def main():
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            # サンプルデータボタン
-            col_label, col_sample = st.columns([3, 1])
-            with col_label:
-                st.markdown("##### 入力：英語レジュメ")
-            with col_sample:
-                if st.button("📝 サンプル", key="sample_resume", help="サンプルレジュメを挿入"):
-                    st.session_state['sample_resume'] = True
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
-            # サンプルデータの初期値設定
-            default_resume = SAMPLE_RESUME if st.session_state.get('sample_resume') else ""
+            with input_tab1:
+                # サンプルデータボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("##### 入力：英語レジュメ")
+                with col_sample:
+                    if st.button("📝 サンプル", key="sample_resume", help="サンプルレジュメを挿入"):
+                        st.session_state['sample_resume'] = True
 
-            resume_input = st.text_area(
-                "英語のレジュメをペースト",
-                value=default_resume,
-                height=400,
-                placeholder="Paste the English resume here...\n\nExample:\nJohn Doe\nSoftware Engineer with 5+ years of experience...",
-                label_visibility="collapsed"
-            )
+                # サンプルデータの初期値設定
+                default_resume = SAMPLE_RESUME if st.session_state.get('sample_resume') else ""
+
+                resume_input = st.text_area(
+                    "英語のレジュメをペースト",
+                    value=default_resume,
+                    height=350,
+                    placeholder="Paste the English resume here...\n\nExample:\nJohn Doe\nSoftware Engineer with 5+ years of experience...",
+                    label_visibility="collapsed"
+                )
+
+            with input_tab2:
+                st.markdown("##### PDFをアップロード")
+                uploaded_pdf = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="resume_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_pdf:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text, error = extract_text_from_pdf(uploaded_pdf)
+                        if error:
+                            st.error(f"❌ {error}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                            resume_input = extracted_text
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text[:2000] + ("..." if len(extracted_text) > 2000 else ""))
+                else:
+                    # PDFがない場合はテキスト入力を使用
+                    if 'resume_input' not in dir():
+                        resume_input = ""
 
             # 文字数カウンター
             char_count = len(resume_input) if resume_input else 0
@@ -1001,6 +1171,161 @@ def main():
                         data=html_content,
                         file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
+                        help="ブラウザで開いて印刷→PDF保存"
+                    )
+
+    elif feature == "レジュメ匿名化（英→英）":
+        st.subheader("🔒 レジュメ匿名化（英語 → 英語）")
+        st.caption("英語レジュメを英語のまま匿名化します。海外クライアントへの提出に最適")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+
+            with input_tab1:
+                # サンプルデータボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("##### 入力：英語レジュメ")
+                with col_sample:
+                    if st.button("📝 サンプル", key="sample_resume_en", help="サンプルレジュメを挿入"):
+                        st.session_state['sample_resume_en'] = True
+
+                default_resume_en = SAMPLE_RESUME if st.session_state.get('sample_resume_en') else ""
+
+                resume_en_input = st.text_area(
+                    "英語のレジュメをペースト",
+                    value=default_resume_en,
+                    height=350,
+                    placeholder="Paste the English resume here...",
+                    label_visibility="collapsed",
+                    key="resume_en_text"
+                )
+
+            with input_tab2:
+                st.markdown("##### PDFをアップロード")
+                uploaded_pdf_en = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="resume_en_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_pdf_en:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text_en, error_en = extract_text_from_pdf(uploaded_pdf_en)
+                        if error_en:
+                            st.error(f"❌ {error_en}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text_en):,}文字）")
+                            resume_en_input = extracted_text_en
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text_en[:2000] + ("..." if len(extracted_text_en) > 2000 else ""))
+                else:
+                    if 'resume_en_input' not in dir():
+                        resume_en_input = ""
+
+            # 文字数カウンター
+            char_count_en = len(resume_en_input) if resume_en_input else 0
+            if char_count_en > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count_en:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+            elif char_count_en > 0:
+                st.caption(f"📊 {char_count_en:,} / {MAX_INPUT_CHARS:,} 文字")
+
+            anonymize_en = st.radio(
+                "🔒 匿名化レベル",
+                options=["full", "light"],
+                format_func=lambda x: {
+                    "full": "完全匿名化（個人情報＋企業名＋プロジェクト）",
+                    "light": "軽度匿名化（個人情報のみ）"
+                }[x],
+                index=0,
+                key="anonymize_en",
+                help="完全：企業名・大学名も業界表現に変換 / 軽度：氏名・連絡先のみ匿名化"
+            )
+
+            process_en_btn = st.button(
+                "🔄 匿名化実行",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not resume_en_input,
+                key="process_en_btn"
+            )
+
+        with col2:
+            st.markdown("##### 出力：匿名化された英語レジュメ")
+
+            if process_en_btn:
+                if not api_key:
+                    st.error("❌ APIキーを入力してください")
+                else:
+                    is_valid_en, error_msg_en = validate_input(resume_en_input, "resume")
+                    if not is_valid_en:
+                        st.warning(f"⚠️ {error_msg_en}")
+                    else:
+                        with st.spinner("🤖 AIがレジュメを匿名化しています..."):
+                            try:
+                                start_time = time.time()
+                                prompt = get_english_anonymization_prompt(resume_en_input, anonymize_en)
+                                result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
+
+                                st.session_state['resume_en_result'] = result
+                                st.session_state['resume_en_time'] = elapsed_time
+                                st.success(f"✅ 匿名化完了！（{elapsed_time:.1f}秒）")
+
+                            except ValueError as e:
+                                st.error(str(e))
+                            except Exception as e:
+                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+
+            # 結果表示
+            if 'resume_en_result' in st.session_state:
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted_en = st.checkbox("📖 整形表示", value=False, key="resume_en_formatted")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_resume_en", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{st.session_state['resume_en_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted_en:
+                    st.markdown(st.session_state['resume_en_result'])
+                else:
+                    st.code(st.session_state['resume_en_result'], language="markdown")
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['resume_en_result'],
+                        file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="en_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        "📝 テキスト",
+                        data=st.session_state['resume_en_result'],
+                        file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="en_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['resume_en_result'], "Anonymized Resume")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="en_html",
                         help="ブラウザで開いて印刷→PDF保存"
                     )
 
