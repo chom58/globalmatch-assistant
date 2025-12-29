@@ -146,48 +146,199 @@ def get_shared_resume(share_id: str) -> dict | None:
 
 
 def show_shared_view(share_id: str):
-    """共有されたレジュメを表示"""
-    st.markdown("# 🌏 GlobalMatch Assistant")
-    st.markdown("*共有されたレジュメ*")
-    st.divider()
+    """共有されたレジュメを表示（スタイリング版）"""
+    import streamlit.components.v1 as components
 
     resume = get_shared_resume(share_id)
     if not resume:
+        st.markdown("# 🌏 GlobalMatch Assistant")
         st.error("❌ このリンクは無効か、有効期限が切れています")
         st.info("💡 共有リンクの有効期限は7日間です")
         return
 
-    st.markdown(f"### 📄 {resume.get('title', 'Anonymized Resume')}")
-
-    # 有効期限表示
+    # 有効期限・閲覧数
     expires_at = resume.get('expires_at', '')[:10]
     view_count = resume.get('view_count', 0)
-    st.caption(f"有効期限: {expires_at} | 閲覧数: {view_count}")
+    title = resume.get('title', '候補者レジュメ')
+    content = resume.get('content', '')
 
-    st.divider()
+    # スタイリングされたHTMLを生成
+    styled_html = generate_shared_html(content, title, expires_at, view_count)
 
-    # コンテンツ表示
-    st.markdown(resume.get('content', ''))
-
-    st.divider()
+    # フルページHTMLとして表示
+    components.html(styled_html, height=800, scrolling=True)
 
     # ダウンロードボタン
+    st.divider()
     col1, col2 = st.columns(2)
     with col1:
         st.download_button(
             "📄 Markdownでダウンロード",
-            resume.get('content', ''),
+            content,
             f"resume_{share_id[:8]}.md",
             "text/markdown"
         )
     with col2:
-        html_content = generate_html(resume.get('content', ''), resume.get('title', 'Resume'))
+        html_content = generate_html(content, title)
         st.download_button(
             "🌐 HTMLでダウンロード",
             html_content,
             f"resume_{share_id[:8]}.html",
             "text/html"
         )
+
+
+def generate_shared_html(content: str, title: str, expires_at: str, view_count: int) -> str:
+    """共有ビュー用のスタイリングされたHTMLを生成"""
+
+    # MarkdownをHTMLに変換
+    html_content = content
+
+    # 見出し変換
+    html_content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
+    html_content = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
+    html_content = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
+
+    # 太字・斜体
+    html_content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_content)
+    html_content = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html_content)
+
+    # リスト
+    html_content = re.sub(r'^- (.+)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
+
+    # テーブル変換
+    def convert_table(match):
+        rows = match.group(0).strip().split('\n')
+        html_rows = []
+        for i, row in enumerate(rows):
+            cells = [c.strip() for c in row.split('|') if c.strip()]
+            if not cells or all(c.replace('-', '') == '' for c in cells):
+                continue
+            tag = 'th' if i == 0 else 'td'
+            html_cells = ''.join(f'<{tag}>{cell}</{tag}>' for cell in cells)
+            html_rows.append(f'<tr>{html_cells}</tr>')
+        return '<table>' + ''.join(html_rows) + '</table>' if html_rows else ''
+
+    html_content = re.sub(r'(\|.+\|[\n])+', convert_table, html_content)
+
+    # 段落
+    html_content = re.sub(r'\n\n+', '</p><p>', html_content)
+    html_content = f'<p>{html_content}</p>'
+    html_content = re.sub(r'<p>\s*</p>', '', html_content)
+
+    return f'''<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #333;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }}
+        .container {{
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+            color: white;
+            padding: 25px 30px;
+            text-align: center;
+        }}
+        .header h1 {{
+            font-size: 22px;
+            margin-bottom: 8px;
+        }}
+        .header .meta {{
+            font-size: 12px;
+            opacity: 0.8;
+        }}
+        .badge {{
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            margin: 0 5px;
+        }}
+        .content {{
+            padding: 30px;
+        }}
+        h2 {{
+            font-size: 16px;
+            color: #1e3a5f;
+            background: #f0f4f8;
+            padding: 10px 15px;
+            margin: 25px 0 15px 0;
+            border-left: 4px solid #1e3a5f;
+            border-radius: 0 8px 8px 0;
+        }}
+        h3 {{
+            font-size: 14px;
+            color: #374151;
+            margin: 18px 0 10px 0;
+            padding-left: 12px;
+            border-left: 3px solid #ddd;
+        }}
+        p {{ margin: 10px 0; }}
+        li {{ margin: 6px 0; margin-left: 20px; }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        th, td {{
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            text-align: left;
+        }}
+        th {{
+            background: #1e3a5f;
+            color: white;
+            font-weight: 600;
+        }}
+        tr:nth-child(even) {{ background: #f9fafb; }}
+        strong {{ color: #1e3a5f; }}
+        .footer {{
+            background: #f8fafc;
+            padding: 15px 30px;
+            text-align: center;
+            font-size: 11px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌏 {title}</h1>
+            <div class="meta">
+                <span class="badge">📅 有効期限: {expires_at}</span>
+                <span class="badge">👁 閲覧数: {view_count}</span>
+            </div>
+        </div>
+        <div class="content">
+            {html_content}
+        </div>
+        <div class="footer">
+            Powered by GlobalMatch Assistant
+        </div>
+    </div>
+</body>
+</html>'''
 
 
 # サンプルデータ
