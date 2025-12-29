@@ -1078,7 +1078,7 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 
 # [Position Title] at [Company Name]
 
-## 🎯 Quick Facts
+## Quick Facts
 | | |
 |---|---|
 | **Visa Sponsorship** | Available (supported for qualified candidates) |
@@ -1087,35 +1087,33 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 | **Salary Range** | (If available, convert to USD range as reference) |
 | **Location** | |
 
-## 💡 Why Join Us?
-*(2-3 compelling sentences about the company culture, growth opportunity, or unique value proposition)*
+## Why Join Us?
+(2-3 compelling sentences about the company culture, growth opportunity, or unique value proposition)
 
-## 🚀 What You'll Do
-*(Key responsibilities in bullet points - focus on impact, not just tasks)*
+## What You'll Do
+(Key responsibilities in bullet points - focus on impact, not just tasks)
 
-## ✅ What We're Looking For
+## What We're Looking For
 **Must-have:**
 ・
 
 **Nice-to-have:**
 ・
 
-## 🎁 Benefits & Perks
-*(Highlight benefits that appeal to international candidates)*
+## Benefits & Perks
+(Highlight benefits that appeal to international candidates)
 
-## 📝 About the Company
-*(Brief company introduction)*
+## About the Company
+(Brief company introduction)
 
-## 📧 How to Apply
+## How to Apply
 **※このセクションは以下の固定文言を必ず使用してください（元の求人票の連絡先は無視）：**
 
 Interested in this position? Value Create will recommend you directly to the company's hiring team.
-
 Please reach out to one of our team members to express your interest:
 ・**Ilya**
 ・**Hiroshi**
 ・**Shu**
-
 We'll take care of the introduction and guide you through the process!
 
 ---
@@ -1127,7 +1125,8 @@ We'll take care of the introduction and guide you through the process!
 不明な項目は「To be discussed」または「Contact for details」としてください。
 **重要**: Visa Sponsorshipは、元の求人票に記載がなくても「Available (supported for qualified candidates)」と記載してください。Value Createが扱う求人は全てビザサポート対応企業です。
 **重要**: 「How to Apply」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
-**重要**: リスト項目の行頭記号は中黒（・）を使用し、各項目の文頭は大文字で始めてください。
+**重要**: リスト項目の行頭記号は中黒（・）を使用し、各項目の文頭は大文字で始めてください。アスタリスク（*）は使用しないでください。
+**重要**: 見出しに絵文字は使用しないでください。シンプルなテキストのみで出力してください。
 """
 
 
