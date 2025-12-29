@@ -1111,10 +1111,16 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 *(Brief company introduction)*
 
 ## 📧 How to Apply
-Interested? Please contact our Value Create team:
-- **Ilya**, **Hiroshi**, or **Shu**
+**※このセクションは以下の固定文言を必ず使用してください（元の求人票の連絡先は無視）：**
 
-We'll guide you through the application process and answer any questions about the role.
+Interested in this position? Value Create will recommend you directly to the company's hiring team.
+
+Please reach out to one of our team members to express your interest:
+- **Ilya**
+- **Hiroshi**
+- **Shu**
+
+We'll take care of the introduction and guide you through the process!
 
 ---
 
@@ -1124,6 +1130,7 @@ We'll guide you through the application process and answer any questions about t
 上記を解析し、外国人エンジニアに魅力的な英語JDに変換してください。
 不明な項目は「To be discussed」または「Contact for details」としてください。
 ビザサポートが明記されていない場合は「Please inquire」と記載してください。
+**重要**: 「How to Apply」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
 """
 
 
