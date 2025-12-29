@@ -1111,7 +1111,10 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 *(Brief company introduction)*
 
 ## 📧 How to Apply
-*(Application process)*
+Interested? Please contact our Value Create team:
+- **Ilya**, **Hiroshi**, or **Shu**
+
+We'll guide you through the application process and answer any questions about the role.
 
 ---
 
