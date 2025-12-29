@@ -1167,7 +1167,7 @@ def main():
 
         with col1:
             # 入力方法タブ
-            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+            input_tab1, input_tab2, input_tab3 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み", "🔗 LinkedIn"])
 
             with input_tab1:
                 # サンプルデータボタン
@@ -1210,6 +1210,30 @@ def main():
                     # PDFがない場合はテキスト入力を使用
                     if 'resume_input' not in dir():
                         resume_input = ""
+
+            with input_tab3:
+                st.markdown("##### LinkedInプロフィールをコピペ")
+                st.info("💡 LinkedInページを開き、プロフィール全体をコピーして貼り付けてください")
+
+                with st.expander("📖 コピー方法", expanded=False):
+                    st.markdown("""
+                    1. LinkedInでプロフィールページを開く
+                    2. `Ctrl+A`（Mac: `Cmd+A`）で全選択
+                    3. `Ctrl+C`（Mac: `Cmd+C`）でコピー
+                    4. 下のテキストエリアに貼り付け
+                    """)
+
+                linkedin_input = st.text_area(
+                    "LinkedInプロフィールをペースト",
+                    height=300,
+                    placeholder="LinkedInプロフィールページのテキストを貼り付けてください...\n\n例:\nJohn Smith\nSenior Software Engineer at Google\nSan Francisco Bay Area\n\nAbout\nExperienced software engineer with 7+ years...",
+                    label_visibility="collapsed",
+                    key="linkedin_text_input"
+                )
+
+                if linkedin_input:
+                    resume_input = linkedin_input
+                    st.success(f"✅ LinkedInテキスト読み込み完了（{len(linkedin_input):,}文字）")
 
             # 文字数カウンター
             char_count = len(resume_input) if resume_input else 0
@@ -1343,7 +1367,7 @@ def main():
 
         with col1:
             # 入力方法タブ
-            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+            input_tab1, input_tab2, input_tab3 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み", "🔗 LinkedIn"])
 
             with input_tab1:
                 # サンプルデータボタン
@@ -1384,6 +1408,30 @@ def main():
                 else:
                     if 'resume_en_input' not in dir():
                         resume_en_input = ""
+
+            with input_tab3:
+                st.markdown("##### LinkedInプロフィールをコピペ")
+                st.info("💡 LinkedInページを開き、プロフィール全体をコピーして貼り付けてください")
+
+                with st.expander("📖 コピー方法", expanded=False):
+                    st.markdown("""
+                    1. LinkedInでプロフィールページを開く
+                    2. `Ctrl+A`（Mac: `Cmd+A`）で全選択
+                    3. `Ctrl+C`（Mac: `Cmd+C`）でコピー
+                    4. 下のテキストエリアに貼り付け
+                    """)
+
+                linkedin_en_input = st.text_area(
+                    "LinkedInプロフィールをペースト",
+                    height=300,
+                    placeholder="LinkedInプロフィールページのテキストを貼り付けてください...",
+                    label_visibility="collapsed",
+                    key="linkedin_en_text"
+                )
+
+                if linkedin_en_input:
+                    resume_en_input = linkedin_en_input
+                    st.success(f"✅ LinkedInテキスト読み込み完了（{len(linkedin_en_input):,}文字）")
 
             # 文字数カウンター
             char_count_en = len(resume_en_input) if resume_en_input else 0
