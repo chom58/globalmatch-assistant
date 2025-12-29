@@ -98,7 +98,7 @@ def create_share_link(content: str, title: str = "Anonymized Resume") -> str | N
         return None
 
     share_id = secrets.token_urlsafe(24)  # 32文字のランダムID
-    expires_at = datetime.now() + timedelta(days=7)
+    expires_at = datetime.now() + timedelta(days=30)
 
     try:
         client.table("shared_resumes").insert({
@@ -153,7 +153,7 @@ def show_shared_view(share_id: str):
     if not resume:
         st.markdown("# 🌏 GlobalMatch Assistant")
         st.error("❌ このリンクは無効か、有効期限が切れています")
-        st.info("💡 共有リンクの有効期限は7日間です")
+        st.info("💡 共有リンクの有効期限は1ヶ月です")
         return
 
     # 有効期限・閲覧数
@@ -478,10 +478,6 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
     <div class="resume-container">
         <header class="resume-header">
             <h1>{title}</h1>
-            <div class="meta-info">
-                <span class="meta-badge">📅 有効期限: {expires_at}</span>
-                <span class="meta-badge">👁 閲覧数: {view_count}</span>
-            </div>
         </header>
 
         <main class="resume-content">
@@ -1654,7 +1650,7 @@ def main():
                 # 共有リンク作成ボタン
                 if get_supabase_client():
                     st.divider()
-                    if st.button("🔗 共有リンク作成", key="share_resume_jp", help="7日間有効の共有リンクを作成"):
+                    if st.button("🔗 共有リンク作成", key="share_resume_jp", help="1ヶ月有効の共有リンクを作成"):
                         with st.spinner("共有リンクを作成中..."):
                             share_id = create_share_link(
                                 st.session_state['resume_result'],
@@ -1667,7 +1663,7 @@ def main():
                             except KeyError:
                                 base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
                             share_url = f"{base_url}/?share={share_id}"
-                            st.success("✅ 共有リンクを作成しました（7日間有効）")
+                            st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
                             st.info("💡 上のURLをコピーしてクライアントに共有してください")
                         else:
@@ -1852,7 +1848,7 @@ def main():
                 # 共有リンク作成ボタン
                 if get_supabase_client():
                     st.divider()
-                    if st.button("🔗 共有リンク作成", key="share_resume_en", help="7日間有効の共有リンクを作成"):
+                    if st.button("🔗 共有リンク作成", key="share_resume_en", help="1ヶ月有効の共有リンクを作成"):
                         with st.spinner("共有リンクを作成中..."):
                             share_id = create_share_link(
                                 st.session_state['resume_en_result'],
@@ -1864,7 +1860,7 @@ def main():
                             except KeyError:
                                 base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
                             share_url = f"{base_url}/?share={share_id}"
-                            st.success("✅ 共有リンクを作成しました（7日間有効）")
+                            st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
                             st.info("💡 上のURLをコピーしてクライアントに共有してください")
                         else:
@@ -1991,7 +1987,7 @@ def main():
                 # 共有リンク作成ボタン
                 if get_supabase_client():
                     st.divider()
-                    if st.button("🔗 共有リンク作成", key="share_jd", help="7日間有効の共有リンクを作成"):
+                    if st.button("🔗 共有リンク作成", key="share_jd", help="1ヶ月有効の共有リンクを作成"):
                         with st.spinner("共有リンクを作成中..."):
                             share_id = create_share_link(
                                 st.session_state['jd_result'],
@@ -2003,7 +1999,7 @@ def main():
                             except KeyError:
                                 base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
                             share_url = f"{base_url}/?share={share_id}"
-                            st.success("✅ 共有リンクを作成しました（7日間有効）")
+                            st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
                             st.info("💡 上のURLをコピーしてクライアントに共有してください")
                         else:
