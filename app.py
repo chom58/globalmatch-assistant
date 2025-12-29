@@ -347,9 +347,10 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
         }}
 
         /* ===== リスト ===== */
-        ul {{
-            list-style: none;
+        ul, ol {{
+            list-style: none !important;
             margin: 12px 0;
+            padding: 0;
         }}
 
         li {{
@@ -357,6 +358,7 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
             padding-left: 20px;
             margin: 10px 0;
             color: var(--text-main);
+            list-style: none !important;
         }}
 
         li::before {{
@@ -368,6 +370,10 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
             height: 6px;
             background: var(--accent);
             border-radius: 50%;
+        }}
+
+        li::marker {{
+            content: none;
         }}
 
         /* ===== テーブル（スキルセット用） ===== */
