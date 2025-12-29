@@ -488,9 +488,6 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
             {html_content}
         </main>
 
-        <footer class="resume-footer">
-            GlobalMatch Assistant により作成
-        </footer>
     </div>
 </body>
 </html>'''
