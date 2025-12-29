@@ -12,6 +12,15 @@ import re
 from datetime import datetime
 import pdfplumber
 import io
+import secrets
+from datetime import timedelta
+
+# Supabase設定（オプション）
+try:
+    from supabase import create_client, Client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
 
 # 定数
 MAX_INPUT_CHARS = 15000  # 最大入力文字数
@@ -54,6 +63,132 @@ def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
 
     except Exception as e:
         return "", f"PDF読み込みエラー: {str(e)[:100]}"
+
+
+# ========================================
+# Supabase URL共有機能
+# ========================================
+
+def get_supabase_client():
+    """Supabaseクライアントを取得"""
+    if not SUPABASE_AVAILABLE:
+        return None
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_ANON_KEY"]
+        if url and key:
+            return create_client(url, key)
+    except (KeyError, Exception):
+        pass
+    return None
+
+
+def create_share_link(content: str, title: str = "Anonymized Resume") -> str | None:
+    """共有リンクを作成
+
+    Args:
+        content: 共有するコンテンツ（Markdown形式）
+        title: タイトル
+
+    Returns:
+        share_id: 共有ID（32文字）、失敗時はNone
+    """
+    client = get_supabase_client()
+    if not client:
+        return None
+
+    share_id = secrets.token_urlsafe(24)  # 32文字のランダムID
+    expires_at = datetime.now() + timedelta(days=7)
+
+    try:
+        client.table("shared_resumes").insert({
+            "id": share_id,
+            "content": content,
+            "title": title,
+            "expires_at": expires_at.isoformat()
+        }).execute()
+        return share_id
+    except Exception:
+        return None
+
+
+def get_shared_resume(share_id: str) -> dict | None:
+    """共有されたレジュメを取得
+
+    Args:
+        share_id: 共有ID
+
+    Returns:
+        dict: レジュメデータ、見つからない場合はNone
+    """
+    client = get_supabase_client()
+    if not client:
+        return None
+
+    try:
+        result = client.table("shared_resumes")\
+            .select("*")\
+            .eq("id", share_id)\
+            .gt("expires_at", datetime.now().isoformat())\
+            .single()\
+            .execute()
+
+        # 閲覧カウント更新
+        if result.data:
+            client.table("shared_resumes")\
+                .update({"view_count": result.data.get("view_count", 0) + 1})\
+                .eq("id", share_id)\
+                .execute()
+
+        return result.data
+    except Exception:
+        return None
+
+
+def show_shared_view(share_id: str):
+    """共有されたレジュメを表示"""
+    st.markdown("# 🌏 GlobalMatch Assistant")
+    st.markdown("*共有されたレジュメ*")
+    st.divider()
+
+    resume = get_shared_resume(share_id)
+    if not resume:
+        st.error("❌ このリンクは無効か、有効期限が切れています")
+        st.info("💡 共有リンクの有効期限は7日間です")
+        return
+
+    st.markdown(f"### 📄 {resume.get('title', 'Anonymized Resume')}")
+
+    # 有効期限表示
+    expires_at = resume.get('expires_at', '')[:10]
+    view_count = resume.get('view_count', 0)
+    st.caption(f"有効期限: {expires_at} | 閲覧数: {view_count}")
+
+    st.divider()
+
+    # コンテンツ表示
+    st.markdown(resume.get('content', ''))
+
+    st.divider()
+
+    # ダウンロードボタン
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "📄 Markdownでダウンロード",
+            resume.get('content', ''),
+            f"resume_{share_id[:8]}.md",
+            "text/markdown"
+        )
+    with col2:
+        html_content = generate_html(resume.get('content', ''), resume.get('title', 'Resume'))
+        st.download_button(
+            "🌐 HTMLでダウンロード",
+            html_content,
+            f"resume_{share_id[:8]}.html",
+            "text/html"
+        )
+
 
 # サンプルデータ
 SAMPLE_RESUME = """John Smith
@@ -953,6 +1088,12 @@ def process_batch_resumes(api_key: str, resumes: list[str], anonymize: str) -> l
 def main():
     """メインアプリケーション"""
 
+    # URLパラメータで共有IDがあれば共有ビューを表示
+    share_id = st.query_params.get("share")
+    if share_id:
+        show_shared_view(share_id)
+        return  # 通常のUIは表示しない
+
     # ヘッダー
     st.markdown("# 🌏 GlobalMatch Assistant")
     st.markdown("*外国人エンジニア × 日本企業をつなぐ人材紹介業務効率化ツール*")
@@ -1172,6 +1313,28 @@ def main():
                         help="ブラウザで開いて印刷→PDF保存"
                     )
 
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 共有リンク作成", key="share_resume_jp", help="7日間有効の共有リンクを作成"):
+                        with st.spinner("共有リンクを作成中..."):
+                            share_id = create_share_link(
+                                st.session_state['resume_result'],
+                                "候補者レジュメ（匿名化済み）"
+                            )
+                        if share_id:
+                            # アプリのベースURLを取得
+                            try:
+                                base_url = st.secrets["APP_URL"]
+                            except KeyError:
+                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ 共有リンクを作成しました（7日間有効）")
+                            st.code(share_url)
+                            st.info("💡 上のURLをコピーしてクライアントに共有してください")
+                        else:
+                            st.error("❌ 共有リンクの作成に失敗しました")
+
     elif feature == "レジュメ匿名化（英→英）":
         st.subheader("🔒 レジュメ匿名化（英語 → 英語）")
         st.caption("英語レジュメを英語のまま匿名化します。海外クライアントへの提出に最適")
@@ -1324,6 +1487,27 @@ def main():
                         help="ブラウザで開いて印刷→PDF保存"
                     )
 
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 共有リンク作成", key="share_resume_en", help="7日間有効の共有リンクを作成"):
+                        with st.spinner("共有リンクを作成中..."):
+                            share_id = create_share_link(
+                                st.session_state['resume_en_result'],
+                                "Anonymized Resume"
+                            )
+                        if share_id:
+                            try:
+                                base_url = st.secrets["APP_URL"]
+                            except KeyError:
+                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ 共有リンクを作成しました（7日間有効）")
+                            st.code(share_url)
+                            st.info("💡 上のURLをコピーしてクライアントに共有してください")
+                        else:
+                            st.error("❌ 共有リンクの作成に失敗しました")
+
     elif feature == "求人票魅力化（日→英）":
         st.subheader("📋 求人票魅力化（日本語 → 英語）")
         st.caption("日本企業の求人票を、外国人エンジニアに魅力的な英語JDに変換します")
@@ -1441,6 +1625,27 @@ def main():
                         key="jd_html",
                         help="ブラウザで開いて印刷→PDF保存"
                     )
+
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 共有リンク作成", key="share_jd", help="7日間有効の共有リンクを作成"):
+                        with st.spinner("共有リンクを作成中..."):
+                            share_id = create_share_link(
+                                st.session_state['jd_result'],
+                                "Job Description"
+                            )
+                        if share_id:
+                            try:
+                                base_url = st.secrets["APP_URL"]
+                            except KeyError:
+                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ 共有リンクを作成しました（7日間有効）")
+                            st.code(share_url)
+                            st.info("💡 上のURLをコピーしてクライアントに共有してください")
+                        else:
+                            st.error("❌ 共有リンクの作成に失敗しました")
 
     else:  # バッチ処理
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
