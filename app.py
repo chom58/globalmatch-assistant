@@ -189,7 +189,7 @@ def show_shared_view(share_id: str):
 
 
 def generate_shared_html(content: str, title: str, expires_at: str, view_count: int) -> str:
-    """共有ビュー用のスタイリングされたHTMLを生成"""
+    """共有ビュー用のスタイリングされたHTMLを生成（Human & Trust デザイン）"""
 
     # MarkdownをHTMLに変換
     html_content = content
@@ -230,112 +230,261 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        /* ===== Reset & Base ===== */
+        *, *::before, *::after {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        /* ===== カラーパレット（Human & Trust） ===== */
+        :root {{
+            --bg-page: #F9F8F4;
+            --bg-card: #FFFFFF;
+            --text-main: #333333;
+            --text-sub: #666666;
+            --accent: #5B7C73;
+            --accent-light: #E8EFED;
+            --border: #E0E0E0;
+            --shadow: rgba(0, 0, 0, 0.05);
+        }}
+
         body {{
-            font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
-            font-size: 14px;
-            line-height: 1.8;
-            color: #333;
-            padding: 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: "Noto Sans JP", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", sans-serif;
+            font-size: 15px;
+            line-height: 1.75;
+            color: var(--text-main);
+            background-color: var(--bg-page);
+            padding: 40px 20px;
             min-height: 100vh;
         }}
-        .container {{
+
+        /* ===== メインコンテナ（紙のメタファー） ===== */
+        .resume-container {{
             max-width: 800px;
             margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: var(--bg-card);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px var(--shadow);
             overflow: hidden;
         }}
-        .header {{
-            background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
-            color: white;
-            padding: 25px 30px;
+
+        /* ===== ヘッダー ===== */
+        .resume-header {{
+            padding: 40px;
+            border-bottom: 1px solid var(--border);
             text-align: center;
         }}
-        .header h1 {{
-            font-size: 22px;
-            margin-bottom: 8px;
+
+        .resume-header h1 {{
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 16px;
+            letter-spacing: 0.02em;
         }}
-        .header .meta {{
-            font-size: 12px;
-            opacity: 0.8;
+
+        .meta-info {{
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
         }}
-        .badge {{
-            display: inline-block;
-            background: rgba(255,255,255,0.2);
-            padding: 4px 12px;
+
+        .meta-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--accent-light);
+            color: var(--accent);
             border-radius: 20px;
-            font-size: 11px;
-            margin: 0 5px;
+            font-size: 13px;
+            font-weight: 500;
         }}
-        .content {{
-            padding: 30px;
+
+        /* ===== コンテンツエリア ===== */
+        .resume-content {{
+            padding: 40px;
         }}
+
+        /* ===== セクション見出し ===== */
         h2 {{
-            font-size: 16px;
-            color: #1e3a5f;
-            background: #f0f4f8;
-            padding: 10px 15px;
-            margin: 25px 0 15px 0;
-            border-left: 4px solid #1e3a5f;
-            border-radius: 0 8px 8px 0;
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--accent);
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent);
+            letter-spacing: 0.03em;
         }}
+
+        h2:first-child {{
+            margin-top: 0;
+        }}
+
         h3 {{
-            font-size: 14px;
-            color: #374151;
-            margin: 18px 0 10px 0;
-            padding-left: 12px;
-            border-left: 3px solid #ddd;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin: 28px 0 12px 0;
+            padding-left: 14px;
+            border-left: 3px solid var(--accent);
         }}
-        p {{ margin: 10px 0; }}
-        li {{ margin: 6px 0; margin-left: 20px; }}
+
+        /* ===== テキスト ===== */
+        p {{
+            margin: 12px 0;
+            color: var(--text-main);
+        }}
+
+        strong {{
+            color: var(--accent);
+            font-weight: 600;
+        }}
+
+        /* ===== リスト ===== */
+        ul {{
+            list-style: none;
+            margin: 12px 0;
+        }}
+
+        li {{
+            position: relative;
+            padding-left: 20px;
+            margin: 10px 0;
+            color: var(--text-main);
+        }}
+
+        li::before {{
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 10px;
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+        }}
+
+        /* ===== テーブル（スキルセット用） ===== */
         table {{
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
+            margin: 20px 0;
             border-radius: 8px;
             overflow: hidden;
+            border: 1px solid var(--border);
         }}
+
         th, td {{
-            border: 1px solid #e5e7eb;
-            padding: 12px;
+            padding: 14px 16px;
             text-align: left;
+            border-bottom: 1px solid var(--border);
         }}
+
         th {{
-            background: #1e3a5f;
-            color: white;
+            background: var(--accent-light);
+            color: var(--accent);
             font-weight: 600;
+            font-size: 14px;
         }}
-        tr:nth-child(even) {{ background: #f9fafb; }}
-        strong {{ color: #1e3a5f; }}
-        .footer {{
-            background: #f8fafc;
-            padding: 15px 30px;
+
+        td {{
+            background: var(--bg-card);
+            color: var(--text-main);
+        }}
+
+        tr:last-child td {{
+            border-bottom: none;
+        }}
+
+        tr:nth-child(even) td {{
+            background: #FAFAFA;
+        }}
+
+        /* ===== フッター ===== */
+        .resume-footer {{
+            padding: 20px 40px;
+            background: var(--bg-page);
             text-align: center;
-            font-size: 11px;
-            color: #6b7280;
-            border-top: 1px solid #e5e7eb;
+            font-size: 12px;
+            color: var(--text-sub);
+            border-top: 1px solid var(--border);
+        }}
+
+        /* ===== レスポンシブ対応 ===== */
+        @media screen and (max-width: 600px) {{
+            body {{
+                padding: 20px 12px;
+            }}
+            .resume-header,
+            .resume-content {{
+                padding: 28px 20px;
+            }}
+            .meta-info {{
+                flex-direction: column;
+                gap: 10px;
+            }}
+            h2 {{
+                font-size: 16px;
+                margin: 32px 0 16px 0;
+            }}
+            table {{
+                font-size: 13px;
+            }}
+            th, td {{
+                padding: 10px 12px;
+            }}
+        }}
+
+        /* ===== 印刷用スタイル ===== */
+        @media print {{
+            body {{
+                background: white;
+                padding: 0;
+            }}
+            .resume-container {{
+                box-shadow: none;
+                border-radius: 0;
+            }}
+            .resume-header,
+            .resume-content {{
+                padding: 30px;
+            }}
+            .meta-badge {{
+                background: #f0f0f0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
+            h2 {{
+                border-bottom-color: var(--accent);
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
         }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🌏 {title}</h1>
-            <div class="meta">
-                <span class="badge">📅 有効期限: {expires_at}</span>
-                <span class="badge">👁 閲覧数: {view_count}</span>
+    <div class="resume-container">
+        <header class="resume-header">
+            <h1>{title}</h1>
+            <div class="meta-info">
+                <span class="meta-badge">📅 有効期限: {expires_at}</span>
+                <span class="meta-badge">👁 閲覧数: {view_count}</span>
             </div>
-        </div>
-        <div class="content">
+        </header>
+
+        <main class="resume-content">
             {html_content}
-        </div>
-        <div class="footer">
-            Powered by GlobalMatch Assistant
-        </div>
+        </main>
+
+        <footer class="resume-footer">
+            GlobalMatch Assistant により作成
+        </footer>
     </div>
 </body>
 </html>'''
