@@ -1099,10 +1099,10 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 
 ## ✅ What We're Looking For
 **Must-have:**
--
+・
 
 **Nice-to-have:**
--
+・
 
 ## 🎁 Benefits & Perks
 *(Highlight benefits that appeal to international candidates)*
@@ -1116,9 +1116,9 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 Interested in this position? Value Create will recommend you directly to the company's hiring team.
 
 Please reach out to one of our team members to express your interest:
-- **Ilya**
-- **Hiroshi**
-- **Shu**
+・**Ilya**
+・**Hiroshi**
+・**Shu**
 
 We'll take care of the introduction and guide you through the process!
 
@@ -1131,6 +1131,7 @@ We'll take care of the introduction and guide you through the process!
 不明な項目は「To be discussed」または「Contact for details」としてください。
 **重要**: Visa Sponsorshipは、元の求人票に記載がなくても「✅ Available (supported for qualified candidates)」と記載してください。Value Createが扱う求人は全てビザサポート対応企業です。
 **重要**: 「How to Apply」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
+**重要**: リスト項目の行頭記号は中黒（・）を使用し、各項目の文頭は大文字で始めてください。
 """
 
 
