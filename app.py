@@ -1085,7 +1085,7 @@ def get_jd_transformation_prompt(jd_text: str) -> str:
 ## 🎯 Quick Facts
 | | |
 |---|---|
-| **Visa Sponsorship** | ✅ Available (supported for qualified candidates) |
+| **Visa Sponsorship** | Available (supported for qualified candidates) |
 | **Remote Work** | (Full Remote/Hybrid/On-site - specify policy) |
 | **Language Requirements** | (English OK/Japanese N2+/Bilingual environment) |
 | **Salary Range** | (If available, convert to USD range as reference) |
@@ -1129,7 +1129,7 @@ We'll take care of the introduction and guide you through the process!
 
 上記を解析し、外国人エンジニアに魅力的な英語JDに変換してください。
 不明な項目は「To be discussed」または「Contact for details」としてください。
-**重要**: Visa Sponsorshipは、元の求人票に記載がなくても「✅ Available (supported for qualified candidates)」と記載してください。Value Createが扱う求人は全てビザサポート対応企業です。
+**重要**: Visa Sponsorshipは、元の求人票に記載がなくても「Available (supported for qualified candidates)」と記載してください。Value Createが扱う求人は全てビザサポート対応企業です。
 **重要**: 「How to Apply」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
 **重要**: リスト項目の行頭記号は中黒（・）を使用し、各項目の文頭は大文字で始めてください。
 """
