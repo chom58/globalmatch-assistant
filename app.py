@@ -253,7 +253,7 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
         }}
 
         body {{
-            font-family: "Noto Sans JP", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", sans-serif;
+            font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", "Noto Sans JP", sans-serif;
             font-size: 15px;
             line-height: 1.75;
             color: var(--text-main);
@@ -1618,7 +1618,14 @@ def main():
                 if show_formatted:
                     st.markdown(st.session_state['resume_result'])
                 else:
-                    st.code(st.session_state['resume_result'], language="markdown")
+                    # 編集可能なテキストエリア
+                    edited_result = st.text_area(
+                        "出力結果（編集可能）",
+                        value=st.session_state['resume_result'],
+                        height=400,
+                        key="edit_resume_result_jp"
+                    )
+                    st.session_state['resume_result'] = edited_result
 
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
@@ -1813,7 +1820,14 @@ def main():
                 if show_formatted_en:
                     st.markdown(st.session_state['resume_en_result'])
                 else:
-                    st.code(st.session_state['resume_en_result'], language="markdown")
+                    # 編集可能なテキストエリア
+                    edited_result_en = st.text_area(
+                        "Output (Editable)",
+                        value=st.session_state['resume_en_result'],
+                        height=400,
+                        key="edit_resume_result_en"
+                    )
+                    st.session_state['resume_en_result'] = edited_result_en
 
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
@@ -1952,7 +1966,14 @@ def main():
                 if show_formatted:
                     st.markdown(st.session_state['jd_result'])
                 else:
-                    st.code(st.session_state['jd_result'], language="markdown")
+                    # 編集可能なテキストエリア
+                    edited_jd_result = st.text_area(
+                        "Output (Editable)",
+                        value=st.session_state['jd_result'],
+                        height=400,
+                        key="edit_jd_result"
+                    )
+                    st.session_state['jd_result'] = edited_jd_result
 
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
