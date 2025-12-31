@@ -2234,21 +2234,49 @@ def main():
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            # サンプルデータボタン
-            col_label, col_sample = st.columns([3, 1])
-            with col_label:
-                st.markdown("##### 入力：英語求人票")
-            with col_sample:
-                if st.button("📝 サンプル", key="sample_jd_en_btn", help="サンプル英語求人票を挿入"):
-                    st.session_state['jd_en_text_input'] = SAMPLE_JD_EN
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
-            jd_en_input = st.text_area(
-                "英語の求人票をペースト",
-                height=400,
-                placeholder="Paste the English job description here...\n\nExample:\nSenior Software Engineer\n\nAbout the role:\nWe are looking for...",
-                label_visibility="collapsed",
-                key="jd_en_text_input"
-            )
+            jd_en_input = ""
+
+            with input_tab1:
+                # サンプルデータボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("##### 入力：英語求人票")
+                with col_sample:
+                    if st.button("📝 サンプル", key="sample_jd_en_btn", help="サンプル英語求人票を挿入"):
+                        st.session_state['jd_en_text_input'] = SAMPLE_JD_EN
+
+                jd_en_text = st.text_area(
+                    "英語の求人票をペースト",
+                    height=350,
+                    placeholder="Paste the English job description here...\n\nExample:\nSenior Software Engineer\n\nAbout the role:\nWe are looking for...",
+                    label_visibility="collapsed",
+                    key="jd_en_text_input"
+                )
+                if jd_en_text:
+                    jd_en_input = jd_en_text
+
+            with input_tab2:
+                st.markdown("##### 求人票PDFをアップロード")
+                uploaded_jd_en_pdf = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="jd_en_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_jd_en_pdf:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text, error = extract_text_from_pdf(uploaded_jd_en_pdf)
+                        if error:
+                            st.error(f"❌ {error}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                            jd_en_input = extracted_text
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text[:2000] + ("..." if len(extracted_text) > 2000 else ""))
 
             # 文字数カウンター
             char_count = len(jd_en_input) if jd_en_input else 0
