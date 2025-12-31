@@ -564,6 +564,54 @@ SAMPLE_JD = """【募集職種】
 書類選考 → 技術面接 → 最終面接 → オファー
 """
 
+SAMPLE_JD_EN = """Senior Backend Engineer
+
+About the Company:
+TechFlow Inc. is a fast-growing SaaS company based in San Francisco, California. Founded in 2018, we've raised $50M in Series B funding and serve over 500 enterprise customers globally. Our platform helps companies streamline their workflow automation.
+
+Location: San Francisco, CA (Hybrid - 2 days in office)
+Salary Range: $180,000 - $250,000 + equity
+Employment Type: Full-time
+
+About the Role:
+We're looking for a Senior Backend Engineer to join our Core Platform team. You'll be responsible for building and scaling our infrastructure that processes millions of workflow executions daily.
+
+Responsibilities:
+- Design and implement scalable microservices using Go and Python
+- Lead technical architecture decisions for new features
+- Mentor junior engineers and conduct code reviews
+- Collaborate with product and design teams on feature development
+- Participate in on-call rotation for production systems
+
+Requirements:
+- 5+ years of backend engineering experience
+- Strong proficiency in Go, Python, or similar languages
+- Experience with distributed systems and microservices
+- Familiarity with AWS/GCP and containerization (Docker, Kubernetes)
+- Excellent communication skills
+
+Nice to have:
+- Experience with event-driven architectures (Kafka, RabbitMQ)
+- Previous experience at a high-growth startup
+- Open source contributions
+
+Benefits:
+- Competitive salary + equity package
+- Health, dental, and vision insurance (100% covered)
+- Unlimited PTO policy
+- $2,000 annual learning budget
+- Home office setup allowance
+- 401(k) matching
+
+Interview Process:
+1. Phone screen with recruiter (30 min)
+2. Technical phone interview (60 min)
+3. Virtual onsite (4 hours)
+4. Final conversation with hiring manager
+
+Apply at: careers@techflow.io
+"""
+
 # ページ設定
 st.set_page_config(
     page_title="GlobalMatch Assistant",
@@ -1061,7 +1109,7 @@ Mark unknown items as "Not specified" or "To be confirmed".
 
 
 def get_jd_transformation_prompt(jd_text: str) -> str:
-    """求人票変換用のプロンプトを生成"""
+    """求人票変換用のプロンプトを生成（日本語→英語）"""
 
     return f"""あなたは外国人エンジニア採用に精通したリクルーターです。
 日本企業の求人票（JD）を、海外のエンジニアにとって魅力的な英語の求人票に変換してください。
@@ -1130,6 +1178,141 @@ We'll take care of the introduction and guide you through the process!
 """
 
 
+def get_jd_en_to_jp_prompt(jd_text: str) -> str:
+    """求人票変換用のプロンプトを生成（英語→日本語）"""
+
+    return f"""あなたは人材紹介のエキスパートコンサルタントです。
+海外企業や外資系企業の英語求人票（Job Description）を、日本人エンジニアにとって分かりやすく魅力的な日本語の求人票に変換してください。
+
+【変換のポイント】
+1. **情報の整理**: 日本の求人票フォーマットに合わせて構造化
+2. **トーンの調整**: 自然な日本語表現で、親しみやすく魅力的に
+3. **重要情報の明確化**: 勤務条件、待遇、技術スタックを分かりやすく
+
+【出力フォーマット】
+以下の構造で出力してください：
+
+---
+
+# [会社名] - [職種名]
+
+## 概要
+| 項目 | 内容 |
+|------|------|
+| **勤務形態** | （フルリモート/ハイブリッド/出社） |
+| **勤務地** | |
+| **雇用形態** | （正社員/契約社員など） |
+| **想定年収** | （円換算の目安も併記） |
+| **英語力** | （必須/あれば尚可/不要） |
+
+## 会社について
+（会社の事業内容、規模、特徴を2-3文で）
+
+## 仕事内容
+（具体的な業務内容を箇条書きで）
+・
+・
+
+## 必須スキル・経験
+・
+・
+
+## 歓迎スキル・経験
+・
+・
+
+## 技術スタック
+| カテゴリ | 技術 |
+|---------|------|
+| 言語 | |
+| フレームワーク | |
+| インフラ | |
+| ツール | |
+
+## 福利厚生・働き方
+・
+・
+
+## 選考プロセス
+（記載があれば）
+
+## 応募方法
+**※このセクションは以下の固定文言を必ず使用してください（元の求人票の連絡先は無視）：**
+
+この求人に興味がある方は、Value Createが直接企業へ推薦いたします。
+以下のチームメンバーまでお気軽にご連絡ください：
+・**Ilya（イリヤ）**
+・**Hiroshi（ヒロシ）**
+・**Shu（シュウ）**
+面談調整から選考サポートまで、一貫してお手伝いいたします！
+
+---
+
+【元の求人票（英語）】
+{jd_text}
+
+上記を解析し、日本人エンジニアに分かりやすい日本語求人票に変換してください。
+不明な項目は「要確認」または「詳細はお問い合わせください」としてください。
+**重要**: 給与がUSDなどの外貨の場合は、参考として日本円換算も併記してください（1USD≒150円目安）。
+**重要**: 「応募方法」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
+**重要**: リスト項目の行頭記号は中黒（・）を使用してください。アスタリスク（*）は使用しないでください。
+**重要**: 見出しに絵文字は使用しないでください。シンプルなテキストのみで出力してください。
+"""
+
+
+def get_company_intro_prompt(company_text: str) -> str:
+    """会社紹介資料から企業紹介文を生成するプロンプト"""
+
+    return f"""あなたは人材紹介会社のエキスパートコンサルタントです。
+会社紹介資料（PDF等から抽出したテキスト）を読み取り、求職者に向けた簡潔で魅力的な企業紹介文を作成してください。
+
+【作成のポイント】
+1. **簡潔さ**: 長くても500文字程度に要約
+2. **魅力的な表現**: 求職者が興味を持つポイントを強調
+3. **事実ベース**: 資料に記載された情報のみを使用
+
+【出力フォーマット】
+以下の構造で出力してください：
+
+---
+
+## 企業概要
+
+### 基本情報
+| 項目 | 内容 |
+|------|------|
+| 会社名 | |
+| 設立 | |
+| 従業員数 | |
+| 本社所在地 | |
+| 事業内容 | |
+
+### 企業の特徴・強み
+（2-3つの箇条書きで、会社の特徴や魅力を記載）
+・
+・
+
+### こんな方におすすめ
+（どんなタイプの求職者に向いているか）
+・
+・
+
+### 紹介文（求職者向け）
+（150-200文字程度の簡潔な紹介文）
+
+---
+
+【会社紹介資料の内容】
+{company_text}
+
+上記の資料を解析し、求職者向けの企業紹介文を作成してください。
+資料に記載がない項目は「資料に記載なし」としてください。
+**重要**: リスト項目の行頭記号は中黒（・）を使用してください。
+**重要**: 見出しに絵文字は使用しないでください。
+**重要**: 誇張や推測は避け、資料の内容に基づいた正確な情報のみを記載してください。
+"""
+
+
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     """入力テキストのバリデーション"""
 
@@ -1153,6 +1336,13 @@ def validate_input(text: str, input_type: str) -> tuple[bool, str]:
         keywords = ["募集", "業務", "必須", "歓迎", "待遇", "給与", "仕事", "職種", "応募"]
         if not any(kw in text for kw in keywords):
             return False, "求人票として認識できません。日本語の求人票を入力してください"
+    elif input_type == "jd_en":
+        keywords = ["job", "position", "role", "responsibilities", "requirements", "salary", "benefits", "experience", "engineer", "developer"]
+        if not any(kw in text.lower() for kw in keywords):
+            return False, "求人票として認識できません。英語の求人票を入力してください"
+    elif input_type == "company":
+        # 会社紹介は最低限のテキストがあれば通す
+        pass
 
     return True, ""
 
@@ -1439,6 +1629,8 @@ def main():
                 "レジュメ最適化（英→日）",
                 "レジュメ匿名化（英→英）",
                 "求人票魅力化（日→英）",
+                "求人票翻訳（英→日）",
+                "企業紹介文作成（PDF）",
                 "📦 バッチ処理（複数レジュメ）"
             ],
             index=0,
@@ -1463,6 +1655,16 @@ def main():
             **求人票魅力化（日→英）**
             1. 日本語の求人票をペースト
             2. 「変換実行」をクリック
+
+            **求人票翻訳（英→日）**
+            1. 英語の求人票をペースト
+            2. 「変換実行」をクリック
+            3. 日本人エンジニア向けに最適化
+
+            **企業紹介文作成（PDF）**
+            1. 会社紹介PDFをアップロード
+            2. 「紹介文作成」をクリック
+            3. 求職者向けの簡潔な企業紹介文を取得
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
             """)
@@ -2025,7 +2227,299 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
-    else:  # バッチ処理
+    elif feature == "求人票翻訳（英→日）":
+        st.subheader("📋 求人票翻訳（英語 → 日本語）")
+        st.caption("海外企業・外資系の英語求人票を、日本人エンジニア向けに最適化された日本語JDに変換します")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # サンプルデータボタン
+            col_label, col_sample = st.columns([3, 1])
+            with col_label:
+                st.markdown("##### 入力：英語求人票")
+            with col_sample:
+                if st.button("📝 サンプル", key="sample_jd_en_btn", help="サンプル英語求人票を挿入"):
+                    st.session_state['jd_en_text_input'] = SAMPLE_JD_EN
+
+            jd_en_input = st.text_area(
+                "英語の求人票をペースト",
+                height=400,
+                placeholder="Paste the English job description here...\n\nExample:\nSenior Software Engineer\n\nAbout the role:\nWe are looking for...",
+                label_visibility="collapsed",
+                key="jd_en_text_input"
+            )
+
+            # 文字数カウンター
+            char_count = len(jd_en_input) if jd_en_input else 0
+            if char_count > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+            elif char_count > 0:
+                st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字")
+
+            st.info("💡 給与がUSD等の外貨の場合、自動で円換算目安も併記されます")
+
+            process_btn = st.button(
+                "🔄 変換実行",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not jd_en_input,
+                key="jd_en_btn"
+            )
+
+        with col2:
+            st.markdown("##### 出力：日本人エンジニア向け求人票")
+
+            if process_btn:
+                if not api_key:
+                    st.error("❌ APIキーを入力してください")
+                else:
+                    # 入力バリデーション
+                    is_valid, error_msg = validate_input(jd_en_input, "jd_en")
+                    if not is_valid:
+                        st.warning(f"⚠️ {error_msg}")
+                    else:
+                        with st.spinner("🤖 AIが求人票を解析・翻訳しています..."):
+                            try:
+                                start_time = time.time()
+                                prompt = get_jd_en_to_jp_prompt(jd_en_input)
+                                result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
+
+                                st.session_state['jd_en_result'] = result
+                                st.session_state['jd_en_time'] = elapsed_time
+                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+
+                            except ValueError as e:
+                                st.error(str(e))
+                            except Exception as e:
+                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+
+            # 結果表示
+            if 'jd_en_result' in st.session_state:
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox("📖 整形表示", value=False, key="jd_en_formatted",
+                                                  help="Markdownをフォーマットして表示")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_jd_en", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{st.session_state['jd_en_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted:
+                    st.markdown(st.session_state['jd_en_result'])
+                else:
+                    # 編集可能なテキストエリア
+                    edited_jd_en_result = st.text_area(
+                        "出力結果（編集可能）",
+                        value=st.session_state['jd_en_result'],
+                        height=400,
+                        key="edit_jd_en_result"
+                    )
+                    st.session_state['jd_en_result'] = edited_jd_en_result
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['jd_en_result'],
+                        file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="jd_en_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        "📝 テキスト",
+                        data=st.session_state['jd_en_result'],
+                        file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="jd_en_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['jd_en_result'], "求人票")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="jd_en_html",
+                        help="ブラウザで開いて印刷→PDF保存"
+                    )
+
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 共有リンク作成", key="share_jd_en", help="1ヶ月有効の共有リンクを作成"):
+                        with st.spinner("共有リンクを作成中..."):
+                            share_id = create_share_link(
+                                st.session_state['jd_en_result'],
+                                "求人票"
+                            )
+                        if share_id:
+                            try:
+                                base_url = st.secrets["APP_URL"]
+                            except KeyError:
+                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
+                            st.code(share_url)
+                            st.info("💡 上のURLをコピーしてクライアントに共有してください")
+                        else:
+                            st.error("❌ 共有リンクの作成に失敗しました")
+
+    elif feature == "企業紹介文作成（PDF）":
+        st.subheader("🏢 企業紹介文作成（PDF読み取り）")
+        st.caption("会社紹介資料（PDF）から求職者向けの簡潔な企業紹介文を自動生成します")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📄 PDF読み込み", "📝 テキスト入力"])
+
+            company_input = ""
+
+            with input_tab1:
+                st.markdown("##### 会社紹介PDFをアップロード")
+                uploaded_company_pdf = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="company_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_company_pdf:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text, error = extract_text_from_pdf(uploaded_company_pdf)
+                        if error:
+                            st.error(f"❌ {error}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                            company_input = extracted_text
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text[:3000] + ("..." if len(extracted_text) > 3000 else ""))
+
+            with input_tab2:
+                st.markdown("##### 会社紹介テキストをペースト")
+                company_text_input = st.text_area(
+                    "会社紹介テキストをペースト",
+                    height=350,
+                    placeholder="会社紹介資料のテキストを貼り付けてください...\n\n例：\n会社名：株式会社〇〇\n設立：2015年\n事業内容：...",
+                    label_visibility="collapsed",
+                    key="company_text_input"
+                )
+                if company_text_input:
+                    company_input = company_text_input
+
+            # 文字数カウンター
+            char_count = len(company_input) if company_input else 0
+            if char_count > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+            elif char_count > 0:
+                st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字")
+
+            st.info("💡 会社概要、事業内容、強みなどが含まれたPDFが理想的です")
+
+            process_btn = st.button(
+                "🔄 紹介文作成",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not company_input,
+                key="company_btn"
+            )
+
+        with col2:
+            st.markdown("##### 出力：求職者向け企業紹介文")
+
+            if process_btn:
+                if not api_key:
+                    st.error("❌ APIキーを入力してください")
+                else:
+                    # 入力バリデーション
+                    is_valid, error_msg = validate_input(company_input, "company")
+                    if not is_valid:
+                        st.warning(f"⚠️ {error_msg}")
+                    else:
+                        with st.spinner("🤖 AIが会社紹介資料を解析しています..."):
+                            try:
+                                start_time = time.time()
+                                prompt = get_company_intro_prompt(company_input)
+                                result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
+
+                                st.session_state['company_result'] = result
+                                st.session_state['company_time'] = elapsed_time
+                                st.success(f"✅ 作成完了！（{elapsed_time:.1f}秒）")
+
+                            except ValueError as e:
+                                st.error(str(e))
+                            except Exception as e:
+                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+
+            # 結果表示
+            if 'company_result' in st.session_state:
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox("📖 整形表示", value=False, key="company_formatted",
+                                                  help="Markdownをフォーマットして表示")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_company", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{st.session_state['company_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted:
+                    st.markdown(st.session_state['company_result'])
+                else:
+                    # 編集可能なテキストエリア
+                    edited_company_result = st.text_area(
+                        "出力結果（編集可能）",
+                        value=st.session_state['company_result'],
+                        height=400,
+                        key="edit_company_result"
+                    )
+                    st.session_state['company_result'] = edited_company_result
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['company_result'],
+                        file_name=f"company_intro_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="company_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        "📝 テキスト",
+                        data=st.session_state['company_result'],
+                        file_name=f"company_intro_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="company_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['company_result'], "企業紹介")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"company_intro_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="company_html",
+                        help="ブラウザで開いて印刷→PDF保存"
+                    )
+
+    elif feature == "📦 バッチ処理（複数レジュメ）":
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
         st.caption("複数の英語レジュメを一括で日本語に変換します。区切り文字で分割してください。")
 
