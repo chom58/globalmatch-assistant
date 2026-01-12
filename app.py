@@ -1576,6 +1576,151 @@ def get_translate_to_japanese_prompt(english_text: str) -> str:
 """
 
 
+def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_text: str, language: str = "ja") -> str:
+    """匿名提案資料生成用のプロンプトを生成"""
+
+    if language == "ja":
+        return f"""あなたは人材紹介のプロフェッショナルです。
+以下のマッチング分析結果とレジュメ、求人票から、企業向けの**匿名候補者提案資料**を作成してください。
+
+【入力情報】
+■ マッチング分析結果:
+{matching_result}
+
+■ レジュメ:
+{resume_text}
+
+■ 求人票:
+{jd_text}
+
+---
+
+【出力フォーマット】※厳密に従ってください
+
+# 候補者提案資料
+
+## 1. Catch Copy（30文字以内）
+候補者の最大の魅力を一言で表現するキャッチコピー
+
+例：「AWS経験5年のフルスタックエンジニア」
+例：「AIプロダクト開発をリードする機械学習エキスパート」
+
+---
+
+## 2. Summary（200文字程度）
+候補者の全体像を簡潔にまとめた概要
+- 総エンジニア経験年数
+- 専門領域・得意分野
+- 主な開発実績
+- 言語能力
+
+---
+
+## 3. Strength（200文字程度）
+この求人に対する候補者の強み・アピールポイント
+- 求人要件に対してマッチする具体的なスキル
+- 特に優れている技術・経験
+- 実績や成果（数値があれば記載）
+
+---
+
+## 4. Education / Research（200文字程度）
+学歴・研究実績・資格
+- 最終学歴（大学・専攻）
+- 研究テーマ（ある場合）
+- 関連資格
+- 技術的なバックグラウンド
+
+---
+
+## 5. Assessment（200文字程度）
+総合評価とコメント
+- マッチング度の総合評価
+- 推薦理由
+- 留意点やギャップ（あれば）
+- 面接時の確認ポイント
+
+---
+
+【重要な注意事項】
+1. **完全匿名化**: 氏名、企業名、固有名詞は一切記載しない
+2. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは30文字、他は200文字程度）
+3. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
+4. **客観性**: 事実に基づいた評価を行う
+5. **簡潔性**: 要点を絞って分かりやすく記載
+"""
+    else:  # English
+        return f"""You are a professional recruitment consultant.
+Create an **anonymous candidate proposal document** for the client company based on the matching analysis result, resume, and job description below.
+
+【Input Information】
+■ Matching Analysis Result:
+{matching_result}
+
+■ Resume:
+{resume_text}
+
+■ Job Description:
+{jd_text}
+
+---
+
+【Output Format】※Strictly follow this format
+
+# Candidate Proposal
+
+## 1. Catch Copy (within 30 characters)
+A one-line catchphrase expressing the candidate's greatest appeal
+
+Example: "Full-stack Engineer with 5 Years AWS Experience"
+Example: "ML Expert Leading AI Product Development"
+
+---
+
+## 2. Summary (approximately 200 characters)
+Brief overview of the candidate
+- Total engineering experience years
+- Specialized areas and expertise
+- Major development achievements
+- Language proficiency
+
+---
+
+## 3. Strength (approximately 200 characters)
+Candidate's strengths for this position
+- Specific skills matching job requirements
+- Outstanding technical experience
+- Achievements with metrics (if available)
+
+---
+
+## 4. Education / Research (approximately 200 characters)
+Academic background and research
+- Highest education (university, major)
+- Research topics (if applicable)
+- Relevant certifications
+- Technical background
+
+---
+
+## 5. Assessment (approximately 200 characters)
+Overall evaluation and comments
+- Overall matching score evaluation
+- Recommendation reasons
+- Concerns or gaps (if any)
+- Points to confirm in interview
+
+---
+
+【Important Notes】
+1. **Complete Anonymization**: No names, company names, or proper nouns
+2. **Character Limit**: Strictly follow character limits (30 for Catch Copy, ~200 for others)
+3. **Specificity**: Use concrete skills and experience, avoid abstract expressions
+4. **Objectivity**: Provide fact-based evaluation
+5. **Brevity**: Focus on key points for clarity
+"""
+
+
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     """入力テキストのバリデーション"""
 
@@ -3528,6 +3673,122 @@ def main():
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
+
+            # 匿名提案資料生成機能
+            st.divider()
+            st.markdown("#### 📄 匿名提案資料生成")
+            st.caption("マッチング分析から企業向けの簡潔な匿名候補者提案資料を生成します")
+
+            col_proposal1, col_proposal2 = st.columns(2)
+
+            with col_proposal1:
+                if st.button("📝 日本語版を生成", key="generate_proposal_ja", use_container_width=True, help="匿名提案資料（日本語）を生成"):
+                    if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
+                        st.error("❌ レジュメと求人票の入力情報が見つかりません。先にマッチング分析を実行してください。")
+                    else:
+                        with st.spinner("🤖 匿名提案資料（日本語）を生成中..."):
+                            try:
+                                prompt = get_anonymous_proposal_prompt(
+                                    st.session_state['matching_result'],
+                                    st.session_state['matching_resume_input'],
+                                    st.session_state['matching_jd_input'],
+                                    language="ja"
+                                )
+                                proposal = call_groq_api(api_key, prompt)
+                                st.session_state['anonymous_proposal'] = proposal
+                                st.success("✅ 匿名提案資料（日本語）の生成が完了しました")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ 生成エラー: {str(e)[:200]}")
+
+            with col_proposal2:
+                if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate anonymous proposal (English)"):
+                    if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
+                        st.error("❌ Resume and JD input not found. Please run matching analysis first.")
+                    else:
+                        with st.spinner("🤖 Generating anonymous proposal (English)..."):
+                            try:
+                                prompt = get_anonymous_proposal_prompt(
+                                    st.session_state['matching_result'],
+                                    st.session_state['matching_resume_input'],
+                                    st.session_state['matching_jd_input'],
+                                    language="en"
+                                )
+                                proposal = call_groq_api(api_key, prompt)
+                                st.session_state['anonymous_proposal'] = proposal
+                                st.success("✅ Anonymous proposal (English) generated successfully")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Generation error: {str(e)[:200]}")
+
+            # 匿名提案資料の表示
+            if 'anonymous_proposal' in st.session_state:
+                st.divider()
+                st.markdown("#### 📋 生成された匿名提案資料")
+
+                # 表示切替とコピーボタン
+                col_view_prop, col_copy_prop = st.columns([2, 1])
+                with col_view_prop:
+                    show_formatted_prop = st.checkbox(
+                        "📖 整形表示",
+                        value=True,
+                        key="proposal_formatted",
+                        help="Markdownをフォーマットして表示"
+                    )
+                with col_copy_prop:
+                    if st.button("📋 コピー", key="copy_proposal", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['anonymous_proposal'].replace('`', '\\`').replace('$', '\\$')
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{escaped_text}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted_prop:
+                    st.markdown(st.session_state['anonymous_proposal'])
+                else:
+                    # 編集可能なテキストエリア
+                    edited_proposal = st.text_area(
+                        "出力結果（編集可能）",
+                        value=st.session_state['anonymous_proposal'],
+                        height=600,
+                        key="edit_proposal"
+                    )
+                    st.session_state['anonymous_proposal'] = edited_proposal
+
+                # ダウンロードボタン
+                st.divider()
+                col_dl_prop1, col_dl_prop2, col_dl_prop3 = st.columns(3)
+                with col_dl_prop1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['anonymous_proposal'],
+                        file_name=f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="proposal_md"
+                    )
+                with col_dl_prop2:
+                    st.download_button(
+                        "📝 テキスト",
+                        data=st.session_state['anonymous_proposal'],
+                        file_name=f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="proposal_txt"
+                    )
+                with col_dl_prop3:
+                    html_content = generate_html(
+                        st.session_state['anonymous_proposal'],
+                        "匿名候補者提案資料"
+                    )
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="proposal_html",
+                        help="ブラウザで開いて印刷→PDF保存"
+                    )
 
             # 共有リンク作成ボタン
             if get_supabase_client():
