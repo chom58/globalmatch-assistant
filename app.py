@@ -2268,6 +2268,36 @@ def main():
 
         st.divider()
 
+        # クイックインポート機能（履歴がない場合に表示）
+        resume_count = len(st.session_state.get('resume_history', []))
+        jd_count = len(st.session_state.get('jd_history', []))
+
+        if resume_count == 0 and jd_count == 0:
+            st.warning("📂 履歴がありません")
+            st.caption("バックアップファイルをお持ちの場合、ここからインポートできます")
+
+            uploaded_backup = st.file_uploader(
+                "バックアップファイル（JSON）",
+                type=["json"],
+                key="sidebar_import_uploader",
+                help="過去にエクスポートしたバックアップファイルを選択"
+            )
+
+            if uploaded_backup:
+                try:
+                    json_string = uploaded_backup.read().decode('utf-8')
+                    if st.button("📥 復元する", key="sidebar_import_btn", use_container_width=True):
+                        success, message = import_history_from_json(json_string)
+                        if success:
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+                except Exception as e:
+                    st.error(f"ファイル読み込みエラー: {str(e)}")
+
+            st.divider()
+
         # 機能選択
         st.subheader("📋 機能選択")
         feature = st.radio(
@@ -3548,6 +3578,29 @@ def main():
                             add_to_history("jd", matching_jd_input, jd_title)
 
                             st.success(f"✅ 分析完了！（{elapsed_time:.1f}秒）")
+
+                            # 自動バックアップ通知
+                            st.info("💾 **データの保存を忘れずに！** スマホやタブを閉じると履歴が消える場合があります。")
+
+                            # すぐにバックアップできるボタンを表示
+                            resume_count = len(st.session_state.get('resume_history', []))
+                            jd_count = len(st.session_state.get('jd_history', []))
+
+                            col_backup1, col_backup2 = st.columns([2, 1])
+                            with col_backup1:
+                                st.caption(f"📊 現在の履歴: レジュメ {resume_count}件、求人票 {jd_count}件")
+                            with col_backup2:
+                                if resume_count > 0 or jd_count > 0:
+                                    json_data = export_history_to_json("all")
+                                    st.download_button(
+                                        "💾 今すぐバックアップ",
+                                        data=json_data,
+                                        file_name=f"globalmatch_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                                        mime="application/json",
+                                        use_container_width=True,
+                                        key="quick_backup_btn",
+                                        help="履歴をJSONファイルでダウンロード"
+                                    )
 
                         except ValueError as e:
                             st.error(str(e))
