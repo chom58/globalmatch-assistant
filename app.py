@@ -1621,6 +1621,96 @@ def call_groq_api(api_key: str, prompt: str) -> str:
     raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）: {str(last_error)[:100]}")
 
 
+# ========================================
+# 履歴管理機能（ローカルストレージ版）
+# ========================================
+
+def init_history(history_type: str):
+    """履歴を初期化"""
+    key = f"{history_type}_history"
+    if key not in st.session_state:
+        st.session_state[key] = []
+
+
+def add_to_history(history_type: str, content: str, title: str = None):
+    """履歴に追加（最大10件）"""
+    init_history(history_type)
+    key = f"{history_type}_history"
+
+    # タイトルを自動生成（提供されていない場合）
+    if not title:
+        # 日付 + コンテンツの最初の30文字
+        timestamp = datetime.now().strftime('%Y/%m/%d %H:%M')
+        preview = content[:30].replace('\n', ' ')
+        title = f"{timestamp} - {preview}..."
+
+    # 新しいエントリを作成
+    entry = {
+        'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
+        'title': title,
+        'content': content,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # 履歴の先頭に追加
+    st.session_state[key].insert(0, entry)
+
+    # 最大10件まで保持
+    if len(st.session_state[key]) > 10:
+        st.session_state[key] = st.session_state[key][:10]
+
+
+def get_history(history_type: str) -> list:
+    """履歴を取得"""
+    init_history(history_type)
+    key = f"{history_type}_history"
+    return st.session_state[key]
+
+
+def delete_history_item(history_type: str, item_id: str):
+    """履歴の個別アイテムを削除"""
+    key = f"{history_type}_history"
+    if key in st.session_state:
+        st.session_state[key] = [
+            item for item in st.session_state[key]
+            if item['id'] != item_id
+        ]
+
+
+def clear_history(history_type: str):
+    """履歴を全削除"""
+    key = f"{history_type}_history"
+    if key in st.session_state:
+        st.session_state[key] = []
+
+
+def extract_title_from_content(content: str, content_type: str) -> str:
+    """コンテンツからタイトルを抽出"""
+    lines = content.split('\n')
+
+    if content_type == "resume":
+        # レジュメの場合：「氏名：J.S.」や名前を探す
+        for line in lines[:10]:
+            if '氏名' in line or 'Name:' in line:
+                # 氏名行から名前部分を抽出
+                name = line.split('：')[-1].split(':')[-1].strip()
+                if name and name != '[非公開]':
+                    return f"候補者: {name}"
+        # 見つからない場合は日付
+        return f"レジュメ {datetime.now().strftime('%m/%d %H:%M')}"
+
+    elif content_type == "jd":
+        # 求人票の場合：職種名を探す
+        for line in lines[:10]:
+            if '募集職種' in line or 'Position' in line or '【' in line:
+                title = line.replace('募集職種', '').replace('【', '').replace('】', '').strip()
+                if title:
+                    return f"求人: {title[:20]}"
+        return f"求人票 {datetime.now().strftime('%m/%d %H:%M')}"
+
+    return f"{content_type} {datetime.now().strftime('%m/%d %H:%M')}"
+
+
 def generate_html(content: str, title: str) -> str:
     """MarkdownテキストからHTMLを生成（印刷用スタイル付き）"""
 
@@ -2802,7 +2892,7 @@ def main():
             # 入力方法選択
             resume_source = st.radio(
                 "レジュメの入力方法",
-                options=["テキスト入力", "過去の最適化結果から選択"],
+                options=["テキスト入力", "過去の最適化結果から選択", "📂 履歴から選択"],
                 key="matching_resume_source",
                 horizontal=True
             )
@@ -2826,7 +2916,7 @@ def main():
                     key="matching_resume_text",
                     label_visibility="collapsed"
                 )
-            else:
+            elif resume_source == "過去の最適化結果から選択":
                 # 過去の結果から選択
                 if 'resume_result' in st.session_state:
                     if st.checkbox("直前のレジュメ最適化結果を使用", key="use_last_resume"):
@@ -2846,6 +2936,38 @@ def main():
                         height=300,
                         key="matching_resume_manual2"
                     )
+            else:  # 履歴から選択
+                history = get_history("resume")
+                if history:
+                    st.markdown("##### 📂 保存された履歴")
+                    selected_resume_id = st.radio(
+                        "履歴を選択",
+                        options=[item['id'] for item in history],
+                        format_func=lambda x: next(item['title'] for item in history if item['id'] == x),
+                        key="select_resume_history",
+                        label_visibility="collapsed"
+                    )
+
+                    if selected_resume_id:
+                        selected_item = next(item for item in history if item['id'] == selected_resume_id)
+                        matching_resume_input = selected_item['content']
+
+                        # プレビューと削除ボタン
+                        with st.expander("📄 選択されたレジュメを確認"):
+                            st.text(matching_resume_input[:500] + ("..." if len(matching_resume_input) > 500 else ""))
+
+                        col_del1, col_del2 = st.columns([1, 1])
+                        with col_del1:
+                            if st.button("🗑️ この項目を削除", key="del_resume_history_item"):
+                                delete_history_item("resume", selected_resume_id)
+                                st.rerun()
+                        with col_del2:
+                            if st.button("🗑️ 全履歴を削除", key="clear_resume_history"):
+                                clear_history("resume")
+                                st.rerun()
+                else:
+                    st.info("💡 履歴がありません。マッチング分析を実行すると自動で保存されます。")
+                    matching_resume_input = ""
 
             # 文字数カウンター
             resume_char_count = len(matching_resume_input) if matching_resume_input else 0
@@ -2859,7 +2981,7 @@ def main():
             # 入力方法選択
             jd_source = st.radio(
                 "求人票の入力方法",
-                options=["テキスト入力", "過去の変換結果から選択"],
+                options=["テキスト入力", "過去の変換結果から選択", "📂 履歴から選択"],
                 key="matching_jd_source",
                 horizontal=True
             )
@@ -2883,7 +3005,7 @@ def main():
                     key="matching_jd_text",
                     label_visibility="collapsed"
                 )
-            else:
+            elif jd_source == "過去の変換結果から選択":
                 # 過去の結果から選択（複数の可能性）
                 available_jds = []
                 if 'jd_result' in st.session_state:
@@ -2907,6 +3029,38 @@ def main():
                         height=300,
                         key="matching_jd_manual"
                     )
+            else:  # 履歴から選択
+                history = get_history("jd")
+                if history:
+                    st.markdown("##### 📂 保存された履歴")
+                    selected_jd_id = st.radio(
+                        "履歴を選択",
+                        options=[item['id'] for item in history],
+                        format_func=lambda x: next(item['title'] for item in history if item['id'] == x),
+                        key="select_jd_history",
+                        label_visibility="collapsed"
+                    )
+
+                    if selected_jd_id:
+                        selected_item = next(item for item in history if item['id'] == selected_jd_id)
+                        matching_jd_input = selected_item['content']
+
+                        # プレビューと削除ボタン
+                        with st.expander("📄 選択された求人票を確認"):
+                            st.text(matching_jd_input[:500] + ("..." if len(matching_jd_input) > 500 else ""))
+
+                        col_del1, col_del2 = st.columns([1, 1])
+                        with col_del1:
+                            if st.button("🗑️ この項目を削除", key="del_jd_history_item"):
+                                delete_history_item("jd", selected_jd_id)
+                                st.rerun()
+                        with col_del2:
+                            if st.button("🗑️ 全履歴を削除", key="clear_jd_history"):
+                                clear_history("jd")
+                                st.rerun()
+                else:
+                    st.info("💡 履歴がありません。マッチング分析を実行すると自動で保存されます。")
+                    matching_jd_input = ""
 
             # 文字数カウンター
             jd_char_count = len(matching_jd_input) if matching_jd_input else 0
@@ -2956,6 +3110,13 @@ def main():
                             st.session_state['matching_time'] = elapsed_time
                             st.session_state['matching_resume_input'] = matching_resume_input
                             st.session_state['matching_jd_input'] = matching_jd_input
+
+                            # 履歴に自動保存
+                            resume_title = extract_title_from_content(matching_resume_input, "resume")
+                            jd_title = extract_title_from_content(matching_jd_input, "jd")
+                            add_to_history("resume", matching_resume_input, resume_title)
+                            add_to_history("jd", matching_jd_input, jd_title)
+
                             st.success(f"✅ 分析完了！（{elapsed_time:.1f}秒）")
 
                         except ValueError as e:
