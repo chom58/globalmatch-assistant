@@ -1633,7 +1633,7 @@ def init_history(history_type: str):
 
 
 def add_to_history(history_type: str, content: str, title: str = None):
-    """履歴に追加（最大10件）"""
+    """履歴に追加（最大50件）+ localStorage同期"""
     init_history(history_type)
     key = f"{history_type}_history"
 
@@ -1655,9 +1655,12 @@ def add_to_history(history_type: str, content: str, title: str = None):
     # 履歴の先頭に追加
     st.session_state[key].insert(0, entry)
 
-    # 最大10件まで保持
-    if len(st.session_state[key]) > 10:
-        st.session_state[key] = st.session_state[key][:10]
+    # 最大50件まで保持（localStorage版は容量増）
+    if len(st.session_state[key]) > 50:
+        st.session_state[key] = st.session_state[key][:50]
+
+    # localStorageに自動同期
+    sync_to_localstorage(history_type)
 
 
 def get_history(history_type: str) -> list:
@@ -1709,6 +1712,117 @@ def extract_title_from_content(content: str, content_type: str) -> str:
         return f"求人票 {datetime.now().strftime('%m/%d %H:%M')}"
 
     return f"{content_type} {datetime.now().strftime('%m/%d %H:%M')}"
+
+
+# ========================================
+# localStorage統合とエクスポート/インポート
+# ========================================
+
+def sync_to_localstorage(history_type: str):
+    """履歴をlocalStorageに同期（JavaScript経由）"""
+    key = f"{history_type}_history"
+    if key in st.session_state:
+        import json
+        # JSON文字列にエスケープ処理
+        json_data = json.dumps(st.session_state[key])
+        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+
+        st.components.v1.html(f"""
+            <script>
+            try {{
+                localStorage.setItem('{key}', '{escaped_data}');
+                console.log('Saved to localStorage: {key}');
+            }} catch(e) {{
+                console.error('Failed to save to localStorage:', e);
+            }}
+            </script>
+        """, height=0)
+
+
+def load_from_localstorage_script():
+    """localStorageから履歴を復元するJavaScriptを返す"""
+    return """
+        <script>
+        // localStorageから履歴を読み込んでStreamlitに送信
+        function loadHistory() {
+            const resumeHistory = localStorage.getItem('resume_history');
+            const jdHistory = localStorage.getItem('jd_history');
+
+            if (resumeHistory || jdHistory) {
+                // Streamlitに送信するためのカスタムイベント
+                const event = new CustomEvent('localStorageData', {
+                    detail: {
+                        resume_history: resumeHistory,
+                        jd_history: jdHistory
+                    }
+                });
+                window.dispatchEvent(event);
+            }
+        }
+
+        // ページロード時に実行
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadHistory);
+        } else {
+            loadHistory();
+        }
+        </script>
+    """
+
+
+def export_history_to_json(history_type: str = "all") -> str:
+    """履歴をJSON形式でエクスポート"""
+    import json
+
+    export_data = {
+        'export_date': datetime.now().isoformat(),
+        'app_version': '1.0.0',
+        'data': {}
+    }
+
+    if history_type == "all":
+        # すべての履歴をエクスポート
+        if 'resume_history' in st.session_state:
+            export_data['data']['resume_history'] = st.session_state['resume_history']
+        if 'jd_history' in st.session_state:
+            export_data['data']['jd_history'] = st.session_state['jd_history']
+    else:
+        # 特定の履歴のみエクスポート
+        key = f"{history_type}_history"
+        if key in st.session_state:
+            export_data['data'][key] = st.session_state[key]
+
+    return json.dumps(export_data, ensure_ascii=False, indent=2)
+
+
+def import_history_from_json(json_string: str) -> tuple[bool, str]:
+    """JSON文字列から履歴をインポート"""
+    import json
+
+    try:
+        data = json.loads(json_string)
+
+        # バージョンチェック（将来的な互換性のため）
+        if 'data' not in data:
+            return False, "無効なファイル形式です"
+
+        imported_count = 0
+
+        # 履歴をインポート
+        for key, history in data['data'].items():
+            if key in ['resume_history', 'jd_history']:
+                st.session_state[key] = history
+                imported_count += len(history)
+
+                # localStorageにも同期
+                sync_to_localstorage(key.replace('_history', ''))
+
+        return True, f"✅ {imported_count}件の履歴をインポートしました"
+
+    except json.JSONDecodeError:
+        return False, "JSONファイルの解析に失敗しました"
+    except Exception as e:
+        return False, f"インポートエラー: {str(e)}"
 
 
 def generate_html(content: str, title: str) -> str:
@@ -1911,6 +2025,37 @@ def main():
     if share_id:
         show_shared_view(share_id)
         return  # 通常のUIは表示しない
+
+    # localStorage復元スクリプトを実行（初回のみ）
+    if 'localstorage_loaded' not in st.session_state:
+        st.components.v1.html("""
+            <script>
+            // localStorageから履歴を読み込み
+            function loadFromLocalStorage() {
+                try {
+                    const resumeHistory = localStorage.getItem('resume_history');
+                    const jdHistory = localStorage.getItem('jd_history');
+
+                    if (resumeHistory) {
+                        console.log('Found resume_history in localStorage');
+                    }
+                    if (jdHistory) {
+                        console.log('Found jd_history in localStorage');
+                    }
+                } catch(e) {
+                    console.error('Failed to load from localStorage:', e);
+                }
+            }
+
+            // ページロード時に実行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadFromLocalStorage);
+            } else {
+                loadFromLocalStorage();
+            }
+            </script>
+        """, height=0)
+        st.session_state['localstorage_loaded'] = True
 
     # ヘッダー
     st.markdown("# 🌏 GlobalMatch Assistant")
@@ -3079,6 +3224,60 @@ def main():
                 disabled=not api_key or not matching_resume_input or not matching_jd_input,
                 key="matching_btn"
             )
+
+        # データ管理セクション（エクスポート/インポート）
+        st.divider()
+        with st.expander("💾 履歴データの管理（エクスポート/インポート）", expanded=False):
+            st.markdown("""
+            **履歴データのバックアップと復元**
+            - **エクスポート**: すべての履歴をJSONファイルとしてダウンロード
+            - **インポート**: 過去にエクスポートしたJSONファイルから履歴を復元
+            - **自動保存**: 履歴はブラウザのlocalStorageに自動保存されます
+            """)
+
+            col_export, col_import = st.columns(2)
+
+            with col_export:
+                st.markdown("##### 📤 エクスポート")
+                resume_count = len(st.session_state.get('resume_history', []))
+                jd_count = len(st.session_state.get('jd_history', []))
+                total_count = resume_count + jd_count
+
+                if total_count > 0:
+                    st.caption(f"レジュメ: {resume_count}件、求人票: {jd_count}件")
+                    json_data = export_history_to_json("all")
+                    st.download_button(
+                        "📥 すべての履歴をダウンロード",
+                        data=json_data,
+                        file_name=f"globalmatch_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json",
+                        use_container_width=True,
+                        key="export_history_btn"
+                    )
+                else:
+                    st.info("💡 履歴がありません")
+
+            with col_import:
+                st.markdown("##### 📥 インポート")
+                uploaded_json = st.file_uploader(
+                    "JSONファイルをアップロード",
+                    type=["json"],
+                    key="import_history_uploader",
+                    help="過去にエクスポートした履歴ファイルを選択"
+                )
+
+                if uploaded_json:
+                    try:
+                        json_string = uploaded_json.read().decode('utf-8')
+                        if st.button("📂 履歴をインポート", key="import_history_btn", use_container_width=True):
+                            success, message = import_history_from_json(json_string)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                    except Exception as e:
+                        st.error(f"ファイル読み込みエラー: {str(e)}")
 
         # 結果表示エリア
         st.divider()
