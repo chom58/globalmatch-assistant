@@ -3037,30 +3037,54 @@ def main():
             # 入力方法選択
             resume_source = st.radio(
                 "レジュメの入力方法",
-                options=["テキスト入力", "過去の最適化結果から選択", "📂 履歴から選択"],
+                options=["テキスト/PDF入力", "過去の最適化結果から選択", "📂 履歴から選択"],
                 key="matching_resume_source",
                 horizontal=True
             )
 
             matching_resume_input = ""
 
-            if resume_source == "テキスト入力":
-                # サンプルボタン
-                col_label, col_sample = st.columns([3, 1])
-                with col_label:
-                    st.markdown("レジュメをペースト")
-                with col_sample:
-                    if st.button("📝 サンプル", key="sample_matching_resume_btn", help="サンプルレジュメを挿入"):
-                        st.session_state['matching_resume_text'] = SAMPLE_MATCHING_RESUME
-                        st.rerun()
+            if resume_source == "テキスト/PDF入力":
+                # タブで切り替え
+                input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
-                matching_resume_input = st.text_area(
-                    "レジュメをペースト",
-                    height=400,
-                    placeholder="最適化済みレジュメを貼り付けてください...",
-                    key="matching_resume_text",
-                    label_visibility="collapsed"
-                )
+                with input_tab1:
+                    # サンプルボタン
+                    col_label, col_sample = st.columns([3, 1])
+                    with col_label:
+                        st.markdown("レジュメをペースト")
+                    with col_sample:
+                        if st.button("📝 サンプル", key="sample_matching_resume_btn", help="サンプルレジュメを挿入"):
+                            st.session_state['matching_resume_text'] = SAMPLE_MATCHING_RESUME
+                            st.rerun()
+
+                    matching_resume_input = st.text_area(
+                        "レジュメをペースト",
+                        height=400,
+                        placeholder="最適化済みレジュメを貼り付けてください...",
+                        key="matching_resume_text",
+                        label_visibility="collapsed"
+                    )
+
+                with input_tab2:
+                    st.markdown("##### レジュメPDFをアップロード")
+                    uploaded_resume_pdf = st.file_uploader(
+                        "PDFファイルを選択",
+                        type=["pdf"],
+                        key="matching_resume_pdf",
+                        help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                    )
+
+                    if uploaded_resume_pdf:
+                        with st.spinner("📄 PDFを読み込み中..."):
+                            extracted_text, error = extract_text_from_pdf(uploaded_resume_pdf)
+                            if error:
+                                st.error(f"❌ {error}")
+                            else:
+                                st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                                matching_resume_input = extracted_text
+                                with st.expander("抽出されたテキストを確認"):
+                                    st.text(extracted_text[:3000] + ("..." if len(extracted_text) > 3000 else ""))
             elif resume_source == "過去の最適化結果から選択":
                 # 過去の結果から選択
                 if 'resume_result' in st.session_state:
@@ -3126,30 +3150,54 @@ def main():
             # 入力方法選択
             jd_source = st.radio(
                 "求人票の入力方法",
-                options=["テキスト入力", "過去の変換結果から選択", "📂 履歴から選択"],
+                options=["テキスト/PDF入力", "過去の変換結果から選択", "📂 履歴から選択"],
                 key="matching_jd_source",
                 horizontal=True
             )
 
             matching_jd_input = ""
 
-            if jd_source == "テキスト入力":
-                # サンプルボタン
-                col_label, col_sample = st.columns([3, 1])
-                with col_label:
-                    st.markdown("求人票をペースト")
-                with col_sample:
-                    if st.button("📝 サンプル", key="sample_matching_jd_btn", help="サンプル求人票を挿入"):
-                        st.session_state['matching_jd_text'] = SAMPLE_MATCHING_JD
-                        st.rerun()
+            if jd_source == "テキスト/PDF入力":
+                # タブで切り替え
+                input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
-                matching_jd_input = st.text_area(
-                    "求人票をペースト",
-                    height=400,
-                    placeholder="求人票を貼り付けてください...",
-                    key="matching_jd_text",
-                    label_visibility="collapsed"
-                )
+                with input_tab1:
+                    # サンプルボタン
+                    col_label, col_sample = st.columns([3, 1])
+                    with col_label:
+                        st.markdown("求人票をペースト")
+                    with col_sample:
+                        if st.button("📝 サンプル", key="sample_matching_jd_btn", help="サンプル求人票を挿入"):
+                            st.session_state['matching_jd_text'] = SAMPLE_MATCHING_JD
+                            st.rerun()
+
+                    matching_jd_input = st.text_area(
+                        "求人票をペースト",
+                        height=400,
+                        placeholder="求人票を貼り付けてください...",
+                        key="matching_jd_text",
+                        label_visibility="collapsed"
+                    )
+
+                with input_tab2:
+                    st.markdown("##### 求人票PDFをアップロード")
+                    uploaded_jd_pdf = st.file_uploader(
+                        "PDFファイルを選択",
+                        type=["pdf"],
+                        key="matching_jd_pdf",
+                        help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                    )
+
+                    if uploaded_jd_pdf:
+                        with st.spinner("📄 PDFを読み込み中..."):
+                            extracted_text, error = extract_text_from_pdf(uploaded_jd_pdf)
+                            if error:
+                                st.error(f"❌ {error}")
+                            else:
+                                st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                                matching_jd_input = extracted_text
+                                with st.expander("抽出されたテキストを確認"):
+                                    st.text(extracted_text[:3000] + ("..." if len(extracted_text) > 3000 else ""))
             elif jd_source == "過去の変換結果から選択":
                 # 過去の結果から選択（複数の可能性）
                 available_jds = []
