@@ -1633,7 +1633,7 @@ def init_history(history_type: str):
 
 
 def add_to_history(history_type: str, content: str, title: str = None):
-    """履歴に追加（最大50件）+ localStorage同期"""
+    """履歴に追加（最大200件）+ localStorage同期"""
     init_history(history_type)
     key = f"{history_type}_history"
 
@@ -1655,9 +1655,9 @@ def add_to_history(history_type: str, content: str, title: str = None):
     # 履歴の先頭に追加
     st.session_state[key].insert(0, entry)
 
-    # 最大50件まで保持（localStorage版は容量増）
-    if len(st.session_state[key]) > 50:
-        st.session_state[key] = st.session_state[key][:50]
+    # 最大200件まで保持（localStorage版は容量増）
+    if len(st.session_state[key]) > 200:
+        st.session_state[key] = st.session_state[key][:200]
 
     # localStorageに自動同期
     sync_to_localstorage(history_type)
