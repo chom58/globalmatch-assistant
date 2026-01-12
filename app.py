@@ -1538,6 +1538,44 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 """
 
 
+def get_translate_to_english_prompt(japanese_text: str) -> str:
+    """日本語→英語翻訳用のプロンプトを生成"""
+    return f"""あなたはプロフェッショナルな翻訳者です。
+以下の日本語の文書を英語に翻訳してください。
+
+【翻訳指示】
+1. ビジネス文書として適切な英語表現を使用
+2. Markdown形式を維持（見出し、表、リストなど）
+3. 専門用語は適切な英語表現に翻訳
+4. 絵文字や記号（✅⚠️❌など）はそのまま保持
+5. 数値やスコアはそのまま保持
+6. 表の構造を崩さないように注意
+7. 自然で読みやすい英語にしてください
+
+【翻訳対象の日本語文書】
+{japanese_text}
+"""
+
+
+def get_translate_to_japanese_prompt(english_text: str) -> str:
+    """英語→日本語翻訳用のプロンプトを生成"""
+    return f"""あなたはプロフェッショナルな翻訳者です。
+以下の英語の文書を日本語に翻訳してください。
+
+【翻訳指示】
+1. ビジネス文書として適切な日本語表現を使用
+2. Markdown形式を維持（見出し、表、リストなど）
+3. 専門用語は適切な日本語表現に翻訳
+4. 絵文字や記号（✅⚠️❌など）はそのまま保持
+5. 数値やスコアはそのまま保持
+6. 表の構造を崩さないように注意
+7. 自然で読みやすい日本語にしてください
+
+【翻訳対象の英語文書】
+{english_text}
+"""
+
+
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     """入力テキストのバリデーション"""
 
@@ -3461,6 +3499,35 @@ def main():
                     key="matching_html",
                     help="ブラウザで開いて印刷→PDF保存"
                 )
+
+            # 翻訳機能
+            st.divider()
+            st.markdown("#### 🌐 翻訳機能")
+            col_trans1, col_trans2 = st.columns(2)
+
+            with col_trans1:
+                if st.button("🇯🇵→🇬🇧 日本語→英語", key="translate_to_en", use_container_width=True, help="マッチング分析結果を英語に翻訳"):
+                    with st.spinner("🤖 英語に翻訳中..."):
+                        try:
+                            prompt = get_translate_to_english_prompt(st.session_state['matching_result'])
+                            translated = call_groq_api(api_key, prompt)
+                            st.session_state['matching_result'] = translated
+                            st.success("✅ 英語への翻訳が完了しました")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
+
+            with col_trans2:
+                if st.button("🇬🇧→🇯🇵 英語→日本語", key="translate_to_ja", use_container_width=True, help="マッチング分析結果を日本語に翻訳"):
+                    with st.spinner("🤖 日本語に翻訳中..."):
+                        try:
+                            prompt = get_translate_to_japanese_prompt(st.session_state['matching_result'])
+                            translated = call_groq_api(api_key, prompt)
+                            st.session_state['matching_result'] = translated
+                            st.success("✅ 日本語への翻訳が完了しました")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
 
             # 共有リンク作成ボタン
             if get_supabase_client():
