@@ -564,6 +564,93 @@ SAMPLE_JD = """【募集職種】
 書類選考 → 技術面接 → 最終面接 → オファー
 """
 
+SAMPLE_MATCHING_RESUME = """## 1. 基本情報
+- 氏名：J.S.
+- 連絡先：[非公開]
+- 所在地：カリフォルニア州
+
+## 2. 推薦サマリ
+Google、Amazonでの実務経験7年以上を持つシニアソフトウェアエンジニアです。マイクロサービスアーキテクチャの設計・開発に精通し、1,000万人以上のユーザーを抱えるシステムの構築実績があります。特にAPIの最適化、CI/CDパイプライン構築、チームマネジメントに強みを持ち、技術的リーダーシップを発揮できる人材です。日本語JLPT N2取得済みで、日本企業での勤務にも意欲的です。
+
+## 3. 技術スタック
+| カテゴリ | スキル |
+|---------|--------|
+| プログラミング言語 | Python, JavaScript, TypeScript, Go, Java |
+| フレームワーク | React, Node.js, Django, FastAPI |
+| データベース | PostgreSQL, MongoDB, Redis |
+| インフラ/クラウド | AWS (認定資格保有), GCP, Docker, Kubernetes |
+| ツール/その他 | Git, CI/CD, マイクロサービス設計 |
+
+## 4. 語学・ビザ
+- **日本語レベル**: JLPT N2取得済み（ビジネスレベル）
+- **英語レベル**: ネイティブ
+- **ビザステータス**: 日本での就労ビザサポート必要
+
+## 5. 職務経歴
+
+### Google（期間：2020年 〜 現在）
+**シニアソフトウェアエンジニア**
+
+**担当業務・成果:**
+- 1,000万人以上の日間アクティブユーザーを持つマイクロサービスアーキテクチャの設計・開発をリード
+- APIレイテンシを40%削減（最適化とキャッシング戦略の導入）
+- 5名のジュニアエンジニアのメンター、100件以上のコードレビュー実施
+- チーム横断での技術的意思決定に参画
+
+### Amazon（期間：2017年 〜 2020年）
+**ソフトウェアエンジニア**
+
+**担当業務・成果:**
+- PythonとAWSを使用したリアルタイム在庫管理システムの構築
+- CI/CDパイプラインの実装によりデプロイ時間を60%短縮
+- 3つのタイムゾーンをまたぐクロスファンクショナルチームとの協業
+
+## 6. 学歴
+- Stanford University - コンピュータサイエンス修士（2017年）
+- UC Berkeley - コンピュータサイエンス学士（2015年）
+
+## 7. 資格
+- AWS Solutions Architect Professional
+- Google Cloud Professional Data Engineer
+"""
+
+SAMPLE_MATCHING_JD = """【募集職種】
+バックエンドエンジニア（シニア）
+
+【会社概要】
+当社は2015年設立のFinTechスタートアップです。累計資金調達額50億円、従業員数120名。
+決済プラットフォーム事業を展開し、年間取扱高は1兆円を突破しました。
+
+【業務内容】
+- 決済システムの設計・開発・運用
+- マイクロサービスアーキテクチャの構築
+- チームリーダーとして3-5名のメンバーマネジメント
+- 技術的な意思決定への参画
+
+【必須スキル】
+- Python, Go, Javaいずれかでの開発経験5年以上
+- 大規模システムの設計・開発経験
+- AWSまたはGCPでのインフラ構築経験
+- チームリーダー経験
+
+【歓迎スキル】
+- 決済・金融システムの開発経験
+- Kubernetes運用経験
+- 英語でのコミュニケーション能力
+
+【待遇】
+- 年収：800万円〜1,500万円
+- フレックスタイム制（コアタイム11:00-15:00）
+- リモートワーク可（週2-3日出社）
+- ストックオプション制度あり
+
+【勤務地】
+東京都渋谷区（渋谷駅徒歩5分）
+
+【選考フロー】
+書類選考 → 技術面接 → 最終面接 → オファー
+"""
+
 SAMPLE_JD_EN = """Senior Backend Engineer
 
 About the Company:
@@ -960,6 +1047,12 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
     else:
         anonymize_instruction = "【匿名化処理】不要です。すべての情報をそのまま残してください。"
 
+    # 基本情報フォーマットの準備
+    if anonymize in ["full", "light"]:
+        basic_info_format = "- 氏名：（イニシャルで表記。例：T.Y.）\n- 連絡先：[非公開]\n- 所在地：（都道府県のみ）"
+    else:
+        basic_info_format = "- 氏名：\n- 連絡先：\n- 所在地："
+
     return f"""あなたは人材紹介会社のエキスパートコンサルタントです。
 外国人エンジニアの英語レジュメを、日本企業の採用担当者向けに最適化された日本語ドキュメントに変換してください。
 
@@ -972,7 +1065,7 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 ---
 
 ## 1. 基本情報
-{"- 氏名：（イニシャルで表記。例：T.Y.）\n- 連絡先：[非公開]\n- 所在地：（都道府県のみ）" if anonymize in ["full", "light"] else "- 氏名：\n- 連絡先：\n- 所在地："}
+{basic_info_format}
 
 ## 2. 推薦サマリ
 *（300文字程度で、この候補者の経歴の要約と強みを記載。採用担当者が最初に読む部分として魅力的に）*
@@ -1057,6 +1150,12 @@ Only anonymize personal contact information (keep company names):
     else:
         anonymize_instruction = "【NO ANONYMIZATION】Keep all information as-is."
 
+    # 基本情報フォーマットの準備
+    if anonymize in ["full", "light"]:
+        basic_info_format_en = "- Name: (Initials only, e.g., J.S.)\n- Contact: [Confidential]\n- Location: (State/Country only)"
+    else:
+        basic_info_format_en = "- Name:\n- Contact:\n- Location:"
+
     return f"""You are an expert HR consultant.
 Anonymize the following English resume while keeping it in English and maintaining a professional format.
 
@@ -1068,7 +1167,7 @@ Maintain the resume in English with this standardized structure:
 ---
 
 ## 1. Basic Information
-{"- Name: (Initials only, e.g., J.S.)\n- Contact: [Confidential]\n- Location: (State/Country only)" if anonymize in ["full", "light"] else "- Name:\n- Contact:\n- Location:"}
+{basic_info_format_en}
 
 ## 2. Professional Summary
 *(2-3 sentences highlighting key qualifications and strengths)*
@@ -1313,6 +1412,132 @@ def get_company_intro_prompt(company_text: str) -> str:
 """
 
 
+def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
+    """レジュメ×求人票マッチング分析用のプロンプトを生成"""
+
+    return f"""あなたは人材紹介のマッチングエキスパートです。
+候補者のレジュメと企業の求人票を詳細に分析し、マッチング評価レポートを作成してください。
+
+【出力フォーマット - 厳守】
+以下の構造で必ず出力してください：
+
+---
+
+# マッチング分析レポート
+
+## マッチスコア: X/100
+
+⭐⭐⭐⭐⭐（5段階評価も併記）
+
+**総合判定**: ✅ 強く推奨 / ⚠️ 条件付き推奨 / ❌ 要検討
+
+---
+
+## スキルマッチ詳細
+
+| 技術カテゴリ | 求人要件 | 候補者スキル | マッチ判定 |
+|------------|---------|------------|----------|
+| プログラミング言語 | | | ✅/⚠️/❌ |
+| フレームワーク | | | |
+| データベース | | | |
+| インフラ/クラウド | | | |
+| その他技術 | | | |
+
+**判定記号の意味**:
+- ✅ 完全マッチ（要件を満たしている）
+- ⚠️ 部分マッチ（一部経験あり、要トレーニング）
+- ❌ ギャップあり（未経験）
+
+---
+
+## 経験年数・キャリアレベル
+
+| 項目 | 求人要件 | 候補者 | 評価 |
+|-----|---------|--------|------|
+| 総エンジニア経験 | | | |
+| 該当領域の経験 | | | |
+| リーダーシップ | | | |
+| 言語レベル | | | |
+
+---
+
+## 強み・アピールポイント
+
+候補者が求人票の要件に対して特に優れている点を3-5項目で記載：
+
+1. **[強み1のタイトル]**
+   - 詳細説明（具体的な経験・実績）
+   - なぜこれが求人票にマッチするか
+
+2. **[強み2のタイトル]**
+   - 詳細説明
+   - なぜこれが求人票にマッチするか
+
+3. **[強み3のタイトル]**
+   - 詳細説明
+   - なぜこれが求人票にマッチするか
+
+---
+
+## ギャップ・改善提案
+
+求人票の要件に対して不足している点と、その対応策：
+
+### ギャップ1: [技術/経験の不足点]
+- **影響度**: 高/中/低
+- **対応策**: （トレーニング期間、OJT、並行学習など）
+
+### ギャップ2: [技術/経験の不足点]
+- **影響度**: 高/中/低
+- **対応策**:
+
+（ギャップがない場合は「特筆すべきギャップなし」と記載）
+
+---
+
+## 企業向け推薦コメント
+
+（200-300文字程度）
+
+企業の採用担当者に向けて、この候補者を推薦する理由を簡潔かつ魅力的に記載してください。
+求人票の要件とのマッチング、候補者の強み、採用メリットを含めること。
+
+---
+
+## 候補者向けコメント
+
+（200-300文字程度）
+
+候補者に向けて、このポジションへの適性とアドバイスを記載してください。
+強みを活かせる点、準備すべきスキル、面接でアピールすべきポイントを含めること。
+
+---
+
+【分析対象】
+
+■ 候補者レジュメ:
+{resume_text}
+
+■ 求人票:
+{jd_text}
+
+---
+
+【分析指示】
+1. 上記フォーマットに厳密に従って出力してください
+2. マッチスコアは以下の観点で総合的に評価:
+   - 技術スキルのマッチ度（40点）
+   - 経験年数・レベルのマッチ度（30点）
+   - 言語・コミュニケーション能力（20点）
+   - その他（文化フィット、志向性など）（10点）
+3. 判定は楽観的すぎず、現実的に評価してください
+4. ギャップがある場合でも、ポテンシャルや学習意欲を考慮してください
+5. 数値や具体的な経験があれば積極的に引用してください
+6. 見出しに絵文字は使用しないでください（判定記号としての絵文字は可）
+7. リスト項目の行頭記号は中黒（・）ではなく、番号またはハイフン（-）を使用してください
+"""
+
+
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     """入力テキストのバリデーション"""
 
@@ -1342,6 +1567,10 @@ def validate_input(text: str, input_type: str) -> tuple[bool, str]:
             return False, "求人票として認識できません。英語の求人票を入力してください"
     elif input_type == "company":
         # 会社紹介は最低限のテキストがあれば通す
+        pass
+    elif input_type == "matching":
+        # マッチング分析は、レジュメと求人票の両方が必要だが、
+        # それぞれの入力で個別にバリデーションされるため、ここでは最低限のチェックのみ
         pass
 
     return True, ""
@@ -1631,6 +1860,7 @@ def main():
                 "求人票魅力化（日→英）",
                 "求人票翻訳（英→日）",
                 "企業紹介文作成（PDF）",
+                "🎯 レジュメ×求人票マッチング分析",
                 "📦 バッチ処理（複数レジュメ）"
             ],
             index=0,
@@ -1665,6 +1895,12 @@ def main():
             1. 会社紹介PDFをアップロード
             2. 「紹介文作成」をクリック
             3. 求職者向けの簡潔な企業紹介文を取得
+
+            **レジュメ×求人票マッチング分析**
+            1. 最適化済みレジュメと求人票を入力
+            2. テキスト直接入力、または過去の変換結果から選択可能
+            3. 「マッチング分析を実行」をクリック
+            4. マッチスコア、スキル比較、強み・ギャップ分析、推薦コメントを取得
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
             """)
@@ -1811,9 +2047,10 @@ def main():
                     if st.button("📋 コピー", key="copy_resume", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
                         # JavaScriptでクリップボードにコピー
+                        escaped_text = st.session_state['resume_result'].replace('`', '\\`').replace('$', '\\$')
                         st.components.v1.html(f"""
                             <script>
-                            navigator.clipboard.writeText(`{st.session_state['resume_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            navigator.clipboard.writeText(`{escaped_text}`);
                             </script>
                         """, height=0)
 
@@ -2013,9 +2250,10 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_resume_en", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['resume_en_result'].replace('`', '\\`').replace('$', '\\$')
                         st.components.v1.html(f"""
                             <script>
-                            navigator.clipboard.writeText(`{st.session_state['resume_en_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            navigator.clipboard.writeText(`{escaped_text}`);
                             </script>
                         """, height=0)
 
@@ -2159,9 +2397,10 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['jd_result'].replace('`', '\\`').replace('$', '\\$')
                         st.components.v1.html(f"""
                             <script>
-                            navigator.clipboard.writeText(`{st.session_state['jd_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            navigator.clipboard.writeText(`{escaped_text}`);
                             </script>
                         """, height=0)
 
@@ -2333,9 +2572,10 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd_en", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['jd_en_result'].replace('`', '\\`').replace('$', '\\$')
                         st.components.v1.html(f"""
                             <script>
-                            navigator.clipboard.writeText(`{st.session_state['jd_en_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            navigator.clipboard.writeText(`{escaped_text}`);
                             </script>
                         """, height=0)
 
@@ -2500,9 +2740,10 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_company", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['company_result'].replace('`', '\\`').replace('$', '\\$')
                         st.components.v1.html(f"""
                             <script>
-                            navigator.clipboard.writeText(`{st.session_state['company_result'].replace('`', '\\`').replace('$', '\\$')}`);
+                            navigator.clipboard.writeText(`{escaped_text}`);
                             </script>
                         """, height=0)
 
@@ -2546,6 +2787,293 @@ def main():
                         key="company_html",
                         help="ブラウザで開いて印刷→PDF保存"
                     )
+
+    elif feature == "🎯 レジュメ×求人票マッチング分析":
+        st.subheader("🎯 レジュメ×求人票マッチング分析")
+        st.caption("最適化済みレジュメと求人票を入力し、AIがマッチング度を多角的に分析します")
+
+        # 2カラムレイアウト（入力エリア）
+        col_input1, col_input2 = st.columns([1, 1])
+
+        # 入力エリア1: レジュメ
+        with col_input1:
+            st.markdown("##### 📄 入力1: レジュメ")
+
+            # 入力方法選択
+            resume_source = st.radio(
+                "レジュメの入力方法",
+                options=["テキスト入力", "過去の最適化結果から選択"],
+                key="matching_resume_source",
+                horizontal=True
+            )
+
+            matching_resume_input = ""
+
+            if resume_source == "テキスト入力":
+                # サンプルボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("レジュメをペースト")
+                with col_sample:
+                    if st.button("📝 サンプル", key="sample_matching_resume_btn", help="サンプルレジュメを挿入"):
+                        st.session_state['matching_resume_text'] = SAMPLE_MATCHING_RESUME
+                        st.rerun()
+
+                matching_resume_input = st.text_area(
+                    "レジュメをペースト",
+                    height=400,
+                    placeholder="最適化済みレジュメを貼り付けてください...",
+                    key="matching_resume_text",
+                    label_visibility="collapsed"
+                )
+            else:
+                # 過去の結果から選択
+                if 'resume_result' in st.session_state:
+                    if st.checkbox("直前のレジュメ最適化結果を使用", key="use_last_resume"):
+                        matching_resume_input = st.session_state['resume_result']
+                        with st.expander("選択されたレジュメを確認"):
+                            st.text(matching_resume_input[:500] + ("..." if len(matching_resume_input) > 500 else ""))
+                    else:
+                        matching_resume_input = st.text_area(
+                            "または手動入力",
+                            height=300,
+                            key="matching_resume_manual"
+                        )
+                else:
+                    st.info("💡 先に「レジュメ最適化」機能を使用してレジュメを最適化してください")
+                    matching_resume_input = st.text_area(
+                        "または手動入力",
+                        height=300,
+                        key="matching_resume_manual2"
+                    )
+
+            # 文字数カウンター
+            resume_char_count = len(matching_resume_input) if matching_resume_input else 0
+            if resume_char_count > 0:
+                st.caption(f"📊 {resume_char_count:,} 文字")
+
+        # 入力エリア2: 求人票
+        with col_input2:
+            st.markdown("##### 📋 入力2: 求人票")
+
+            # 入力方法選択
+            jd_source = st.radio(
+                "求人票の入力方法",
+                options=["テキスト入力", "過去の変換結果から選択"],
+                key="matching_jd_source",
+                horizontal=True
+            )
+
+            matching_jd_input = ""
+
+            if jd_source == "テキスト入力":
+                # サンプルボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("求人票をペースト")
+                with col_sample:
+                    if st.button("📝 サンプル", key="sample_matching_jd_btn", help="サンプル求人票を挿入"):
+                        st.session_state['matching_jd_text'] = SAMPLE_MATCHING_JD
+                        st.rerun()
+
+                matching_jd_input = st.text_area(
+                    "求人票をペースト",
+                    height=400,
+                    placeholder="求人票を貼り付けてください...",
+                    key="matching_jd_text",
+                    label_visibility="collapsed"
+                )
+            else:
+                # 過去の結果から選択（複数の可能性）
+                available_jds = []
+                if 'jd_result' in st.session_state:
+                    available_jds.append(("求人票魅力化（日→英）の結果", st.session_state['jd_result']))
+                if 'jd_en_result' in st.session_state:
+                    available_jds.append(("求人票翻訳（英→日）の結果", st.session_state['jd_en_result']))
+
+                if available_jds:
+                    selected_jd = st.radio(
+                        "使用する求人票を選択",
+                        options=[name for name, _ in available_jds],
+                        key="select_jd"
+                    )
+                    matching_jd_input = next(content for name, content in available_jds if name == selected_jd)
+                    with st.expander("選択された求人票を確認"):
+                        st.text(matching_jd_input[:500] + ("..." if len(matching_jd_input) > 500 else ""))
+                else:
+                    st.info("💡 先に「求人票魅力化」または「求人票翻訳」機能を使用してください")
+                    matching_jd_input = st.text_area(
+                        "または手動入力",
+                        height=300,
+                        key="matching_jd_manual"
+                    )
+
+            # 文字数カウンター
+            jd_char_count = len(matching_jd_input) if matching_jd_input else 0
+            if jd_char_count > 0:
+                st.caption(f"📊 {jd_char_count:,} 文字")
+
+        # 分析実行ボタン（中央配置）
+        st.divider()
+        col_center = st.columns([1, 2, 1])
+        with col_center[1]:
+            st.info("💡 両方の入力が完了したら、下のボタンで分析を開始します")
+            process_btn = st.button(
+                "🎯 マッチング分析を実行",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not matching_resume_input or not matching_jd_input,
+                key="matching_btn"
+            )
+
+        # 結果表示エリア
+        st.divider()
+        st.markdown("### 📊 分析結果")
+
+        if process_btn:
+            if not api_key:
+                st.error("❌ APIキーを入力してください")
+            elif not matching_resume_input or not matching_jd_input:
+                st.warning("⚠️ レジュメと求人票の両方を入力してください")
+            else:
+                # 入力バリデーション
+                is_valid_resume, error_msg_resume = validate_input(matching_resume_input, "matching")
+                is_valid_jd, error_msg_jd = validate_input(matching_jd_input, "matching")
+
+                if not is_valid_resume:
+                    st.warning(f"⚠️ レジュメ入力エラー: {error_msg_resume}")
+                elif not is_valid_jd:
+                    st.warning(f"⚠️ 求人票入力エラー: {error_msg_jd}")
+                else:
+                    with st.spinner("🤖 AIがレジュメと求人票を詳細分析しています..."):
+                        try:
+                            start_time = time.time()
+                            prompt = get_matching_analysis_prompt(matching_resume_input, matching_jd_input)
+                            result = call_groq_api(api_key, prompt)
+                            elapsed_time = time.time() - start_time
+
+                            st.session_state['matching_result'] = result
+                            st.session_state['matching_time'] = elapsed_time
+                            st.session_state['matching_resume_input'] = matching_resume_input
+                            st.session_state['matching_jd_input'] = matching_jd_input
+                            st.success(f"✅ 分析完了！（{elapsed_time:.1f}秒）")
+
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+
+        # 結果表示（セッションステートにある場合）
+        if 'matching_result' in st.session_state:
+            # スコアの可視化
+            import re
+            score_match = re.search(r'マッチスコア[：:]\s*(\d+)/100', st.session_state['matching_result'])
+            if score_match:
+                score = int(score_match.group(1))
+                st.divider()
+                st.markdown("#### 📊 マッチング評価")
+
+                # プログレスバーの色を決定
+                if score >= 80:
+                    color_text = "🟢 優秀なマッチング"
+                elif score >= 60:
+                    color_text = "🟡 良いマッチング"
+                else:
+                    color_text = "🟠 要検討"
+
+                col_prog, col_score = st.columns([3, 1])
+                with col_prog:
+                    st.progress(score / 100)
+                with col_score:
+                    st.metric("スコア", f"{score}/100")
+
+                st.caption(f"{color_text}")
+                st.divider()
+
+            # 表示切替とコピーボタン
+            col_view, col_copy = st.columns([2, 1])
+            with col_view:
+                show_formatted = st.checkbox(
+                    "📖 整形表示",
+                    value=True,  # デフォルトで整形表示
+                    key="matching_formatted",
+                    help="Markdownをフォーマットして表示"
+                )
+            with col_copy:
+                if st.button("📋 コピー", key="copy_matching", use_container_width=True):
+                    st.toast("✅ クリップボードにコピーしました")
+                    escaped_text = st.session_state['matching_result'].replace('`', '\\`').replace('$', '\\$')
+                    st.components.v1.html(f"""
+                        <script>
+                        navigator.clipboard.writeText(`{escaped_text}`);
+                        </script>
+                    """, height=0)
+
+            if show_formatted:
+                st.markdown(st.session_state['matching_result'])
+            else:
+                # 編集可能なテキストエリア
+                edited_matching_result = st.text_area(
+                    "出力結果（編集可能）",
+                    value=st.session_state['matching_result'],
+                    height=600,
+                    key="edit_matching_result"
+                )
+                st.session_state['matching_result'] = edited_matching_result
+
+            # ダウンロードボタン
+            st.divider()
+            col_dl1, col_dl2, col_dl3 = st.columns(3)
+            with col_dl1:
+                st.download_button(
+                    "📄 Markdown",
+                    data=st.session_state['matching_result'],
+                    file_name=f"matching_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                    mime="text/markdown",
+                    key="matching_md"
+                )
+            with col_dl2:
+                st.download_button(
+                    "📝 テキスト",
+                    data=st.session_state['matching_result'],
+                    file_name=f"matching_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    key="matching_txt"
+                )
+            with col_dl3:
+                html_content = generate_html(
+                    st.session_state['matching_result'],
+                    "マッチング分析レポート"
+                )
+                st.download_button(
+                    "🌐 HTML",
+                    data=html_content,
+                    file_name=f"matching_analysis_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                    mime="text/html",
+                    key="matching_html",
+                    help="ブラウザで開いて印刷→PDF保存"
+                )
+
+            # 共有リンク作成ボタン
+            if get_supabase_client():
+                st.divider()
+                if st.button("🔗 共有リンク作成", key="share_matching", help="1ヶ月有効の共有リンクを作成"):
+                    with st.spinner("共有リンクを作成中..."):
+                        share_id = create_share_link(
+                            st.session_state['matching_result'],
+                            "マッチング分析レポート"
+                        )
+                    if share_id:
+                        try:
+                            base_url = st.secrets["APP_URL"]
+                        except KeyError:
+                            base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                        share_url = f"{base_url}/?share={share_id}"
+                        st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
+                        st.code(share_url)
+                        st.info("💡 上のURLをコピーしてクライアントに共有してください")
+                    else:
+                        st.error("❌ 共有リンクの作成に失敗しました")
 
     elif feature == "📦 バッチ処理（複数レジュメ）":
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
@@ -2670,9 +3198,10 @@ Full-stack Developer...
                         with col_copy:
                             if st.button("📋 コピー", key=f"copy_batch_{result['index']}", use_container_width=True):
                                 st.toast("✅ クリップボードにコピーしました")
+                                escaped_text = result['output'].replace('`', '\\`').replace('$', '\\$')
                                 st.components.v1.html(f"""
                                     <script>
-                                    navigator.clipboard.writeText(`{result['output'].replace('`', '\\`').replace('$', '\\$')}`);
+                                    navigator.clipboard.writeText(`{escaped_text}`);
                                     </script>
                                 """, height=0)
 
