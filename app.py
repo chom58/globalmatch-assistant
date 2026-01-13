@@ -1599,7 +1599,7 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 # 候補者提案資料
 
-## 1. Catch Copy（30文字以内）
+## 1. Catch Copy（50文字程度）
 候補者の最大の魅力を一言で表現するキャッチコピー
 
 例：「AWS経験5年のフルスタックエンジニア」
