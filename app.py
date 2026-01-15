@@ -1599,11 +1599,20 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 # 候補者提案資料
 
-## 1. Catch Copy（100文字程度）
-候補者の最大の魅力を一言で表現するキャッチコピー
+## 1. Catch Copy（各100文字程度）
+候補者の魅力を3つの視点で表現するキャッチコピーを生成してください。
 
-例：「AWS経験5年のフルスタックエンジニア」
-例：「AIプロダクト開発をリードする機械学習エキスパート」
+### パターンA: スキル重視型
+候補者の技術スキル・専門性を前面に出したキャッチコピー
+例：「AWS/Kubernetes経験5年、大規模クラウド基盤構築のスペシャリスト」
+
+### パターンB: 実績重視型
+候補者の具体的な成果・実績を強調したキャッチコピー
+例：「月間1000万PVサービスの開発リーダー、パフォーマンス改善で応答速度50%向上を達成」
+
+### パターンC: ポテンシャル重視型
+候補者の成長性・可能性・人物面を強調したキャッチコピー
+例：「新技術習得に意欲的、チームリーダーとして組織を牽引できるフルスタックエンジニア」
 
 ---
 
@@ -1644,7 +1653,7 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 【重要な注意事項】
 1. **完全匿名化**: 氏名、企業名、固有名詞は一切記載しない
-2. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは100文字程度、他は200文字程度）
+2. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
 3. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
 4. **客観性**: 事実に基づいた評価を行う
 5. **簡潔性**: 要点を絞って分かりやすく記載
@@ -1669,11 +1678,20 @@ Create an **anonymous candidate proposal document** for the client company based
 
 # Candidate Proposal
 
-## 1. Catch Copy (approximately 100 characters)
-A one-line catchphrase expressing the candidate's greatest appeal
+## 1. Catch Copy (approximately 100 characters each)
+Generate catchphrases from three different perspectives to express the candidate's appeal.
 
-Example: "Full-stack Engineer with 5 Years AWS Experience"
-Example: "ML Expert Leading AI Product Development"
+### Pattern A: Skill-focused
+A catchphrase highlighting technical skills and expertise
+Example: "AWS/Kubernetes Specialist with 5 Years Experience in Large-scale Cloud Infrastructure"
+
+### Pattern B: Achievement-focused
+A catchphrase emphasizing concrete results and accomplishments
+Example: "Development Leader of 10M Monthly PV Service, Achieved 50% Performance Improvement"
+
+### Pattern C: Potential-focused
+A catchphrase emphasizing growth potential and personal qualities
+Example: "Eager Learner of New Technologies, Full-stack Engineer Who Can Lead Teams"
 
 ---
 
@@ -1714,7 +1732,7 @@ Overall evaluation and comments
 
 【Important Notes】
 1. **Complete Anonymization**: No names, company names, or proper nouns
-2. **Character Limit**: Strictly follow character limits (approximately 100 for Catch Copy, ~200 for others)
+2. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
 3. **Specificity**: Use concrete skills and experience, avoid abstract expressions
 4. **Objectivity**: Provide fact-based evaluation
 5. **Brevity**: Focus on key points for clarity
