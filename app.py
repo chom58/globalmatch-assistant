@@ -1621,7 +1621,7 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 - 総エンジニア経験年数
 - 専門領域・得意分野
 - 主な開発実績
-- 言語能力
+- 言語能力（レジュメに日本語能力の記載がある場合は必ず含める：N1-N5、conversational、native、business levelなど。記載がなければ省略）
 
 ---
 
@@ -1700,7 +1700,7 @@ Brief overview of the candidate
 - Total engineering experience years
 - Specialized areas and expertise
 - Major development achievements
-- Language proficiency
+- Language proficiency (If Japanese proficiency is mentioned in resume, must include it: N1-N5, conversational, native, business level, etc. Omit if not mentioned)
 
 ---
 
