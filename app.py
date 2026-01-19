@@ -2642,6 +2642,85 @@ def main():
                         help="ブラウザで開いて印刷→PDF保存"
                     )
 
+                # 追加変換ボタン
+                st.divider()
+                st.markdown("##### 🔄 追加変換")
+                if st.button("📝 この結果を英語匿名化（English → English）", key="convert_to_en_anonymize", use_container_width=True, help="生成された日本語レジュメを基に英語匿名化レジュメを生成"):
+                    with st.spinner("🤖 英語匿名化レジュメを生成中..."):
+                        try:
+                            # 元の英語レジュメを取得
+                            if 'resume_text_input' in st.session_state and st.session_state['resume_text_input']:
+                                original_english_resume = st.session_state['resume_text_input']
+                                # 英語匿名化プロンプトを生成（完全匿名化）
+                                prompt_en = get_english_anonymization_prompt(original_english_resume, "full")
+                                result_en = call_groq_api(api_key, prompt_en)
+                                st.session_state['resume_en_result'] = result_en
+                                st.success("✅ 英語匿名化レジュメの生成が完了しました")
+                                st.info("💡 下にスクロールして結果を確認してください")
+                                st.rerun()
+                            else:
+                                st.error("❌ 元の英語レジュメが見つかりません。最初から変換し直してください。")
+                        except Exception as e:
+                            st.error(f"❌ 生成エラー: {str(e)[:200]}")
+
+                # 英語匿名化結果の表示
+                if 'resume_en_result' in st.session_state and st.session_state.get('resume_result'):
+                    st.divider()
+                    st.markdown("##### 📄 英語匿名化レジュメ（追加生成）")
+
+                    col_view_en2, col_copy_en2 = st.columns([2, 1])
+                    with col_view_en2:
+                        show_formatted_en2 = st.checkbox("📖 整形表示", value=False, key="resume_en2_formatted")
+                    with col_copy_en2:
+                        if st.button("📋 コピー", key="copy_resume_en2", use_container_width=True):
+                            st.toast("✅ クリップボードにコピーしました")
+                            escaped_text = st.session_state['resume_en_result'].replace('`', '\\`').replace('$', '\\$')
+                            st.components.v1.html(f"""
+                                <script>
+                                navigator.clipboard.writeText(`{escaped_text}`);
+                                </script>
+                            """, height=0)
+
+                    if show_formatted_en2:
+                        st.markdown(st.session_state['resume_en_result'])
+                    else:
+                        edited_result_en2 = st.text_area(
+                            "Output (Editable)",
+                            value=st.session_state['resume_en_result'],
+                            height=400,
+                            key="edit_resume_result_en2"
+                        )
+                        st.session_state['resume_en_result'] = edited_result_en2
+
+                    # ダウンロードボタン
+                    col_dl1_en2, col_dl2_en2, col_dl3_en2 = st.columns(3)
+                    with col_dl1_en2:
+                        st.download_button(
+                            "📄 Markdown",
+                            data=st.session_state['resume_en_result'],
+                            file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                            mime="text/markdown",
+                            key="en2_md"
+                        )
+                    with col_dl2_en2:
+                        st.download_button(
+                            "📝 テキスト",
+                            data=st.session_state['resume_en_result'],
+                            file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            mime="text/plain",
+                            key="en2_txt"
+                        )
+                    with col_dl3_en2:
+                        html_content = generate_html(st.session_state['resume_en_result'], "Anonymized Resume")
+                        st.download_button(
+                            "🌐 HTML",
+                            data=html_content,
+                            file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                            mime="text/html",
+                            key="en2_html",
+                            help="ブラウザで開いて印刷→PDF保存"
+                        )
+
                 # 共有リンク作成ボタン
                 if get_supabase_client():
                     st.divider()
@@ -2847,6 +2926,85 @@ def main():
                         key="en_html",
                         help="ブラウザで開いて印刷→PDF保存"
                     )
+
+                # 追加変換ボタン
+                st.divider()
+                st.markdown("##### 🔄 追加変換")
+                if st.button("🌐 この結果を日本語に翻訳（English → Japanese）", key="convert_to_jp_translate", use_container_width=True, help="英語匿名化レジュメを日本語フォーマットに変換"):
+                    with st.spinner("🤖 日本語レジュメを生成中..."):
+                        try:
+                            # 英語匿名化されたレジュメを取得
+                            if 'resume_en_result' in st.session_state and st.session_state['resume_en_result']:
+                                english_resume = st.session_state['resume_en_result']
+                                # 日本語変換プロンプトを生成（完全匿名化）
+                                prompt_jp = get_resume_optimization_prompt(english_resume, "full")
+                                result_jp = call_groq_api(api_key, prompt_jp)
+                                st.session_state['resume_result'] = result_jp
+                                st.success("✅ 日本語レジュメの生成が完了しました")
+                                st.info("💡 下にスクロールして結果を確認してください")
+                                st.rerun()
+                            else:
+                                st.error("❌ 英語レジュメが見つかりません。最初から変換し直してください。")
+                        except Exception as e:
+                            st.error(f"❌ 生成エラー: {str(e)[:200]}")
+
+                # 日本語変換結果の表示（英語匿名化後の追加変換）
+                if 'resume_result' in st.session_state and st.session_state.get('resume_en_result') and not st.session_state.get('resume_text_input'):
+                    st.divider()
+                    st.markdown("##### 📄 日本語レジュメ（追加生成）")
+
+                    col_view_jp2, col_copy_jp2 = st.columns([2, 1])
+                    with col_view_jp2:
+                        show_formatted_jp2 = st.checkbox("📖 整形表示", value=False, key="resume_jp2_formatted")
+                    with col_copy_jp2:
+                        if st.button("📋 コピー", key="copy_resume_jp2", use_container_width=True):
+                            st.toast("✅ クリップボードにコピーしました")
+                            escaped_text = st.session_state['resume_result'].replace('`', '\\`').replace('$', '\\$')
+                            st.components.v1.html(f"""
+                                <script>
+                                navigator.clipboard.writeText(`{escaped_text}`);
+                                </script>
+                            """, height=0)
+
+                    if show_formatted_jp2:
+                        st.markdown(st.session_state['resume_result'])
+                    else:
+                        edited_result_jp2 = st.text_area(
+                            "出力結果（編集可能）",
+                            value=st.session_state['resume_result'],
+                            height=400,
+                            key="edit_resume_result_jp2"
+                        )
+                        st.session_state['resume_result'] = edited_result_jp2
+
+                    # ダウンロードボタン
+                    col_dl1_jp2, col_dl2_jp2, col_dl3_jp2 = st.columns(3)
+                    with col_dl1_jp2:
+                        st.download_button(
+                            "📄 Markdown",
+                            data=st.session_state['resume_result'],
+                            file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                            mime="text/markdown",
+                            key="jp2_md"
+                        )
+                    with col_dl2_jp2:
+                        st.download_button(
+                            "📝 テキスト",
+                            data=st.session_state['resume_result'],
+                            file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            mime="text/plain",
+                            key="jp2_txt"
+                        )
+                    with col_dl3_jp2:
+                        html_content = generate_html(st.session_state['resume_result'], "候補者レジュメ")
+                        st.download_button(
+                            "🌐 HTML",
+                            data=html_content,
+                            file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                            mime="text/html",
+                            key="jp2_html",
+                            help="ブラウザで開いて印刷→PDF保存"
+                        )
 
                 # 共有リンク作成ボタン
                 if get_supabase_client():
