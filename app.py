@@ -1070,37 +1070,79 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 ## 2. 推薦サマリ
 *（300文字程度で、この候補者の経歴の要約と強みを記載。採用担当者が最初に読む部分として魅力的に）*
 
-## 3. 技術スタック
-| カテゴリ | スキル |
-|---------|--------|
-| プログラミング言語 | |
-| フレームワーク | |
-| データベース | |
-| インフラ/クラウド | |
-| ツール/その他 | |
+## 3. 技術スタック・習熟度
+| カテゴリ | スキル | 経験年数 | 習熟度 |
+|---------|--------|----------|--------|
+| プログラミング言語 | | | |
+| フレームワーク | | | |
+| データベース | | | |
+| インフラ/クラウド | | | |
+| ツール/その他 | | | |
+
+*習熟度: Expert（専門家レベル）/ Advanced（上級）/ Intermediate（中級）/ Beginner（初級）*
 
 ## 4. 語学・ビザ
 - **日本語レベル**: （JLPTレベル、日本滞在歴、実務での使用経験から推定）
 - **英語レベル**:
 - **ビザステータス**: （記載があれば、なければ「要確認」）
 
-## 5. 職務経歴
+## 5. リーダーシップ・ソフトスキル
+*（該当する経験がある場合のみ記載）*
+- メンタリング・チーム管理経験
+- クロスファンクショナルチームでの協業
+- 技術プレゼンテーション・登壇
+- 採用面接への参加
+
+## 6. 職務経歴
 *（新しい順に記載）*
 
 ### 【会社名】（期間：YYYY年MM月 〜 YYYY年MM月）
 **役職/ポジション**
 
+**プロジェクト概要:**
+- プロダクト/サービスの種類・規模（例：月間100万ユーザーのECプラットフォーム）
+
 **担当業務・成果:**
-- （具体的な成果を箇条書きで）
-- （数値があれば積極的に記載）
+- （具体的な成果を数値付きで記載：ユーザー数増加、パフォーマンス改善率、コスト削減額など）
+- （チーム規模、技術的チャレンジ、ビジネスインパクトを含める）
+
+## 7. オープンソース・副業プロジェクト
+*（該当する活動がある場合のみ記載）*
+- OSS貢献（プロジェクト名、貢献内容、影響度）
+- 個人プロジェクト（概要、技術スタック、ユーザー数など）
+- 技術コミュニティ活動（登壇、記事執筆、コミュニティ運営など）
+
+## 8. 受賞歴・表彰
+*（該当する実績がある場合のみ記載）*
+- 社内表彰、ハッカソン受賞、競技プログラミング、特許など
+
+## 9. 継続的学習
+*（最近の学習活動がある場合のみ記載）*
+- 最近取得した資格・修了したコース
+- カンファレンス参加・登壇
+- 技術ブログ・記事執筆
 
 ---
 
 【入力レジュメ】
 {resume_text}
 
+---
+
+【重要な抽出指示】
 上記のレジュメを解析し、指定フォーマットで日本語に変換してください。
-不明な項目は「記載なし」または「要確認」としてください。
+以下の点に特に注意してください：
+
+1. **成果には必ず数値を含める**: ユーザー数、パフォーマンス改善率、コスト削減額、チーム規模など
+2. **技術スキルには経験年数と習熟度を併記**: 可能な限り推定して記載
+3. **リーダーシップ経験を見逃さない**: メンター、チームリード、採用関与など
+4. **プロジェクトの規模感を記載**: ユーザー数、売上、予算、チーム規模など
+5. **OSS貢献・副業があれば必ず記載**: GitHub、個人プロジェクト、登壇、記事執筆など
+6. **受賞歴・表彰があれば記載**: 社内賞、ハッカソン、競技プログラミングなど
+7. **最近の学習活動を記載**: 資格取得、コース修了、カンファレンス参加など
+
+**重要**: レジュメに情報が全くない場合のみ「記載なし」とし、少しでも関連する記述があれば必ず抽出して記載してください。
+**重要**: 該当するセクション（OSS、受賞歴など）に情報がない場合は、そのセクション自体を省略してください。
 """
 
 
@@ -1172,29 +1214,57 @@ Maintain the resume in English with this standardized structure:
 ## 2. Professional Summary
 *(2-3 sentences highlighting key qualifications and strengths)*
 
-## 3. Technical Skills
-| Category | Skills |
-|----------|--------|
-| Programming Languages | |
-| Frameworks & Libraries | |
-| Databases | |
-| Cloud & Infrastructure | |
-| Tools & Others | |
+## 3. Technical Skills & Proficiency
+| Category | Skills | Years of Experience | Proficiency Level |
+|----------|--------|---------------------|-------------------|
+| Programming Languages | | | |
+| Frameworks & Libraries | | | |
+| Databases | | | |
+| Cloud & Infrastructure | | | |
+| Tools & Others | | | |
 
-## 4. Work Experience
+*Proficiency Levels: Expert / Advanced / Intermediate / Beginner*
+
+## 4. Leadership & Soft Skills
+*(Include only if applicable)*
+- Mentoring & team management experience
+- Cross-functional collaboration
+- Technical presentations & speaking
+- Interview participation
+
+## 5. Work Experience
 *(Most recent first)*
 
 ### [Company Description] (Period: MMM YYYY – MMM YYYY)
 **Position/Role**
 
-**Key Responsibilities & Achievements:**
-- (Specific achievements with metrics where available)
-- (Impact and results)
+**Project Context:**
+- Product/service type and scale (e.g., E-commerce platform with 1M+ monthly users)
 
-## 5. Education
+**Key Responsibilities & Achievements:**
+- (Specific achievements with metrics: user growth, performance improvements, cost savings, etc.)
+- (Team size, technical challenges, business impact)
+
+## 6. Open Source & Side Projects
+*(Include only if applicable)*
+- OSS contributions (project name, contribution type, impact metrics)
+- Personal projects (overview, tech stack, user metrics)
+- Technical community involvement (speaking, writing, organizing)
+
+## 7. Awards & Recognition
+*(Include only if applicable)*
+- Company awards, hackathon wins, competitive programming, patents, etc.
+
+## 8. Continuous Learning
+*(Include only if applicable)*
+- Recent certifications or completed courses
+- Conference attendance or speaking
+- Technical blog posts or articles
+
+## 9. Education
 - **Degree** - [University Description], Year
 
-## 6. Certifications
+## 10. Certifications
 - Certification names (without ID numbers)
 
 ---
@@ -1202,8 +1272,22 @@ Maintain the resume in English with this standardized structure:
 【INPUT RESUME】
 {resume_text}
 
+---
+
+【IMPORTANT EXTRACTION INSTRUCTIONS】
 Parse the above resume and output in the specified format in English.
-Mark unknown items as "Not specified" or "To be confirmed".
+Pay special attention to the following:
+
+1. **Always include metrics in achievements**: User numbers, performance improvement %, cost savings, team size, etc.
+2. **Specify experience years and proficiency for technical skills**: Estimate if necessary
+3. **Don't miss leadership experience**: Mentoring, team lead, hiring involvement, etc.
+4. **Include project scale information**: User count, revenue, budget, team size, etc.
+5. **Extract OSS contributions & side projects**: GitHub, personal projects, speaking, writing, etc.
+6. **Include awards & recognition**: Company awards, hackathons, competitive programming, etc.
+7. **Capture recent learning activities**: Certifications, courses, conference attendance, etc.
+
+**IMPORTANT**: Only use "Not specified" when there is absolutely NO related information in the resume. If there's any relevant mention, extract and include it.
+**IMPORTANT**: Omit entire sections (OSS, Awards, etc.) if there's no information, rather than listing them as empty.
 """
 
 
