@@ -3770,7 +3770,7 @@ def main():
                     st.error("❌ Please enter API key")
                 else:
                     # 入力バリデーション
-                    is_valid, error_msg = validate_input(jd_en_en_input, "jd")
+                    is_valid, error_msg = validate_input(jd_en_en_input, "jd_en")
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
