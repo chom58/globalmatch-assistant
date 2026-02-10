@@ -1443,6 +1443,87 @@ def get_jd_en_to_jp_prompt(jd_text: str) -> str:
 """
 
 
+def get_jd_jp_to_jp_prompt(jd_text: str) -> str:
+    """求人票フォーマット化用のプロンプトを生成（日本語→日本語）"""
+
+    return f"""あなたは人材紹介のエキスパートコンサルタントです。
+日本語の求人票を、統一された見やすいフォーマットの魅力的な日本語求人票に変換してください。
+
+【変換のポイント】
+1. **フォーマットの統一**: 読みやすく整理された構造に再構成
+2. **情報の明確化**: 勤務条件、待遇、技術スタックを分かりやすく整理
+3. **魅力的な表現**: エンジニアが興味を持つポイントを強調
+
+【出力フォーマット】
+以下の構造で出力してください：
+
+---
+
+# [会社名] - [職種名]
+
+## 概要
+| 項目 | 内容 |
+|------|------|
+| **勤務形態** | （フルリモート/ハイブリッド/出社） |
+| **勤務地** | |
+| **雇用形態** | （正社員/契約社員など） |
+| **想定年収** | |
+| **英語力** | （必須/あれば尚可/不要） |
+
+## 会社について
+（会社の事業内容、規模、特徴を2-3文で）
+
+## 仕事内容
+（具体的な業務内容を箇条書きで）
+・
+・
+
+## 必須スキル・経験
+・
+・
+
+## 歓迎スキル・経験
+・
+・
+
+## 技術スタック
+| カテゴリ | 技術 |
+|---------|------|
+| 言語 | |
+| フレームワーク | |
+| インフラ | |
+| ツール | |
+
+## 福利厚生・働き方
+・
+・
+
+## 選考プロセス
+（記載があれば）
+
+## 応募方法
+**※このセクションは以下の固定文言を必ず使用してください（元の求人票の連絡先は無視）：**
+
+この求人に興味がある方は、Value Createが直接企業へ推薦いたします。
+以下のチームメンバーまでお気軽にご連絡ください：
+・**Ilya（イリヤ）**
+・**Hiroshi（ヒロシ）**
+・**Shu（シュウ）**
+面談調整から選考サポートまで、一貫してお手伝いいたします！
+
+---
+
+【元の求人票（日本語）】
+{jd_text}
+
+上記を解析し、統一されたフォーマットの魅力的な日本語求人票に変換してください。
+不明な項目は「要確認」または「詳細はお問い合わせください」としてください。
+**重要**: 「応募方法」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
+**重要**: リスト項目の行頭記号は中黒（・）を使用してください。アスタリスク（*）は使用しないでください。
+**重要**: 見出しに絵文字は使用しないでください。シンプルなテキストのみで出力してください。
+"""
+
+
 def get_jd_en_to_en_prompt(jd_text: str) -> str:
     """求人票フォーマット化用のプロンプトを生成（英語→英語）"""
 
@@ -2486,6 +2567,7 @@ def main():
                 "レジュメ匿名化（英→英）",
                 "求人票魅力化（日→英）",
                 "求人票翻訳（英→日）",
+                "求人票フォーマット化（日→日）",
                 "求人票フォーマット化（英→英）",
                 "企業紹介文作成（PDF）",
                 "🎯 レジュメ×求人票マッチング分析",
@@ -2518,6 +2600,11 @@ def main():
             1. 英語の求人票をペースト
             2. 「変換実行」をクリック
             3. 日本人エンジニア向けに最適化
+
+            **求人票フォーマット化（日→日）**
+            1. 日本語の求人票をペースト
+            2. 「変換実行」をクリック
+            3. 統一フォーマットの魅力的な日本語JDを取得
 
             **求人票フォーマット化（英→英）**
             1. 英語の求人票をペースト
@@ -3432,6 +3519,181 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
+    elif feature == "求人票フォーマット化（日→日）":
+        st.subheader("📋 求人票フォーマット化（日本語 → 日本語）")
+        st.caption("日本語の求人票を、統一された見やすいフォーマットの魅力的な日本語JDに変換します")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+
+            jd_jp_jp_input = ""
+
+            with input_tab1:
+                # サンプルデータボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("##### 入力：日本語求人票")
+                with col_sample:
+                    if st.button("📝 サンプル", key="sample_jd_jp_jp_btn", help="サンプル求人票を挿入"):
+                        st.session_state['jd_jp_jp_text_input'] = SAMPLE_JD
+
+                jd_jp_jp_text = st.text_area(
+                    "日本語の求人票をペースト",
+                    height=350,
+                    placeholder="求人票をここに貼り付けてください...\n\n例：\n【募集職種】バックエンドエンジニア\n【業務内容】自社サービスの開発...",
+                    label_visibility="collapsed",
+                    key="jd_jp_jp_text_input"
+                )
+                if jd_jp_jp_text:
+                    jd_jp_jp_input = jd_jp_jp_text
+
+            with input_tab2:
+                st.markdown("##### 求人票PDFをアップロード")
+                uploaded_jd_jp_jp_pdf = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="jd_jp_jp_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_jd_jp_jp_pdf:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text, error = extract_text_from_pdf(uploaded_jd_jp_jp_pdf)
+                        if error:
+                            st.error(f"❌ {error}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                            jd_jp_jp_input = extracted_text
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text[:2000] + ("..." if len(extracted_text) > 2000 else ""))
+
+            # 文字数カウンター
+            char_count = len(jd_jp_jp_input) if jd_jp_jp_input else 0
+            if char_count > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+            elif char_count > 0:
+                st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字")
+
+            st.info("💡 統一フォーマットに整理され、見やすく魅力的な求人票が生成されます")
+
+            process_btn = st.button(
+                "🔄 変換実行",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not jd_jp_jp_input,
+                key="jd_jp_jp_btn"
+            )
+
+        with col2:
+            st.markdown("##### 出力：統一フォーマットの日本語JD")
+
+            if process_btn:
+                if not api_key:
+                    st.error("❌ APIキーを入力してください")
+                else:
+                    # 入力バリデーション
+                    is_valid, error_msg = validate_input(jd_jp_jp_input, "jd")
+                    if not is_valid:
+                        st.warning(f"⚠️ {error_msg}")
+                    else:
+                        with st.spinner("🤖 AIが求人票を解析・整形しています..."):
+                            try:
+                                start_time = time.time()
+                                prompt = get_jd_jp_to_jp_prompt(jd_jp_jp_input)
+                                result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
+
+                                st.session_state['jd_jp_jp_result'] = result
+                                st.session_state['jd_jp_jp_time'] = elapsed_time
+                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+
+                            except ValueError as e:
+                                st.error(str(e))
+                            except Exception as e:
+                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+
+            # 結果表示
+            if 'jd_jp_jp_result' in st.session_state:
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox("📖 整形表示", value=False, key="jd_jp_jp_formatted",
+                                                  help="Markdownをフォーマットして表示")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_jd_jp_jp", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['jd_jp_jp_result'].replace('`', '\\`').replace('$', '\\$')
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{escaped_text}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted:
+                    st.markdown(st.session_state['jd_jp_jp_result'])
+                else:
+                    # 編集可能なテキストエリア
+                    edited_jd_jp_jp_result = st.text_area(
+                        "出力結果（編集可能）",
+                        value=st.session_state['jd_jp_jp_result'],
+                        height=400,
+                        key="edit_jd_jp_jp_result"
+                    )
+                    st.session_state['jd_jp_jp_result'] = edited_jd_jp_jp_result
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['jd_jp_jp_result'],
+                        file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="jd_jp_jp_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        "📝 テキスト",
+                        data=st.session_state['jd_jp_jp_result'],
+                        file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="jd_jp_jp_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['jd_jp_jp_result'], "求人票")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="jd_jp_jp_html",
+                        help="ブラウザで開いて印刷→PDF保存"
+                    )
+
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 共有リンク作成", key="share_jd_jp_jp", help="1ヶ月有効の共有リンクを作成"):
+                        with st.spinner("共有リンクを作成中..."):
+                            share_id = create_share_link(
+                                st.session_state['jd_jp_jp_result'],
+                                "求人票"
+                            )
+                        if share_id:
+                            try:
+                                base_url = st.secrets["APP_URL"]
+                            except KeyError:
+                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
+                            st.code(share_url)
+                            st.info("💡 上のURLをコピーしてクライアントに共有してください")
+                        else:
+                            st.error("❌ 共有リンクの作成に失敗しました")
+
     elif feature == "求人票フォーマット化（英→英）":
         st.subheader("📋 求人票フォーマット化（English → English）")
         st.caption("Transform English job descriptions into an attractive, well-structured format for international engineers")
@@ -3936,6 +4198,8 @@ def main():
                     available_jds.append(("求人票魅力化（日→英）の結果", st.session_state['jd_result']))
                 if 'jd_en_result' in st.session_state:
                     available_jds.append(("求人票翻訳（英→日）の結果", st.session_state['jd_en_result']))
+                if 'jd_jp_jp_result' in st.session_state:
+                    available_jds.append(("求人票フォーマット化（日→日）の結果", st.session_state['jd_jp_jp_result']))
                 if 'jd_en_en_result' in st.session_state:
                     available_jds.append(("求人票フォーマット化（英→英）の結果", st.session_state['jd_en_en_result']))
 
