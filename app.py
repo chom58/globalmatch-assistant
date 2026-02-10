@@ -1443,6 +1443,83 @@ def get_jd_en_to_jp_prompt(jd_text: str) -> str:
 """
 
 
+def get_jd_en_to_en_prompt(jd_text: str) -> str:
+    """求人票フォーマット化用のプロンプトを生成（英語→英語）"""
+
+    return f"""You are an expert recruiter specializing in international engineer recruitment.
+Transform the provided English job description into an attractive, well-structured English JD that appeals to international engineers.
+
+【Key Transformation Points】
+1. **Restructure the format**: Place information that international engineers prioritize at the top
+2. **Enhance readability**: Use clear, engaging language with consistent formatting
+3. **Clarify key information**: Explicitly state visa support, remote work policy, and language requirements
+4. **Highlight appeal**: Emphasize growth opportunities, tech stack, and company culture
+
+【Output Format】
+Please output in the following structure:
+
+---
+
+# [Position Title] at [Company Name]
+
+## Quick Facts
+| | |
+|---|---|
+| **Visa Sponsorship** | Available (supported for qualified candidates) |
+| **Remote Work** | (Full Remote/Hybrid/On-site - specify policy) |
+| **Language Requirements** | (English OK/Japanese N2+/Bilingual environment) |
+| **Salary Range** | (If available, include in USD) |
+| **Location** | |
+
+## Why Join Us?
+(2-3 compelling sentences about company culture, growth opportunity, or unique value proposition)
+
+## What You'll Do
+(Key responsibilities in bullet points - focus on impact, not just tasks)
+・
+・
+
+## What We're Looking For
+**Must-have:**
+・
+・
+
+**Nice-to-have:**
+・
+・
+
+## Benefits & Perks
+(Highlight benefits that appeal to international candidates)
+・
+・
+
+## About the Company
+(Brief company introduction)
+
+## How to Apply
+**※Please use this fixed template (ignore any contact information in the original JD):**
+
+Interested in this position? Value Create will recommend you directly to the company's hiring team.
+Please reach out to one of our team members to express your interest:
+・**Ilya**
+・**Hiroshi**
+・**Shu**
+We'll take care of the introduction and guide you through the process!
+
+---
+
+【Original Job Description】
+{jd_text}
+
+Please analyze the above JD and transform it into an attractive English job description for international engineers.
+For unclear items, use "To be discussed" or "Contact for details".
+**IMPORTANT**: For Visa Sponsorship, even if not mentioned in the original JD, state "Available (supported for qualified candidates)". All positions handled by Value Create offer visa support.
+**IMPORTANT**: For the "How to Apply" section, ignore any contact information or email addresses in the original JD and use the fixed template above (contact Value Create team).
+**IMPORTANT**: Use middle dots (・) for list items and capitalize the first letter of each item. Do not use asterisks (*).
+**IMPORTANT**: Do not use emojis in headings. Output simple text only.
+"""
+
+
 def get_company_intro_prompt(company_text: str) -> str:
     """会社紹介資料から企業紹介文を生成するプロンプト"""
 
@@ -2409,6 +2486,7 @@ def main():
                 "レジュメ匿名化（英→英）",
                 "求人票魅力化（日→英）",
                 "求人票翻訳（英→日）",
+                "求人票フォーマット化（英→英）",
                 "企業紹介文作成（PDF）",
                 "🎯 レジュメ×求人票マッチング分析",
                 "📦 バッチ処理（複数レジュメ）"
@@ -2440,6 +2518,11 @@ def main():
             1. 英語の求人票をペースト
             2. 「変換実行」をクリック
             3. 日本人エンジニア向けに最適化
+
+            **求人票フォーマット化（英→英）**
+            1. 英語の求人票をペースト
+            2. 「変換実行」をクリック
+            3. 統一フォーマットの魅力的な英語JDを取得
 
             **企業紹介文作成（PDF）**
             1. 会社紹介PDFをアップロード
@@ -3349,6 +3432,181 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
+    elif feature == "求人票フォーマット化（英→英）":
+        st.subheader("📋 求人票フォーマット化（English → English）")
+        st.caption("Transform English job descriptions into an attractive, well-structured format for international engineers")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 Text Input", "📄 PDF Upload"])
+
+            jd_en_en_input = ""
+
+            with input_tab1:
+                # サンプルデータボタン
+                col_label, col_sample = st.columns([3, 1])
+                with col_label:
+                    st.markdown("##### Input: English Job Description")
+                with col_sample:
+                    if st.button("📝 Sample", key="sample_jd_en_en_btn", help="Insert sample English JD"):
+                        st.session_state['jd_en_en_text_input'] = SAMPLE_JD_EN
+
+                jd_en_en_text = st.text_area(
+                    "Paste English job description",
+                    height=350,
+                    placeholder="Paste the English job description here...\n\nExample:\nSenior Software Engineer\n\nAbout the role:\nWe are looking for...",
+                    label_visibility="collapsed",
+                    key="jd_en_en_text_input"
+                )
+                if jd_en_en_text:
+                    jd_en_en_input = jd_en_en_text
+
+            with input_tab2:
+                st.markdown("##### Upload Job Description PDF")
+                uploaded_jd_en_en_pdf = st.file_uploader(
+                    "Select PDF file",
+                    type=["pdf"],
+                    key="jd_en_en_pdf",
+                    help=f"Maximum {MAX_PDF_SIZE_MB}MB, up to 20 pages"
+                )
+
+                if uploaded_jd_en_en_pdf:
+                    with st.spinner("📄 Reading PDF..."):
+                        extracted_text, error = extract_text_from_pdf(uploaded_jd_en_en_pdf)
+                        if error:
+                            st.error(f"❌ {error}")
+                        else:
+                            st.success(f"✅ Text extracted ({len(extracted_text):,} characters)")
+                            jd_en_en_input = extracted_text
+                            with st.expander("View extracted text"):
+                                st.text(extracted_text[:2000] + ("..." if len(extracted_text) > 2000 else ""))
+
+            # 文字数カウンター
+            char_count = len(jd_en_en_input) if jd_en_en_input else 0
+            if char_count > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} characters (exceeded)")
+            elif char_count > 0:
+                st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} characters")
+
+            st.info("💡 The output will follow a standardized format optimized for international recruitment")
+
+            process_btn = st.button(
+                "🔄 Transform",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not jd_en_en_input,
+                key="jd_en_en_btn"
+            )
+
+        with col2:
+            st.markdown("##### Output: Formatted English JD")
+
+            if process_btn:
+                if not api_key:
+                    st.error("❌ Please enter API key")
+                else:
+                    # 入力バリデーション
+                    is_valid, error_msg = validate_input(jd_en_en_input, "jd")
+                    if not is_valid:
+                        st.warning(f"⚠️ {error_msg}")
+                    else:
+                        with st.spinner("🤖 AI is analyzing and transforming the job description..."):
+                            try:
+                                start_time = time.time()
+                                prompt = get_jd_en_to_en_prompt(jd_en_en_input)
+                                result = call_groq_api(api_key, prompt)
+                                elapsed_time = time.time() - start_time
+
+                                st.session_state['jd_en_en_result'] = result
+                                st.session_state['jd_en_en_time'] = elapsed_time
+                                st.success(f"✅ Transformation complete! ({elapsed_time:.1f}s)")
+
+                            except ValueError as e:
+                                st.error(str(e))
+                            except Exception as e:
+                                st.error(f"❌ Unexpected error: {str(e)[:200]}")
+
+            # 結果表示
+            if 'jd_en_en_result' in st.session_state:
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox("📖 Formatted View", value=False, key="jd_en_en_formatted",
+                                                  help="Display with Markdown formatting")
+                with col_copy:
+                    if st.button("📋 Copy", key="copy_jd_en_en", use_container_width=True):
+                        st.toast("✅ Copied to clipboard")
+                        escaped_text = st.session_state['jd_en_en_result'].replace('`', '\\`').replace('$', '\\$')
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{escaped_text}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted:
+                    st.markdown(st.session_state['jd_en_en_result'])
+                else:
+                    # 編集可能なテキストエリア
+                    edited_jd_en_en_result = st.text_area(
+                        "Output (Editable)",
+                        value=st.session_state['jd_en_en_result'],
+                        height=400,
+                        key="edit_jd_en_en_result"
+                    )
+                    st.session_state['jd_en_en_result'] = edited_jd_en_en_result
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['jd_en_en_result'],
+                        file_name=f"job_description_en_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="jd_en_en_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        "📝 Text",
+                        data=st.session_state['jd_en_en_result'],
+                        file_name=f"job_description_en_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="jd_en_en_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['jd_en_en_result'], "Job Description")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"job_description_en_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="jd_en_en_html",
+                        help="Open in browser and save as PDF via print"
+                    )
+
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 Create Share Link", key="share_jd_en_en", help="Create a shareable link (valid for 1 month)"):
+                        with st.spinner("Creating share link..."):
+                            share_id = create_share_link(
+                                st.session_state['jd_en_en_result'],
+                                "Job Description"
+                            )
+                        if share_id:
+                            try:
+                                base_url = st.secrets["APP_URL"]
+                            except KeyError:
+                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ Share link created (valid for 1 month)")
+                            st.code(share_url)
+                            st.info("💡 Copy the URL above to share with clients")
+                        else:
+                            st.error("❌ Failed to create share link")
+
     elif feature == "企業紹介文作成（PDF）":
         st.subheader("🏢 企業紹介文作成（PDF読み取り）")
         st.caption("会社紹介資料（PDF）から求職者向けの簡潔な企業紹介文を自動生成します")
@@ -3678,6 +3936,8 @@ def main():
                     available_jds.append(("求人票魅力化（日→英）の結果", st.session_state['jd_result']))
                 if 'jd_en_result' in st.session_state:
                     available_jds.append(("求人票翻訳（英→日）の結果", st.session_state['jd_en_result']))
+                if 'jd_en_en_result' in st.session_state:
+                    available_jds.append(("求人票フォーマット化（英→英）の結果", st.session_state['jd_en_en_result']))
 
                 if available_jds:
                     selected_jd = st.radio(
