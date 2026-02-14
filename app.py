@@ -1981,6 +1981,56 @@ Overall evaluation and comments
 """
 
 
+def get_cv_proposal_extract_prompt(resume_text: str) -> str:
+    """CV提案用コメント抽出プロンプトを生成（英語・各60文字以内）"""
+
+    return f"""You are a professional recruitment consultant specializing in international engineer placement.
+
+From the following CV/resume, extract concise English comments for an anonymous candidate proposal document.
+
+【CV/Resume】
+{resume_text}
+
+---
+
+【Output Format】※ Strictly follow this format. Each item MUST be within 60 characters. Output in English only.
+
+## 1. Catch Copy
+A one-line headline that captures the candidate's core appeal.
+Example: "10-Year Full-Stack Engineer with Cloud Architecture Expertise"
+※ Max 60 characters. No names or company names.
+
+## 2. Summary
+A brief overview of the candidate's profile.
+Example: "Senior backend engineer, 8 yrs exp in fintech, fluent JP"
+※ Max 60 characters. Include years of experience and domain.
+
+## 3. Strength
+The candidate's strongest technical or professional asset.
+Example: "Led 5 microservice migrations, reduced latency by 40%"
+※ Max 60 characters. Be specific with metrics if available.
+
+## 4. Education / Research
+Academic background and relevant certifications.
+Example: "MSc Computer Science, AWS Solutions Architect certified"
+※ Max 60 characters. Highest degree + key certification.
+
+## 5. Assessment
+Overall evaluation and recommendation.
+Example: "Strong match for senior roles, excellent leadership record"
+※ Max 60 characters. Objective assessment.
+
+---
+
+【Important Rules】
+1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "Major US tech company", "Top university in Japan").
+2. **60-Character Limit**: Each section MUST be 60 characters or fewer. Count carefully.
+3. **English Only**: All output must be in English.
+4. **Specificity**: Use concrete skills, years, metrics. Avoid vague expressions.
+5. **No Markdown Headers in Values**: Output the value text directly after each header.
+"""
+
+
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     """入力テキストのバリデーション"""
 
@@ -2571,6 +2621,7 @@ def main():
                 "求人票フォーマット化（英→英）",
                 "企業紹介文作成（PDF）",
                 "🎯 レジュメ×求人票マッチング分析",
+                "📝 CV提案コメント抽出",
                 "📦 バッチ処理（複数レジュメ）"
             ],
             index=0,
@@ -2621,6 +2672,12 @@ def main():
             2. テキスト直接入力、または過去の変換結果から選択可能
             3. 「マッチング分析を実行」をクリック
             4. マッチスコア、スキル比較、強み・ギャップ分析、推薦コメントを取得
+
+            **CV提案コメント抽出**
+            1. 英語のCVをテキスト入力またはPDFアップロード
+            2. 「抽出実行」をクリック
+            3. 匿名提案用の5項目コメント（各60文字以内・英語）を取得
+            4. 複数CVの一括処理にも対応（---NEXT---で区切り）
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
             """)
@@ -4647,6 +4704,285 @@ def main():
                         st.info("💡 上のURLをコピーしてクライアントに共有してください")
                     else:
                         st.error("❌ 共有リンクの作成に失敗しました")
+
+    elif feature == "📝 CV提案コメント抽出":
+        st.subheader("📝 CV提案コメント抽出")
+        st.caption("CVから匿名提案用の5項目コメント（英語・各60文字以内）を抽出します。複数CVの一括処理にも対応。")
+
+        # 入力モード選択
+        cv_extract_mode = st.radio(
+            "入力モード",
+            options=["single", "batch"],
+            format_func=lambda x: {
+                "single": "単体CV入力",
+                "batch": "複数CV一括処理"
+            }[x],
+            horizontal=True,
+            key="cv_extract_mode"
+        )
+
+        if cv_extract_mode == "single":
+            col1, col2 = st.columns([1, 1])
+
+            with col1:
+                input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+
+                with input_tab1:
+                    st.markdown("##### 入力：英語CV")
+                    cv_extract_input = st.text_area(
+                        "英語のCVをペースト",
+                        height=350,
+                        placeholder="Paste the English CV/Resume here...",
+                        label_visibility="collapsed",
+                        key="cv_extract_text"
+                    )
+
+                with input_tab2:
+                    st.markdown("##### PDFをアップロード")
+                    uploaded_pdf_cv = st.file_uploader(
+                        "PDFファイルを選択",
+                        type=["pdf"],
+                        key="cv_extract_pdf",
+                        help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                    )
+
+                    if uploaded_pdf_cv:
+                        with st.spinner("📄 PDFを読み込み中..."):
+                            extracted_cv_text, cv_pdf_error = extract_text_from_pdf(uploaded_pdf_cv)
+                            if cv_pdf_error:
+                                st.error(f"❌ {cv_pdf_error}")
+                            else:
+                                st.success(f"✅ テキスト抽出完了（{len(extracted_cv_text):,}文字）")
+                                cv_extract_input = extracted_cv_text
+                                with st.expander("抽出されたテキストを確認"):
+                                    st.text(extracted_cv_text[:2000] + ("..." if len(extracted_cv_text) > 2000 else ""))
+                    else:
+                        if 'cv_extract_input' not in dir():
+                            cv_extract_input = ""
+
+                # 文字数カウンター
+                cv_char_count = len(cv_extract_input) if cv_extract_input else 0
+                if cv_char_count > MAX_INPUT_CHARS:
+                    st.error(f"📊 {cv_char_count:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+                elif cv_char_count > 0:
+                    st.caption(f"📊 {cv_char_count:,} / {MAX_INPUT_CHARS:,} 文字")
+
+                cv_extract_btn = st.button(
+                    "🔄 抽出実行",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not api_key or not cv_extract_input,
+                    key="cv_extract_btn"
+                )
+
+            with col2:
+                st.markdown("##### 出力：提案コメント（英語・各60文字以内）")
+
+                if cv_extract_btn:
+                    if not api_key:
+                        st.error("❌ APIキーを入力してください")
+                    else:
+                        is_valid_cv, error_msg_cv = validate_input(cv_extract_input, "resume")
+                        if not is_valid_cv:
+                            st.warning(f"⚠️ {error_msg_cv}")
+                        else:
+                            with st.spinner("🤖 AIがCVからコメントを抽出しています..."):
+                                try:
+                                    start_time = time.time()
+                                    prompt = get_cv_proposal_extract_prompt(cv_extract_input)
+                                    result = call_groq_api(api_key, prompt)
+                                    elapsed_time = time.time() - start_time
+
+                                    st.session_state['cv_extract_result'] = result
+                                    st.session_state['cv_extract_time'] = elapsed_time
+                                    st.success(f"✅ 抽出完了！（{elapsed_time:.1f}秒）")
+
+                                except ValueError as e:
+                                    st.error(str(e))
+                                except Exception as e:
+                                    st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+
+                # 結果表示
+                if 'cv_extract_result' in st.session_state:
+                    col_view, col_copy = st.columns([2, 1])
+                    with col_view:
+                        show_formatted_cv = st.checkbox("📖 整形表示", value=True, key="cv_extract_formatted")
+                    with col_copy:
+                        if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
+                            st.toast("✅ クリップボードにコピーしました")
+                            escaped_text = st.session_state['cv_extract_result'].replace('`', '\\`').replace('$', '\\$')
+                            st.components.v1.html(f"""
+                                <script>
+                                navigator.clipboard.writeText(`{escaped_text}`);
+                                </script>
+                            """, height=0)
+
+                    if show_formatted_cv:
+                        st.markdown(st.session_state['cv_extract_result'])
+                    else:
+                        edited_cv_result = st.text_area(
+                            "Output (Editable)",
+                            value=st.session_state['cv_extract_result'],
+                            height=400,
+                            key="edit_cv_extract_result"
+                        )
+                        st.session_state['cv_extract_result'] = edited_cv_result
+
+                    # ダウンロードボタン
+                    col_dl1, col_dl2 = st.columns(2)
+                    with col_dl1:
+                        st.download_button(
+                            "📄 Markdown",
+                            data=st.session_state['cv_extract_result'],
+                            file_name=f"cv_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                            mime="text/markdown",
+                            key="cv_extract_md"
+                        )
+                    with col_dl2:
+                        st.download_button(
+                            "📝 テキスト",
+                            data=st.session_state['cv_extract_result'],
+                            file_name=f"cv_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            mime="text/plain",
+                            key="cv_extract_txt"
+                        )
+
+        else:  # batch mode
+            st.info("💡 **区切り方法**: `---NEXT---` を各CVの間に入れてください")
+
+            batch_cv_input = st.text_area(
+                "複数の英語CVを貼り付け",
+                height=400,
+                placeholder="""John Doe
+Software Engineer with 5+ years experience...
+[CV 1]
+
+---NEXT---
+
+Jane Smith
+Full-stack Developer...
+[CV 2]
+
+---NEXT---
+
+[Add more CVs...]""",
+                label_visibility="collapsed",
+                key="batch_cv_extract_text"
+            )
+
+            if batch_cv_input:
+                cv_list = [r.strip() for r in batch_cv_input.split("---NEXT---") if r.strip()]
+                st.metric("検出されたCV数", len(cv_list))
+            else:
+                cv_list = []
+                st.metric("検出されたCV数", 0)
+
+            batch_cv_btn = st.button(
+                "🚀 一括抽出実行",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not batch_cv_input,
+                key="batch_cv_extract_btn"
+            )
+
+            if batch_cv_btn and batch_cv_input:
+                cv_list = [r.strip() for r in batch_cv_input.split("---NEXT---") if r.strip()]
+
+                if len(cv_list) == 0:
+                    st.warning("⚠️ CVが検出されませんでした")
+                elif len(cv_list) > 10:
+                    st.error("❌ 一度に処理できるのは最大10件までです")
+                else:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+
+                    batch_cv_start_time = time.time()
+                    cv_results = []
+                    for i, cv_text in enumerate(cv_list):
+                        status_text.text(f"🔄 処理中... ({i + 1}/{len(cv_list)})")
+                        progress_bar.progress((i + 1) / len(cv_list))
+
+                        cv_result = {"index": i + 1, "status": "pending", "output": None, "error": None, "time": 0}
+
+                        is_valid, error_msg = validate_input(cv_text, "resume")
+                        if not is_valid:
+                            cv_result["status"] = "error"
+                            cv_result["error"] = error_msg
+                        else:
+                            try:
+                                item_start = time.time()
+                                prompt = get_cv_proposal_extract_prompt(cv_text)
+                                output = call_groq_api(api_key, prompt)
+                                cv_result["status"] = "success"
+                                cv_result["output"] = output
+                                cv_result["time"] = time.time() - item_start
+                            except Exception as e:
+                                cv_result["status"] = "error"
+                                cv_result["error"] = str(e)
+
+                        cv_results.append(cv_result)
+                        time.sleep(1)  # レート制限対策
+
+                    batch_cv_elapsed = time.time() - batch_cv_start_time
+                    st.session_state['batch_cv_extract_results'] = cv_results
+                    st.session_state['batch_cv_extract_time'] = batch_cv_elapsed
+                    status_text.text(f"✅ 処理完了！（合計 {batch_cv_elapsed:.1f}秒）")
+
+            # バッチ結果表示
+            if 'batch_cv_extract_results' in st.session_state:
+                st.divider()
+                st.subheader("📊 抽出結果")
+
+                success_count = sum(1 for r in st.session_state['batch_cv_extract_results'] if r['status'] == 'success')
+                error_count = sum(1 for r in st.session_state['batch_cv_extract_results'] if r['status'] == 'error')
+
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    st.metric("✅ 成功", success_count)
+                with col_m2:
+                    st.metric("❌ エラー", error_count)
+
+                # 個別結果
+                for cv_r in st.session_state['batch_cv_extract_results']:
+                    time_str = f"（{cv_r['time']:.1f}秒）" if cv_r['time'] > 0 else ""
+                    with st.expander(f"CV #{cv_r['index']} - {'✅ 成功' + time_str if cv_r['status'] == 'success' else '❌ エラー'}"):
+                        if cv_r['status'] == 'success':
+                            col_view_b, col_copy_b = st.columns([2, 1])
+                            with col_view_b:
+                                show_fmt = st.checkbox("📖 整形表示", value=True, key=f"batch_cv_fmt_{cv_r['index']}")
+                            with col_copy_b:
+                                if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
+                                    st.toast("✅ クリップボードにコピーしました")
+                                    escaped_text = cv_r['output'].replace('`', '\\`').replace('$', '\\$')
+                                    st.components.v1.html(f"""
+                                        <script>
+                                        navigator.clipboard.writeText(`{escaped_text}`);
+                                        </script>
+                                    """, height=0)
+
+                            if show_fmt:
+                                st.markdown(cv_r['output'])
+                            else:
+                                st.code(cv_r['output'], language="markdown")
+                        else:
+                            st.error(f"エラー: {cv_r['error']}")
+
+                # 全件まとめてダウンロード
+                if success_count > 0:
+                    st.divider()
+                    all_cv_content = "\n\n---\n\n".join([
+                        f"# CV #{r['index']}\n\n{r['output']}"
+                        for r in st.session_state['batch_cv_extract_results']
+                        if r['status'] == 'success'
+                    ])
+                    st.download_button(
+                        "📦 全件ダウンロード（Markdown）",
+                        data=all_cv_content,
+                        file_name=f"cv_proposals_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                        key="batch_cv_extract_download"
+                    )
 
     elif feature == "📦 バッチ処理（複数レジュメ）":
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
