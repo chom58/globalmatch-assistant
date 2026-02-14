@@ -1982,7 +1982,7 @@ Overall evaluation and comments
 
 
 def get_cv_proposal_extract_prompt(resume_text: str) -> str:
-    """CV提案用コメント抽出プロンプトを生成（英語・各60文字以内）"""
+    """CV提案用コメント抽出プロンプトを生成（英語・各150文字以内）"""
 
     return f"""You are a professional recruitment consultant specializing in international engineer placement.
 
@@ -1993,38 +1993,38 @@ From the following CV/resume, extract concise English comments for an anonymous 
 
 ---
 
-【Output Format】※ Strictly follow this format. Each item MUST be within 60 characters. Output in English only.
+【Output Format】※ Strictly follow this format. Each item MUST be within 150 characters. Output in English only.
 
 ## 1. Catch Copy
 A one-line headline that captures the candidate's core appeal.
 Example: "10-Year Full-Stack Engineer with Cloud Architecture Expertise"
-※ Max 60 characters. No names or company names.
+※ Max 150 characters. No names or company names.
 
 ## 2. Summary
 A brief overview of the candidate's profile.
 Example: "Senior backend engineer, 8 yrs exp in fintech, fluent JP"
-※ Max 60 characters. Include years of experience and domain.
+※ Max 150 characters. Include years of experience and domain.
 
 ## 3. Strength
 The candidate's strongest technical or professional asset.
 Example: "Led 5 microservice migrations, reduced latency by 40%"
-※ Max 60 characters. Be specific with metrics if available.
+※ Max 150 characters. Be specific with metrics if available.
 
 ## 4. Education / Research
 Academic background and relevant certifications.
 Example: "MSc Computer Science, AWS Solutions Architect certified"
-※ Max 60 characters. Highest degree + key certification.
+※ Max 150 characters. Highest degree + key certification.
 
 ## 5. Assessment
 Overall evaluation and recommendation.
 Example: "Strong match for senior roles, excellent leadership record"
-※ Max 60 characters. Objective assessment.
+※ Max 150 characters. Objective assessment.
 
 ---
 
 【Important Rules】
 1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "Major US tech company", "Top university in Japan").
-2. **60-Character Limit**: Each section MUST be 60 characters or fewer. Count carefully.
+2. **150-Character Limit**: Each section MUST be 150 characters or fewer. Count carefully.
 3. **English Only**: All output must be in English.
 4. **Specificity**: Use concrete skills, years, metrics. Avoid vague expressions.
 5. **No Markdown Headers in Values**: Output the value text directly after each header.
@@ -2676,7 +2676,7 @@ def main():
             **CV提案コメント抽出**
             1. 英語のCVをテキスト入力またはPDFアップロード
             2. 「抽出実行」をクリック
-            3. 匿名提案用の5項目コメント（各60文字以内・英語）を取得
+            3. 匿名提案用の5項目コメント（各150文字以内・英語）を取得
             4. 複数CVの一括処理にも対応（---NEXT---で区切り）
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
@@ -4707,7 +4707,7 @@ def main():
 
     elif feature == "📝 CV提案コメント抽出":
         st.subheader("📝 CV提案コメント抽出")
-        st.caption("CVから匿名提案用の5項目コメント（英語・各60文字以内）を抽出します。複数CVの一括処理にも対応。")
+        st.caption("CVから匿名提案用の5項目コメント（英語・各150文字以内）を抽出します。複数CVの一括処理にも対応。")
 
         # 入力モード選択
         cv_extract_mode = st.radio(
@@ -4776,7 +4776,7 @@ def main():
                 )
 
             with col2:
-                st.markdown("##### 出力：提案コメント（英語・各60文字以内）")
+                st.markdown("##### 出力：提案コメント（英語・各150文字以内）")
 
                 if cv_extract_btn:
                     if not api_key:
