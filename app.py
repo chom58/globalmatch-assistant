@@ -2076,6 +2076,28 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 """
 
 
+def get_shorten_proposal_prompt(proposal_text: str) -> str:
+    """CV提案コメントを短縮するプロンプトを生成"""
+
+    return f"""You are an elite recruitment consultant. The following candidate proposal is too long for a presentation slide. Shorten each section while keeping the most impactful information.
+
+【Current Proposal】
+{proposal_text}
+
+---
+
+【Instructions】
+- **Catch Copy**: Keep within 60-80 characters. Keep the most memorable phrase.
+- **Summary, Strength, Education/Research, Assessment**: Each MUST be within 150 characters (1-2 sentences MAX). Cut less important details, keep the strongest facts and metrics.
+- Keep the same section headers (## 1. Catch Copy, ## 2. Summary, etc.)
+- Maintain the same language and anonymization level as the original
+- Prioritize: quantified achievements > rare skills > general descriptions
+- Every sentence must earn its place — if it doesn't add unique value, cut it
+- Output in English only
+- Do NOT add any new information not present in the original
+"""
+
+
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     """入力テキストのバリデーション"""
 
@@ -4939,9 +4961,20 @@ def main():
 
                 # 結果表示
                 if 'cv_extract_result' in st.session_state:
-                    col_view, col_copy = st.columns([2, 1])
+                    col_view, col_shorten, col_copy = st.columns([2, 1, 1])
                     with col_view:
                         show_formatted_cv = st.checkbox("📖 整形表示", value=True, key="cv_extract_formatted")
+                    with col_shorten:
+                        if st.button("✂️ さらに短く", key="shorten_cv_extract", use_container_width=True, help="各セクションを150文字以内に短縮"):
+                            with st.spinner("🤖 短縮中..."):
+                                try:
+                                    prompt = get_shorten_proposal_prompt(st.session_state['cv_extract_result'])
+                                    shortened = call_groq_api(api_key, prompt)
+                                    st.session_state['cv_extract_result'] = shortened
+                                    st.success("✅ 短縮完了！")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ 短縮エラー: {str(e)[:200]}")
                     with col_copy:
                         if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
@@ -5117,9 +5150,20 @@ Full-stack Developer...
                     time_str = f"（{cv_r['time']:.1f}秒）" if cv_r['time'] > 0 else ""
                     with st.expander(f"CV #{cv_r['index']} - {'✅ 成功' + time_str if cv_r['status'] == 'success' else '❌ エラー'}"):
                         if cv_r['status'] == 'success':
-                            col_view_b, col_copy_b = st.columns([2, 1])
+                            col_view_b, col_shorten_b, col_copy_b = st.columns([2, 1, 1])
                             with col_view_b:
                                 show_fmt = st.checkbox("📖 整形表示", value=True, key=f"batch_cv_fmt_{cv_r['index']}")
+                            with col_shorten_b:
+                                if st.button("✂️ さらに短く", key=f"shorten_batch_cv_{cv_r['index']}", use_container_width=True, help="各セクションを150文字以内に短縮"):
+                                    with st.spinner("🤖 短縮中..."):
+                                        try:
+                                            prompt = get_shorten_proposal_prompt(cv_r['output'])
+                                            shortened = call_groq_api(api_key, prompt)
+                                            cv_r['output'] = shortened
+                                            st.success("✅ 短縮完了！")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ 短縮エラー: {str(e)[:200]}")
                             with col_copy_b:
                                 if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
                                     st.toast("✅ クリップボードにコピーしました")
