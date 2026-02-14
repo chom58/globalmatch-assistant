@@ -1818,12 +1818,26 @@ def get_translate_to_japanese_prompt(english_text: str) -> str:
 """
 
 
-def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_text: str, language: str = "ja") -> str:
-    """匿名提案資料生成用のプロンプトを生成"""
+def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_text: str, language: str = "ja", anonymize_level: str = "full") -> str:
+    """匿名提案資料生成用のプロンプトを生成
+
+    anonymize_level: "full" = 完全匿名化, "light" = 企業名・大学名を表示（個人情報のみ匿名化）
+    """
 
     if language == "ja":
+        if anonymize_level == "light":
+            anonymize_note = """【匿名化ルール（軽度匿名化モード）】
+- 氏名・連絡先（メール、電話番号、住所）は匿名化する
+- **企業名・大学名・プロジェクト名・製品名はそのまま記載してよい**
+- 経歴の具体的な内容（役職、チーム規模、成果数値など）もそのまま記載してよい"""
+        else:
+            anonymize_note = """【匿名化ルール（完全匿名化モード）】
+- 氏名、企業名、大学名、固有名詞は一切記載しない
+- 企業名は「大手SIer」「外資系IT企業」などの一般表現に置換する
+- 大学名は「国内トップ大学」「海外有名大学」などに置換する"""
+
         return f"""あなたは人材紹介のプロフェッショナルです。
-以下のマッチング分析結果とレジュメ、求人票から、企業向けの**匿名候補者提案資料**を作成してください。
+以下のマッチング分析結果とレジュメ、求人票から、企業向けの**候補者提案資料**を作成してください。
 
 【入力情報】
 ■ マッチング分析結果:
@@ -1893,16 +1907,28 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 ---
 
-【重要な注意事項】
-1. **完全匿名化**: 氏名、企業名、固有名詞は一切記載しない
-2. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
-3. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
-4. **客観性**: 事実に基づいた評価を行う
-5. **簡潔性**: 要点を絞って分かりやすく記載
+{anonymize_note}
+
+【その他の注意事項】
+1. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
+2. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
+3. **客観性**: 事実に基づいた評価を行う
+4. **簡潔性**: 要点を絞って分かりやすく記載
 """
     else:  # English
+        if anonymize_level == "light":
+            anonymize_note_en = """【Anonymization Rules (Light Anonymization Mode)】
+- Anonymize personal names and contact info (email, phone, address)
+- **Company names, university names, project names, and product names may be included as-is**
+- Specific career details (job titles, team sizes, achievement metrics) may also be included as-is"""
+        else:
+            anonymize_note_en = """【Anonymization Rules (Full Anonymization Mode)】
+- No real names, company names, university names, or identifiable proper nouns
+- Replace company names with generic terms (e.g., "a major global IT firm", "a leading SaaS company")
+- Replace university names with generic terms (e.g., "a top US university", "a prestigious Japanese university")"""
+
         return f"""You are a professional recruitment consultant.
-Create an **anonymous candidate proposal document** for the client company based on the matching analysis result, resume, and job description below.
+Create a **candidate proposal document** for the client company based on the matching analysis result, resume, and job description below.
 
 【Input Information】
 ■ Matching Analysis Result:
@@ -1972,17 +1998,23 @@ Overall evaluation and comments
 
 ---
 
-【Important Notes】
-1. **Complete Anonymization**: No names, company names, or proper nouns
-2. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
-3. **Specificity**: Use concrete skills and experience, avoid abstract expressions
-4. **Objectivity**: Provide fact-based evaluation
-5. **Brevity**: Focus on key points for clarity
+{anonymize_note_en}
+
+【Other Important Notes】
+1. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
+2. **Specificity**: Use concrete skills and experience, avoid abstract expressions
+3. **Objectivity**: Provide fact-based evaluation
+4. **Brevity**: Focus on key points for clarity
 """
 
 
-def get_cv_proposal_extract_prompt(resume_text: str) -> str:
+def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "full") -> str:
     """CV提案用コメント抽出プロンプトを生成（英語・各300文字以内・採用企業訴求型）"""
+
+    if anonymize_level == "light":
+        anonymize_rules = """1. **Light Anonymization**: Anonymize personal names and contact info (email, phone, address) only. **Company names, university names, project names, and product names may be kept as-is.** Use actual company/university names from the CV to add credibility."""
+    else:
+        anonymize_rules = """1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university")."""
 
     return f"""You are an elite recruitment consultant who writes compelling candidate proposals that make hiring managers eager to interview.
 
@@ -2035,7 +2067,7 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 ---
 
 【Important Rules】
-1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university").
+{anonymize_rules}
 2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
 3. **English Only**: All output must be in English.
 4. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
@@ -4644,47 +4676,61 @@ def main():
 
             # 匿名提案資料生成機能
             st.divider()
-            st.markdown("#### 📄 匿名提案資料生成")
-            st.caption("マッチング分析から企業向けの簡潔な匿名候補者提案資料を生成します")
+            st.markdown("#### 📄 候補者提案資料生成")
+            st.caption("マッチング分析から企業向けの簡潔な候補者提案資料を生成します")
+
+            proposal_anon_level = st.radio(
+                "🔒 匿名化レベル",
+                options=["full", "light"],
+                format_func=lambda x: {
+                    "full": "完全匿名化（企業名・大学名も伏せる）",
+                    "light": "軽度匿名化（企業名・大学名は表示）"
+                }[x],
+                horizontal=True,
+                key="proposal_anon_level",
+                help="完全：企業名を「大手SIer」等に置換 / 軽度：企業名・大学名をそのまま表示（個人情報のみ匿名化）"
+            )
 
             col_proposal1, col_proposal2 = st.columns(2)
 
             with col_proposal1:
-                if st.button("📝 日本語版を生成", key="generate_proposal_ja", use_container_width=True, help="匿名提案資料（日本語）を生成"):
+                if st.button("📝 日本語版を生成", key="generate_proposal_ja", use_container_width=True, help="提案資料（日本語）を生成"):
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ レジュメと求人票の入力情報が見つかりません。先にマッチング分析を実行してください。")
                     else:
-                        with st.spinner("🤖 匿名提案資料（日本語）を生成中..."):
+                        with st.spinner("🤖 候補者提案資料（日本語）を生成中..."):
                             try:
                                 prompt = get_anonymous_proposal_prompt(
                                     st.session_state['matching_result'],
                                     st.session_state['matching_resume_input'],
                                     st.session_state['matching_jd_input'],
-                                    language="ja"
+                                    language="ja",
+                                    anonymize_level=proposal_anon_level
                                 )
                                 proposal = call_groq_api(api_key, prompt)
                                 st.session_state['anonymous_proposal'] = proposal
-                                st.success("✅ 匿名提案資料（日本語）の生成が完了しました")
+                                st.success("✅ 候補者提案資料（日本語）の生成が完了しました")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ 生成エラー: {str(e)[:200]}")
 
             with col_proposal2:
-                if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate anonymous proposal (English)"):
+                if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate proposal (English)"):
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ Resume and JD input not found. Please run matching analysis first.")
                     else:
-                        with st.spinner("🤖 Generating anonymous proposal (English)..."):
+                        with st.spinner("🤖 Generating candidate proposal (English)..."):
                             try:
                                 prompt = get_anonymous_proposal_prompt(
                                     st.session_state['matching_result'],
                                     st.session_state['matching_resume_input'],
                                     st.session_state['matching_jd_input'],
-                                    language="en"
+                                    language="en",
+                                    anonymize_level=proposal_anon_level
                                 )
                                 proposal = call_groq_api(api_key, prompt)
                                 st.session_state['anonymous_proposal'] = proposal
-                                st.success("✅ Anonymous proposal (English) generated successfully")
+                                st.success("✅ Candidate proposal (English) generated successfully")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Generation error: {str(e)[:200]}")
@@ -4692,7 +4738,7 @@ def main():
             # 匿名提案資料の表示
             if 'anonymous_proposal' in st.session_state:
                 st.divider()
-                st.markdown("#### 📋 生成された匿名提案資料")
+                st.markdown("#### 📋 生成された候補者提案資料")
 
                 # 表示切替とコピーボタン
                 col_view_prop, col_copy_prop = st.columns([2, 1])
@@ -4781,19 +4827,34 @@ def main():
 
     elif feature == "📝 CV提案コメント抽出":
         st.subheader("📝 CV提案コメント抽出")
-        st.caption("CVから匿名提案用の5項目コメント（英語・各300文字以内）を抽出します。複数CVの一括処理にも対応。")
+        st.caption("CVから提案用の5項目コメント（英語・各300文字以内）を抽出します。複数CVの一括処理にも対応。")
 
-        # 入力モード選択
-        cv_extract_mode = st.radio(
-            "入力モード",
-            options=["single", "batch"],
-            format_func=lambda x: {
-                "single": "単体CV入力",
-                "batch": "複数CV一括処理"
-            }[x],
-            horizontal=True,
-            key="cv_extract_mode"
-        )
+        # 匿名化レベル選択
+        col_mode, col_anon = st.columns(2)
+        with col_mode:
+            # 入力モード選択
+            cv_extract_mode = st.radio(
+                "入力モード",
+                options=["single", "batch"],
+                format_func=lambda x: {
+                    "single": "単体CV入力",
+                    "batch": "複数CV一括処理"
+                }[x],
+                horizontal=True,
+                key="cv_extract_mode"
+            )
+        with col_anon:
+            cv_anon_level = st.radio(
+                "🔒 匿名化レベル",
+                options=["full", "light"],
+                format_func=lambda x: {
+                    "full": "完全匿名化（企業名も伏せる）",
+                    "light": "軽度匿名化（企業名は表示）"
+                }[x],
+                horizontal=True,
+                key="cv_extract_anon_level",
+                help="完全：企業名を「a major IT firm」等に置換 / 軽度：企業名・大学名をそのまま表示"
+            )
 
         if cv_extract_mode == "single":
             col1, col2 = st.columns([1, 1])
@@ -4863,7 +4924,7 @@ def main():
                             with st.spinner("🤖 AIがCVからコメントを抽出しています..."):
                                 try:
                                     start_time = time.time()
-                                    prompt = get_cv_proposal_extract_prompt(cv_extract_input)
+                                    prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level)
                                     result = call_groq_api(api_key, prompt)
                                     elapsed_time = time.time() - start_time
 
@@ -5020,7 +5081,7 @@ Full-stack Developer...
                         else:
                             try:
                                 item_start = time.time()
-                                prompt = get_cv_proposal_extract_prompt(cv_text)
+                                prompt = get_cv_proposal_extract_prompt(cv_text, anonymize_level=cv_anon_level)
                                 output = call_groq_api(api_key, prompt)
                                 cv_result["status"] = "success"
                                 cv_result["output"] = output
