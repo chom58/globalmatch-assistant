@@ -2635,6 +2635,7 @@ def main():
                 "企業紹介文作成（PDF）",
                 "🎯 レジュメ×求人票マッチング分析",
                 "📝 CV提案コメント抽出",
+                "✉️ 求人打診メール作成",
                 "📦 バッチ処理（複数レジュメ）"
             ],
             index=0,
@@ -2691,6 +2692,12 @@ def main():
             2. 「抽出実行」をクリック
             3. 匿名提案用の5項目コメント（各300文字以内・英語）を取得
             4. 複数CVの一括処理にも対応（---NEXT---で区切り）
+
+            **求人打診メール作成**
+            1. 候補者の名前と送信者名を入力
+            2. 求人情報（ポジション名、企業名、URL等）を追加
+            3. 「メール生成」をクリックでメール文面を自動作成
+            4. コピーしてそのままメール送信に利用
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
             """)
@@ -5031,6 +5038,181 @@ Full-stack Developer...
                         use_container_width=True,
                         key="batch_cv_extract_download"
                     )
+
+    elif feature == "✉️ 求人打診メール作成":
+        st.subheader("✉️ 求人打診メール作成")
+        st.caption("面談後に候補者へ送る求人打診メールを簡単に作成できます")
+
+        # --- 基本情報 ---
+        col_name, col_sender = st.columns(2)
+        with col_name:
+            candidate_name = st.text_input(
+                "候補者の名前（First Name）",
+                placeholder="e.g. Taro",
+                key="email_candidate_name"
+            )
+        with col_sender:
+            sender_name = st.selectbox(
+                "送信者名",
+                options=["Shu", "Ilya", "Hiroshi"],
+                key="email_sender_name"
+            )
+
+        st.divider()
+
+        # --- 求人エントリ管理 ---
+        st.markdown("##### 求人情報")
+
+        # 求人数を管理
+        if 'email_job_count' not in st.session_state:
+            st.session_state['email_job_count'] = 1
+
+        col_add, col_remove = st.columns(2)
+        with col_add:
+            if st.button("＋ 求人を追加", key="add_job_btn", use_container_width=True):
+                if st.session_state['email_job_count'] < 10:
+                    st.session_state['email_job_count'] += 1
+                    st.rerun()
+        with col_remove:
+            if st.button("－ 最後の求人を削除", key="remove_job_btn", use_container_width=True,
+                         disabled=st.session_state['email_job_count'] <= 1):
+                st.session_state['email_job_count'] -= 1
+                st.rerun()
+
+        st.caption(f"現在の求人数: {st.session_state['email_job_count']}件（最大10件）")
+
+        jobs = []
+        for i in range(st.session_state['email_job_count']):
+            with st.expander(f"求人 #{i + 1}", expanded=True):
+                jcol1, jcol2 = st.columns(2)
+                with jcol1:
+                    job_title = st.text_input(
+                        "ポジション名",
+                        placeholder="e.g. Robot Deployment / Research Engineer",
+                        key=f"job_title_{i}"
+                    )
+                with jcol2:
+                    company_name = st.text_input(
+                        "企業名",
+                        placeholder="e.g. RLWRLD",
+                        key=f"company_name_{i}"
+                    )
+                website = st.text_input(
+                    "Website URL",
+                    placeholder="e.g. https://www.example.com/",
+                    key=f"job_website_{i}"
+                )
+                overview = st.text_area(
+                    "概要 / Overview（任意）",
+                    placeholder="e.g. A national-scale project aiming to build one of the world's largest VLA models.",
+                    height=80,
+                    key=f"job_overview_{i}"
+                )
+                key_focus = st.text_input(
+                    "Key Focus（任意）",
+                    placeholder='e.g. They are specifically looking for expertise in "real-world implementation."',
+                    key=f"job_keyfocus_{i}"
+                )
+                jd_note = st.text_input(
+                    "JD備考（任意）",
+                    placeholder="e.g. Please refer to the attached file.",
+                    key=f"job_jdnote_{i}"
+                )
+                fit_comment = st.text_area(
+                    "おすすめコメント（任意）",
+                    placeholder="e.g. Given your expertise in AI and computer vision, I believe this would be an excellent match.",
+                    height=68,
+                    key=f"job_fit_{i}"
+                )
+
+                jobs.append({
+                    "title": job_title,
+                    "company": company_name,
+                    "website": website,
+                    "overview": overview,
+                    "key_focus": key_focus,
+                    "jd_note": jd_note,
+                    "fit_comment": fit_comment,
+                })
+
+        st.divider()
+
+        # --- メール生成 ---
+        generate_btn = st.button(
+            "📧 メール生成",
+            type="primary",
+            use_container_width=True,
+            disabled=not candidate_name,
+            key="generate_email_btn"
+        )
+
+        if generate_btn and candidate_name:
+            # メール文面を組み立て
+            lines = []
+            lines.append(f"Hi {candidate_name}\n")
+            lines.append("It was a pleasure speaking with you today.\n")
+            lines.append("As discussed, please find the details of the opportunities below.")
+            lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
+
+            for idx, job in enumerate(jobs, 1):
+                # ヘッダー行: タイトルと企業名の組み合わせ
+                header_parts = []
+                if job["title"]:
+                    header_parts.append(job["title"])
+                if job["company"]:
+                    header_parts.append(job["company"])
+                if header_parts:
+                    lines.append(f"{idx}. {' | '.join(header_parts)}\n")
+                else:
+                    lines.append(f"{idx}. (TBD)\n")
+
+                if job["website"]:
+                    lines.append(f"Website: {job['website']}\n")
+                if job["overview"]:
+                    lines.append(f"Overview: {job['overview']}\n")
+                if job["key_focus"]:
+                    lines.append(f"Key Focus: {job['key_focus']}\n")
+                if job["jd_note"]:
+                    lines.append(f"JD: {job['jd_note']}\n")
+                if job["fit_comment"]:
+                    lines.append(f"{job['fit_comment']}\n")
+
+                lines.append("")  # 求人間の空行
+
+            lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.\n")
+            lines.append("We look forward to hearing your thoughts on these opportunities.")
+            lines.append("Best regards,")
+            lines.append(sender_name)
+
+            email_text = "\n".join(lines)
+            st.session_state['generated_email'] = email_text
+
+        # --- 結果表示 ---
+        if 'generated_email' in st.session_state:
+            st.divider()
+            st.markdown("##### 生成されたメール")
+
+            col_copy_e, col_dl_e = st.columns(2)
+            with col_copy_e:
+                if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
+                    st.toast("✅ クリップボードにコピーしました")
+                    escaped = st.session_state['generated_email'].replace('`', '\\`').replace('$', '\\$')
+                    st.components.v1.html(f"""
+                        <script>
+                        navigator.clipboard.writeText(`{escaped}`);
+                        </script>
+                    """, height=0)
+            with col_dl_e:
+                st.download_button(
+                    "📄 テキストファイルDL",
+                    data=st.session_state['generated_email'],
+                    file_name=f"job_email_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key="dl_email_btn"
+                )
+
+            st.code(st.session_state['generated_email'], language=None)
 
     elif feature == "📦 バッチ処理（複数レジュメ）":
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
