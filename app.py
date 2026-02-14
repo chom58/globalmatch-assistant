@@ -1982,45 +1982,55 @@ Overall evaluation and comments
 
 
 def get_cv_proposal_extract_prompt(resume_text: str) -> str:
-    """CV提案用コメント抽出プロンプトを生成（英語・各300文字以内）"""
+    """CV提案用コメント抽出プロンプトを生成（英語・各300文字以内・採用企業訴求型）"""
 
-    return f"""You are a professional recruitment consultant specializing in international engineer placement.
+    return f"""You are an elite recruitment consultant who writes compelling candidate proposals that make hiring managers eager to interview.
 
-From the following CV/resume, extract detailed English comments for an anonymous candidate proposal document (to be used in presentation slides).
+Your goal: Write a proposal that makes the hiring company think "We need to meet this person immediately." Stay strictly factual — every claim must be supported by the CV — but frame facts to maximize business appeal.
 
 【CV/Resume】
 {resume_text}
 
 ---
 
+【Writing Principles — Apply to ALL sections】
+- **Lead with business impact**: Instead of "Used Python and SQL", write "Reduced data processing time by 40% through optimized Python/SQL pipelines"
+- **Quantify whenever possible**: Revenue impact, team size, scale (users/requests/data), cost savings, speed improvements
+- **Show progression & ambition**: Highlight career growth trajectory — promotions, expanding scope, increasing responsibility
+- **Use power verbs**: Led, Architected, Delivered, Scaled, Transformed, Pioneered, Spearheaded — not "worked on" or "was involved in"
+- **Focus on problems solved**: Frame experience as "challenges tackled → results delivered", not just duties performed
+- **Highlight rarity**: What makes this candidate hard to find? Unique skill combinations, cross-domain expertise, bilingual ability, etc.
+
+---
+
 【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
 
 ## 1. Catch Copy
-A one-line headline that captures the candidate's core appeal. MUST include: years of experience + role/title + key domain or differentiator. Aim for 60-100 characters.
-Example 1: "10-Year Full-Stack Engineer with Cloud Architecture & AI Platform Expertise"
-Example 2: "Senior DevOps Lead | 12 Years in Large-Scale Distributed Systems & SRE"
-Example 3: "8-Year Data Scientist Specializing in NLP and Recommendation Engine Development"
+A punchy, memorable headline that makes the reader want to learn more. MUST include: years of experience + role/title + the candidate's unique value proposition or differentiator. Frame it as what this person DELIVERS, not just what they ARE.
+Example 1: "10-Year Full-Stack Architect Who Delivers Production-Grade AI Platforms from Zero to Scale"
+Example 2: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
+Example 3: "8-Year Data Scientist Turning NLP Research into Revenue-Generating Recommendation Engines"
 ※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names.
 
 ## 2. Summary
-A detailed overview of the candidate's career and profile. Describe their role, domain expertise, and notable contributions in 2-4 sentences.
-Example: "A Technical Architect at a major global IT firm, he designs AI automation and cloud-native platforms. A core contributor to container orchestration technologies, he recently launched a custom Golang framework for autonomous agents, bridging distributed systems with AI."
-※ Max 300 characters. Include role, years of experience, domain, and key achievements.
+Paint a vivid picture of who this candidate is and what they bring to the table. Start with their most impressive achievement or defining trait, then build context with role, domain, and career highlights. The reader should immediately understand why this person stands out.
+Example: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, he progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
+※ 200-300 characters. Lead with the strongest fact. Include role, years, domain, and measurable achievements.
 
 ## 3. Strength
-The candidate's strongest technical or professional assets. Describe specific skills, technologies, and leadership capabilities in 2-4 sentences.
-Example: "An expert in Golang, C++, and container runtimes, he is a rare Deep Tech talent with experience spanning Linux kernel development to proprietary Agentic AI frameworks. He excels in architecting scalable cloud solutions and leading global engineering teams."
-※ Max 300 characters. Be specific with technologies, metrics, and impact.
+Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest.
+Example: "A rare engineer who spans from Linux kernel optimization to production AI systems — he architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams (US, EU, APAC) and translate deep-tech R&D into shipping products."
+※ 200-300 characters. Connect skills → outcomes. Highlight what's rare or hard to find.
 
 ## 4. Education / Research
-Academic background, certifications, and ongoing professional development in 2-3 sentences.
-Example: "He holds an M.Sc. in Computer Science and is currently enrolled in an executive technology program at a top US university (2026). A dedicated open-source contributor, he focuses on container orchestration and AI workflow frameworks."
-※ Max 300 characters. Include degrees, certifications, and research focus.
+Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends.
+Example: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university (2026), signaling strong commitment to staying at the cutting edge. Active open-source contributor to container orchestration projects."
+※ 200-300 characters. Frame education as evidence of growth mindset and expertise depth.
 
 ## 5. Assessment
-Overall evaluation and recommendation. Explain why this candidate is a strong match in 2-4 sentences.
-Example: "He is a builder capable of constructing AI platforms from scratch, not just using APIs. His ability to develop custom Agentic frameworks in Golang makes him a strong technical match for organizations seeking deep-tech engineers who can bridge backend systems with AI agents."
-※ Max 300 characters. Provide objective, detailed assessment.
+Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential.
+Example: "A builder who constructs AI platforms from scratch — not just an API consumer. His rare combination of low-level systems expertise and AI product delivery makes him ideal for organizations building proprietary AI capabilities. Expect him to elevate both technical standards and team capability."
+※ 200-300 characters. Answer "Why this candidate NOW?" Be specific about fit and potential impact.
 
 ---
 
@@ -2028,8 +2038,9 @@ Example: "He is a builder capable of constructing AI platforms from scratch, not
 1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university").
 2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
 3. **English Only**: All output must be in English.
-4. **Specificity**: Use concrete skills, years, metrics. Avoid vague expressions.
+4. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
 5. **No Markdown Headers in Values**: Output the value text directly after each header.
+6. **Hiring Manager Perspective**: Write as if presenting to a CTO or VP of Engineering who sees dozens of proposals weekly. Make THIS candidate impossible to skip.
 """
 
 
