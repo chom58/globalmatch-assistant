@@ -2264,6 +2264,25 @@ def sync_saved_jobs_to_localstorage():
         """, height=0)
 
 
+def sync_saved_job_sets_to_localstorage():
+    """保存済み求人セットをlocalStorageに同期"""
+    if 'saved_job_sets' in st.session_state:
+        import json
+        json_data = json.dumps(st.session_state['saved_job_sets'])
+        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+
+        st.components.v1.html(f"""
+            <script>
+            try {{
+                localStorage.setItem('saved_job_sets', '{escaped_data}');
+                console.log('Saved job sets to localStorage');
+            }} catch(e) {{
+                console.error('Failed to save job sets to localStorage:', e);
+            }}
+            </script>
+        """, height=0)
+
+
 def load_from_localstorage_script():
     """localStorageから履歴を復元するJavaScriptを返す"""
     return """
@@ -2273,14 +2292,16 @@ def load_from_localstorage_script():
             const resumeHistory = localStorage.getItem('resume_history');
             const jdHistory = localStorage.getItem('jd_history');
             const savedJobs = localStorage.getItem('saved_jobs');
+            const savedJobSets = localStorage.getItem('saved_job_sets');
 
-            if (resumeHistory || jdHistory || savedJobs) {
+            if (resumeHistory || jdHistory || savedJobs || savedJobSets) {
                 // Streamlitに送信するためのカスタムイベント
                 const event = new CustomEvent('localStorageData', {
                     detail: {
                         resume_history: resumeHistory,
                         jd_history: jdHistory,
-                        saved_jobs: savedJobs
+                        saved_jobs: savedJobs,
+                        saved_job_sets: savedJobSets
                     }
                 });
                 window.dispatchEvent(event);
@@ -2315,6 +2336,8 @@ def export_history_to_json(history_type: str = "all") -> str:
             export_data['data']['jd_history'] = st.session_state['jd_history']
         if 'saved_jobs' in st.session_state:
             export_data['data']['saved_jobs'] = st.session_state['saved_jobs']
+        if 'saved_job_sets' in st.session_state:
+            export_data['data']['saved_job_sets'] = st.session_state['saved_job_sets']
     else:
         # 特定の履歴のみエクスポート
         key = f"{history_type}_history"
@@ -2349,6 +2372,10 @@ def import_history_from_json(json_string: str) -> tuple[bool, str]:
                 st.session_state['saved_jobs'] = history
                 imported_count += len(history)
                 sync_saved_jobs_to_localstorage()
+            elif key == 'saved_job_sets':
+                st.session_state['saved_job_sets'] = history
+                imported_count += len(history)
+                sync_saved_job_sets_to_localstorage()
 
         return True, f"✅ {imported_count}件の履歴をインポートしました"
 
@@ -5070,9 +5097,11 @@ Full-stack Developer...
         st.subheader("✉️ 求人打診メール作成")
         st.caption("面談後に候補者へ送る求人打診メールを簡単に作成できます")
 
-        # saved_jobs 初期化
+        # saved_jobs / saved_job_sets 初期化
         if 'saved_jobs' not in st.session_state:
             st.session_state['saved_jobs'] = []
+        if 'saved_job_sets' not in st.session_state:
+            st.session_state['saved_job_sets'] = []
 
         # --- 基本情報 ---
         col_name, col_sender = st.columns(2)
@@ -5091,33 +5120,69 @@ Full-stack Developer...
 
         st.divider()
 
-        # --- 保存済み求人から読み込み ---
+        # --- 保存済みデータから読み込み ---
         saved_jobs_list = st.session_state.get('saved_jobs', [])
-        if saved_jobs_list:
-            st.markdown("##### 📂 保存済み求人から選択")
-            # 選択肢を作成
-            saved_options = [f"{sj['company']} - {sj['title']}" for sj in saved_jobs_list]
-            selected_saved = st.multiselect(
-                "メールに含める求人を選択",
-                options=range(len(saved_options)),
-                format_func=lambda x: saved_options[x],
-                key="selected_saved_jobs"
-            )
+        saved_sets_list = st.session_state.get('saved_job_sets', [])
 
-            if selected_saved:
-                if st.button("📥 選択した求人を読み込み", key="load_saved_jobs_btn", use_container_width=True):
-                    # 既存のフォームをクリアして選択した求人をセット
-                    st.session_state['email_job_count'] = len(selected_saved)
-                    for idx, sj_idx in enumerate(selected_saved):
-                        sj = saved_jobs_list[sj_idx]
-                        st.session_state[f'job_title_{idx}'] = sj.get('title', '')
-                        st.session_state[f'company_name_{idx}'] = sj.get('company', '')
-                        st.session_state[f'job_website_{idx}'] = sj.get('website', '')
-                        st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
-                        st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
-                        st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
-                        st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
-                    st.rerun()
+        if saved_sets_list or saved_jobs_list:
+            st.markdown("##### 📂 保存済みデータから読み込み")
+            load_tab_set, load_tab_individual = st.tabs(["📦 セットから読み込み", "📄 個別求人から選択"])
+
+            with load_tab_set:
+                if saved_sets_list:
+                    set_options = [f"{s['name']}（{len(s['jobs'])}件）" for s in saved_sets_list]
+                    selected_set_idx = st.selectbox(
+                        "求人セットを選択",
+                        options=range(len(set_options)),
+                        format_func=lambda x: set_options[x],
+                        key="selected_job_set"
+                    )
+
+                    # 選択中のセット内容をプレビュー
+                    selected_set = saved_sets_list[selected_set_idx]
+                    preview_lines = [f"- {j.get('company', '')} | {j.get('title', '')}" for j in selected_set['jobs']]
+                    st.caption("\n".join(preview_lines))
+
+                    if st.button("📥 このセットを読み込み", key="load_set_btn", use_container_width=True):
+                        set_jobs = selected_set['jobs']
+                        st.session_state['email_job_count'] = len(set_jobs)
+                        for idx, sj in enumerate(set_jobs):
+                            st.session_state[f'job_title_{idx}'] = sj.get('title', '')
+                            st.session_state[f'company_name_{idx}'] = sj.get('company', '')
+                            st.session_state[f'job_website_{idx}'] = sj.get('website', '')
+                            st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
+                            st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
+                            st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
+                            st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
+                        st.rerun()
+                else:
+                    st.info("保存済みセットはありません。下の求人フォームを入力後「💾 セットとして保存」で作成できます。")
+
+            with load_tab_individual:
+                if saved_jobs_list:
+                    saved_options = [f"{sj['company']} - {sj['title']}" for sj in saved_jobs_list]
+                    selected_saved = st.multiselect(
+                        "メールに含める求人を選択",
+                        options=range(len(saved_options)),
+                        format_func=lambda x: saved_options[x],
+                        key="selected_saved_jobs"
+                    )
+
+                    if selected_saved:
+                        if st.button("📥 選択した求人を読み込み", key="load_saved_jobs_btn", use_container_width=True):
+                            st.session_state['email_job_count'] = len(selected_saved)
+                            for idx, sj_idx in enumerate(selected_saved):
+                                sj = saved_jobs_list[sj_idx]
+                                st.session_state[f'job_title_{idx}'] = sj.get('title', '')
+                                st.session_state[f'company_name_{idx}'] = sj.get('company', '')
+                                st.session_state[f'job_website_{idx}'] = sj.get('website', '')
+                                st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
+                                st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
+                                st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
+                                st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
+                            st.rerun()
+                else:
+                    st.info("保存済みの個別求人はありません。各求人エントリ内の「💾 この求人を保存」で追加できます。")
 
             st.divider()
 
@@ -5229,6 +5294,37 @@ Full-stack Developer...
 
         st.divider()
 
+        # --- セットとして保存 ---
+        has_any_job = any(j["title"] or j["company"] for j in jobs)
+        if has_any_job:
+            with st.expander("💾 現在の求人をセットとして保存"):
+                set_name = st.text_input(
+                    "セット名",
+                    placeholder="e.g. Robotics系3社セット",
+                    key="save_set_name"
+                )
+                if st.button("💾 セットを保存", key="save_set_btn", use_container_width=True, disabled=not set_name):
+                    # 入力されている求人のみ保存
+                    valid_jobs = [j for j in jobs if j["title"] or j["company"]]
+                    new_set = {
+                        'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
+                        'name': set_name,
+                        'jobs': valid_jobs,
+                        'saved_at': datetime.now().isoformat()
+                    }
+                    # 同名セットの重複チェック
+                    existing_idx = next(
+                        (i for i, s in enumerate(st.session_state['saved_job_sets']) if s['name'] == set_name),
+                        None
+                    )
+                    if existing_idx is not None:
+                        st.session_state['saved_job_sets'][existing_idx] = new_set
+                        st.toast(f"✅ セット「{set_name}」を更新しました（{len(valid_jobs)}件）")
+                    else:
+                        st.session_state['saved_job_sets'].append(new_set)
+                        st.toast(f"✅ セット「{set_name}」を保存しました（{len(valid_jobs)}件）")
+                    sync_saved_job_sets_to_localstorage()
+
         # --- メール生成 ---
         generate_btn = st.button(
             "📧 メール生成",
@@ -5306,32 +5402,68 @@ Full-stack Developer...
 
             st.code(st.session_state['generated_email'], language=None)
 
-        # --- 保存済み求人の管理 ---
-        if st.session_state.get('saved_jobs'):
-            st.divider()
-            with st.expander(f"📂 保存済み求人の管理（{len(st.session_state['saved_jobs'])}件）"):
-                for sj_idx, sj in enumerate(st.session_state['saved_jobs']):
-                    saved_date = ""
-                    if sj.get('saved_at'):
-                        try:
-                            dt = datetime.fromisoformat(sj['saved_at'])
-                            saved_date = dt.strftime('%Y/%m/%d')
-                        except Exception:
-                            pass
-                    col_info, col_del = st.columns([4, 1])
-                    with col_info:
-                        st.markdown(f"**{sj.get('company', '')} - {sj.get('title', '')}**  \n"
-                                    f"🔗 {sj.get('website', '-')}　📅 {saved_date}")
-                    with col_del:
-                        if st.button("🗑️", key=f"del_saved_job_{sj_idx}", help="この求人を削除"):
-                            st.session_state['saved_jobs'].pop(sj_idx)
-                            sync_saved_jobs_to_localstorage()
-                            st.rerun()
+        # --- 保存済みデータの管理 ---
+        has_saved_sets = bool(st.session_state.get('saved_job_sets'))
+        has_saved_jobs = bool(st.session_state.get('saved_jobs'))
 
-                if st.button("🗑️ すべての保存済み求人を削除", key="clear_all_saved_jobs"):
-                    st.session_state['saved_jobs'] = []
-                    sync_saved_jobs_to_localstorage()
-                    st.rerun()
+        if has_saved_sets or has_saved_jobs:
+            st.divider()
+            manage_tab_sets, manage_tab_jobs = st.tabs(["📦 セット管理", "📄 個別求人管理"])
+
+            with manage_tab_sets:
+                if has_saved_sets:
+                    for ss_idx, ss in enumerate(st.session_state['saved_job_sets']):
+                        saved_date = ""
+                        if ss.get('saved_at'):
+                            try:
+                                dt = datetime.fromisoformat(ss['saved_at'])
+                                saved_date = dt.strftime('%Y/%m/%d')
+                            except Exception:
+                                pass
+                        col_info, col_del = st.columns([4, 1])
+                        with col_info:
+                            job_names = ", ".join([j.get('company', '?') for j in ss.get('jobs', [])])
+                            st.markdown(f"**{ss.get('name', '')}**（{len(ss.get('jobs', []))}件）  \n"
+                                        f"{job_names}　📅 {saved_date}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_saved_set_{ss_idx}", help="このセットを削除"):
+                                st.session_state['saved_job_sets'].pop(ss_idx)
+                                sync_saved_job_sets_to_localstorage()
+                                st.rerun()
+
+                    if st.button("🗑️ すべてのセットを削除", key="clear_all_saved_sets"):
+                        st.session_state['saved_job_sets'] = []
+                        sync_saved_job_sets_to_localstorage()
+                        st.rerun()
+                else:
+                    st.caption("保存済みセットはありません")
+
+            with manage_tab_jobs:
+                if has_saved_jobs:
+                    for sj_idx, sj in enumerate(st.session_state['saved_jobs']):
+                        saved_date = ""
+                        if sj.get('saved_at'):
+                            try:
+                                dt = datetime.fromisoformat(sj['saved_at'])
+                                saved_date = dt.strftime('%Y/%m/%d')
+                            except Exception:
+                                pass
+                        col_info, col_del = st.columns([4, 1])
+                        with col_info:
+                            st.markdown(f"**{sj.get('company', '')} - {sj.get('title', '')}**  \n"
+                                        f"🔗 {sj.get('website', '-')}　📅 {saved_date}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_saved_job_{sj_idx}", help="この求人を削除"):
+                                st.session_state['saved_jobs'].pop(sj_idx)
+                                sync_saved_jobs_to_localstorage()
+                                st.rerun()
+
+                    if st.button("🗑️ すべての個別求人を削除", key="clear_all_saved_jobs"):
+                        st.session_state['saved_jobs'] = []
+                        sync_saved_jobs_to_localstorage()
+                        st.rerun()
+                else:
+                    st.caption("保存済みの個別求人はありません")
 
     elif feature == "📦 バッチ処理（複数レジュメ）":
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
