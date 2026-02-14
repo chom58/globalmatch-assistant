@@ -5367,7 +5367,8 @@ Full-stack Developer...
 
                 lines.append("")  # 求人間の空行
 
-            lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.\n")
+            lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
+            lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
             lines.append("We look forward to hearing your thoughts on these opportunities.")
             lines.append("Best regards,")
             lines.append(sender_name)
