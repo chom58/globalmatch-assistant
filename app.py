@@ -1996,9 +1996,11 @@ From the following CV/resume, extract detailed English comments for an anonymous
 【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
 
 ## 1. Catch Copy
-A one-line headline that captures the candidate's core appeal.
-Example: "10-Year Full-Stack Engineer with Cloud Architecture Expertise"
-※ Max 100 characters. No names or company names.
+A one-line headline that captures the candidate's core appeal. MUST include: years of experience + role/title + key domain or differentiator. Aim for 60-100 characters.
+Example 1: "10-Year Full-Stack Engineer with Cloud Architecture & AI Platform Expertise"
+Example 2: "Senior DevOps Lead | 12 Years in Large-Scale Distributed Systems & SRE"
+Example 3: "8-Year Data Scientist Specializing in NLP and Recommendation Engine Development"
+※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names.
 
 ## 2. Summary
 A detailed overview of the candidate's career and profile. Describe their role, domain expertise, and notable contributions in 2-4 sentences.
@@ -2024,7 +2026,7 @@ Example: "He is a builder capable of constructing AI platforms from scratch, not
 
 【Important Rules】
 1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university").
-2. **300-Character Target**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy should be under 100 characters. Write enough detail for a presentation slide.
+2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
 3. **English Only**: All output must be in English.
 4. **Specificity**: Use concrete skills, years, metrics. Avoid vague expressions.
 5. **No Markdown Headers in Values**: Output the value text directly after each header.
