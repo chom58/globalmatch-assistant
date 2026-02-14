@@ -1982,49 +1982,49 @@ Overall evaluation and comments
 
 
 def get_cv_proposal_extract_prompt(resume_text: str) -> str:
-    """CV提案用コメント抽出プロンプトを生成（英語・各150文字以内）"""
+    """CV提案用コメント抽出プロンプトを生成（英語・各300文字以内）"""
 
     return f"""You are a professional recruitment consultant specializing in international engineer placement.
 
-From the following CV/resume, extract concise English comments for an anonymous candidate proposal document.
+From the following CV/resume, extract detailed English comments for an anonymous candidate proposal document (to be used in presentation slides).
 
 【CV/Resume】
 {resume_text}
 
 ---
 
-【Output Format】※ Strictly follow this format. Each item MUST be within 150 characters. Output in English only.
+【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
 
 ## 1. Catch Copy
 A one-line headline that captures the candidate's core appeal.
 Example: "10-Year Full-Stack Engineer with Cloud Architecture Expertise"
-※ Max 150 characters. No names or company names.
+※ Max 100 characters. No names or company names.
 
 ## 2. Summary
-A brief overview of the candidate's profile.
-Example: "Senior backend engineer, 8 yrs exp in fintech, fluent JP"
-※ Max 150 characters. Include years of experience and domain.
+A detailed overview of the candidate's career and profile. Describe their role, domain expertise, and notable contributions in 2-4 sentences.
+Example: "A Technical Architect at a major global IT firm, he designs AI automation and cloud-native platforms. A core contributor to container orchestration technologies, he recently launched a custom Golang framework for autonomous agents, bridging distributed systems with AI."
+※ Max 300 characters. Include role, years of experience, domain, and key achievements.
 
 ## 3. Strength
-The candidate's strongest technical or professional asset.
-Example: "Led 5 microservice migrations, reduced latency by 40%"
-※ Max 150 characters. Be specific with metrics if available.
+The candidate's strongest technical or professional assets. Describe specific skills, technologies, and leadership capabilities in 2-4 sentences.
+Example: "An expert in Golang, C++, and container runtimes, he is a rare Deep Tech talent with experience spanning Linux kernel development to proprietary Agentic AI frameworks. He excels in architecting scalable cloud solutions and leading global engineering teams."
+※ Max 300 characters. Be specific with technologies, metrics, and impact.
 
 ## 4. Education / Research
-Academic background and relevant certifications.
-Example: "MSc Computer Science, AWS Solutions Architect certified"
-※ Max 150 characters. Highest degree + key certification.
+Academic background, certifications, and ongoing professional development in 2-3 sentences.
+Example: "He holds an M.Sc. in Computer Science and is currently enrolled in an executive technology program at a top US university (2026). A dedicated open-source contributor, he focuses on container orchestration and AI workflow frameworks."
+※ Max 300 characters. Include degrees, certifications, and research focus.
 
 ## 5. Assessment
-Overall evaluation and recommendation.
-Example: "Strong match for senior roles, excellent leadership record"
-※ Max 150 characters. Objective assessment.
+Overall evaluation and recommendation. Explain why this candidate is a strong match in 2-4 sentences.
+Example: "He is a builder capable of constructing AI platforms from scratch, not just using APIs. His ability to develop custom Agentic frameworks in Golang makes him a strong technical match for organizations seeking deep-tech engineers who can bridge backend systems with AI agents."
+※ Max 300 characters. Provide objective, detailed assessment.
 
 ---
 
 【Important Rules】
-1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "Major US tech company", "Top university in Japan").
-2. **150-Character Limit**: Each section MUST be 150 characters or fewer. Count carefully.
+1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university").
+2. **300-Character Target**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy should be under 100 characters. Write enough detail for a presentation slide.
 3. **English Only**: All output must be in English.
 4. **Specificity**: Use concrete skills, years, metrics. Avoid vague expressions.
 5. **No Markdown Headers in Values**: Output the value text directly after each header.
@@ -2676,7 +2676,7 @@ def main():
             **CV提案コメント抽出**
             1. 英語のCVをテキスト入力またはPDFアップロード
             2. 「抽出実行」をクリック
-            3. 匿名提案用の5項目コメント（各150文字以内・英語）を取得
+            3. 匿名提案用の5項目コメント（各300文字以内・英語）を取得
             4. 複数CVの一括処理にも対応（---NEXT---で区切り）
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
@@ -4707,7 +4707,7 @@ def main():
 
     elif feature == "📝 CV提案コメント抽出":
         st.subheader("📝 CV提案コメント抽出")
-        st.caption("CVから匿名提案用の5項目コメント（英語・各150文字以内）を抽出します。複数CVの一括処理にも対応。")
+        st.caption("CVから匿名提案用の5項目コメント（英語・各300文字以内）を抽出します。複数CVの一括処理にも対応。")
 
         # 入力モード選択
         cv_extract_mode = st.radio(
@@ -4776,7 +4776,7 @@ def main():
                 )
 
             with col2:
-                st.markdown("##### 出力：提案コメント（英語・各150文字以内）")
+                st.markdown("##### 出力：提案コメント（英語・各300文字以内）")
 
                 if cv_extract_btn:
                     if not api_key:
