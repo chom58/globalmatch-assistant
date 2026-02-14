@@ -4848,12 +4848,19 @@ def main():
                         )
 
         else:  # batch mode
-            st.info("💡 **区切り方法**: `---NEXT---` を各CVの間に入れてください")
+            batch_input_tab1, batch_input_tab2 = st.tabs(["📝 テキスト入力", "📄 複数PDF読み込み"])
 
-            batch_cv_input = st.text_area(
-                "複数の英語CVを貼り付け",
-                height=400,
-                placeholder="""John Doe
+            # PDFから抽出したCVリストを保持
+            if 'batch_cv_pdf_texts' not in st.session_state:
+                st.session_state['batch_cv_pdf_texts'] = []
+
+            with batch_input_tab1:
+                st.info("💡 **区切り方法**: `---NEXT---` を各CVの間に入れてください")
+
+                batch_cv_input = st.text_area(
+                    "複数の英語CVを貼り付け",
+                    height=400,
+                    placeholder="""John Doe
 Software Engineer with 5+ years experience...
 [CV 1]
 
@@ -4866,10 +4873,38 @@ Full-stack Developer...
 ---NEXT---
 
 [Add more CVs...]""",
-                label_visibility="collapsed",
-                key="batch_cv_extract_text"
-            )
+                    label_visibility="collapsed",
+                    key="batch_cv_extract_text"
+                )
 
+            with batch_input_tab2:
+                st.markdown("##### 複数PDFをアップロード（最大10件）")
+                uploaded_pdfs = st.file_uploader(
+                    "PDFファイルを選択（複数選択可）",
+                    type=["pdf"],
+                    accept_multiple_files=True,
+                    key="batch_cv_pdfs",
+                    help=f"各ファイル最大{MAX_PDF_SIZE_MB}MB、20ページまで。最大10ファイル。"
+                )
+
+                if uploaded_pdfs:
+                    if len(uploaded_pdfs) > 10:
+                        st.error("❌ 一度にアップロードできるのは最大10件までです")
+                    else:
+                        pdf_texts = []
+                        for j, pdf_file in enumerate(uploaded_pdfs):
+                            extracted_text, pdf_error = extract_text_from_pdf(pdf_file)
+                            if pdf_error:
+                                st.warning(f"⚠️ {pdf_file.name}: {pdf_error}")
+                            else:
+                                pdf_texts.append(extracted_text)
+                                st.success(f"✅ {pdf_file.name}（{len(extracted_text):,}文字）")
+                        st.session_state['batch_cv_pdf_texts'] = pdf_texts
+                        # PDFテキストをbatch_cv_inputにマージ
+                        if pdf_texts:
+                            batch_cv_input = "\n\n---NEXT---\n\n".join(pdf_texts)
+
+            # CV数カウント
             if batch_cv_input:
                 cv_list = [r.strip() for r in batch_cv_input.split("---NEXT---") if r.strip()]
                 st.metric("検出されたCV数", len(cv_list))
