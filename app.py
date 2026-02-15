@@ -1818,12 +1818,26 @@ def get_translate_to_japanese_prompt(english_text: str) -> str:
 """
 
 
-def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_text: str, language: str = "ja") -> str:
-    """匿名提案資料生成用のプロンプトを生成"""
+def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_text: str, language: str = "ja", anonymize_level: str = "full") -> str:
+    """匿名提案資料生成用のプロンプトを生成
+
+    anonymize_level: "full" = 完全匿名化, "light" = 企業名・大学名を表示（個人情報のみ匿名化）
+    """
 
     if language == "ja":
+        if anonymize_level == "light":
+            anonymize_note = """【匿名化ルール（軽度匿名化モード）】
+- 氏名・連絡先（メール、電話番号、住所）は匿名化する
+- **企業名・大学名・プロジェクト名・製品名はそのまま記載してよい**
+- 経歴の具体的な内容（役職、チーム規模、成果数値など）もそのまま記載してよい"""
+        else:
+            anonymize_note = """【匿名化ルール（完全匿名化モード）】
+- 氏名、企業名、大学名、固有名詞は一切記載しない
+- 企業名は「大手SIer」「外資系IT企業」などの一般表現に置換する
+- 大学名は「国内トップ大学」「海外有名大学」などに置換する"""
+
         return f"""あなたは人材紹介のプロフェッショナルです。
-以下のマッチング分析結果とレジュメ、求人票から、企業向けの**匿名候補者提案資料**を作成してください。
+以下のマッチング分析結果とレジュメ、求人票から、企業向けの**候補者提案資料**を作成してください。
 
 【入力情報】
 ■ マッチング分析結果:
@@ -1893,16 +1907,28 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 ---
 
-【重要な注意事項】
-1. **完全匿名化**: 氏名、企業名、固有名詞は一切記載しない
-2. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
-3. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
-4. **客観性**: 事実に基づいた評価を行う
-5. **簡潔性**: 要点を絞って分かりやすく記載
+{anonymize_note}
+
+【その他の注意事項】
+1. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
+2. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
+3. **客観性**: 事実に基づいた評価を行う
+4. **簡潔性**: 要点を絞って分かりやすく記載
 """
     else:  # English
+        if anonymize_level == "light":
+            anonymize_note_en = """【Anonymization Rules (Light Anonymization Mode)】
+- Anonymize personal names and contact info (email, phone, address)
+- **Company names, university names, project names, and product names may be included as-is**
+- Specific career details (job titles, team sizes, achievement metrics) may also be included as-is"""
+        else:
+            anonymize_note_en = """【Anonymization Rules (Full Anonymization Mode)】
+- No real names, company names, university names, or identifiable proper nouns
+- Replace company names with generic terms (e.g., "a major global IT firm", "a leading SaaS company")
+- Replace university names with generic terms (e.g., "a top US university", "a prestigious Japanese university")"""
+
         return f"""You are a professional recruitment consultant.
-Create an **anonymous candidate proposal document** for the client company based on the matching analysis result, resume, and job description below.
+Create a **candidate proposal document** for the client company based on the matching analysis result, resume, and job description below.
 
 【Input Information】
 ■ Matching Analysis Result:
@@ -1972,17 +1998,23 @@ Overall evaluation and comments
 
 ---
 
-【Important Notes】
-1. **Complete Anonymization**: No names, company names, or proper nouns
-2. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
-3. **Specificity**: Use concrete skills and experience, avoid abstract expressions
-4. **Objectivity**: Provide fact-based evaluation
-5. **Brevity**: Focus on key points for clarity
+{anonymize_note_en}
+
+【Other Important Notes】
+1. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
+2. **Specificity**: Use concrete skills and experience, avoid abstract expressions
+3. **Objectivity**: Provide fact-based evaluation
+4. **Brevity**: Focus on key points for clarity
 """
 
 
-def get_cv_proposal_extract_prompt(resume_text: str) -> str:
+def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "full") -> str:
     """CV提案用コメント抽出プロンプトを生成（英語・各300文字以内・採用企業訴求型）"""
+
+    if anonymize_level == "light":
+        anonymize_rules = """1. **Light Anonymization**: Anonymize personal names and contact info (email, phone, address) only. **Company names, university names, project names, and product names may be kept as-is.** Use actual company/university names from the CV to add credibility."""
+    else:
+        anonymize_rules = """1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university")."""
 
     return f"""You are an elite recruitment consultant who writes compelling candidate proposals that make hiring managers eager to interview.
 
@@ -2035,7 +2067,7 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 ---
 
 【Important Rules】
-1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university").
+{anonymize_rules}
 2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
 3. **English Only**: All output must be in English.
 4. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
@@ -2066,6 +2098,28 @@ def extract_name_from_cv(text: str) -> str:
             continue
         return line
     return ""
+
+
+def get_shorten_proposal_prompt(proposal_text: str) -> str:
+    """CV提案コメントを短縮するプロンプトを生成"""
+
+    return f"""You are an elite recruitment consultant. The following candidate proposal is too long for a presentation slide. Shorten each section while keeping the most impactful information.
+
+【Current Proposal】
+{proposal_text}
+
+---
+
+【Instructions】
+- **Catch Copy**: Keep within 60-80 characters. Keep the most memorable phrase.
+- **Summary, Strength, Education/Research, Assessment**: Each MUST be within 150 characters (1-2 sentences MAX). Cut less important details, keep the strongest facts and metrics.
+- Keep the same section headers (## 1. Catch Copy, ## 2. Summary, etc.)
+- Maintain the same language and anonymization level as the original
+- Prioritize: quantified achievements > rare skills > general descriptions
+- Every sentence must earn its place — if it doesn't add unique value, cut it
+- Output in English only
+- Do NOT add any new information not present in the original
+"""
 
 
 def validate_input(text: str, input_type: str) -> tuple[bool, str]:
@@ -2269,6 +2323,44 @@ def sync_to_localstorage(history_type: str):
         """, height=0)
 
 
+def sync_saved_jobs_to_localstorage():
+    """保存済み求人をlocalStorageに同期"""
+    if 'saved_jobs' in st.session_state:
+        import json
+        json_data = json.dumps(st.session_state['saved_jobs'])
+        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+
+        st.components.v1.html(f"""
+            <script>
+            try {{
+                localStorage.setItem('saved_jobs', '{escaped_data}');
+                console.log('Saved jobs to localStorage');
+            }} catch(e) {{
+                console.error('Failed to save jobs to localStorage:', e);
+            }}
+            </script>
+        """, height=0)
+
+
+def sync_saved_job_sets_to_localstorage():
+    """保存済み求人セットをlocalStorageに同期"""
+    if 'saved_job_sets' in st.session_state:
+        import json
+        json_data = json.dumps(st.session_state['saved_job_sets'])
+        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+
+        st.components.v1.html(f"""
+            <script>
+            try {{
+                localStorage.setItem('saved_job_sets', '{escaped_data}');
+                console.log('Saved job sets to localStorage');
+            }} catch(e) {{
+                console.error('Failed to save job sets to localStorage:', e);
+            }}
+            </script>
+        """, height=0)
+
+
 def load_from_localstorage_script():
     """localStorageから履歴を復元するJavaScriptを返す"""
     return """
@@ -2277,13 +2369,17 @@ def load_from_localstorage_script():
         function loadHistory() {
             const resumeHistory = localStorage.getItem('resume_history');
             const jdHistory = localStorage.getItem('jd_history');
+            const savedJobs = localStorage.getItem('saved_jobs');
+            const savedJobSets = localStorage.getItem('saved_job_sets');
 
-            if (resumeHistory || jdHistory) {
+            if (resumeHistory || jdHistory || savedJobs || savedJobSets) {
                 // Streamlitに送信するためのカスタムイベント
                 const event = new CustomEvent('localStorageData', {
                     detail: {
                         resume_history: resumeHistory,
-                        jd_history: jdHistory
+                        jd_history: jdHistory,
+                        saved_jobs: savedJobs,
+                        saved_job_sets: savedJobSets
                     }
                 });
                 window.dispatchEvent(event);
@@ -2316,6 +2412,10 @@ def export_history_to_json(history_type: str = "all") -> str:
             export_data['data']['resume_history'] = st.session_state['resume_history']
         if 'jd_history' in st.session_state:
             export_data['data']['jd_history'] = st.session_state['jd_history']
+        if 'saved_jobs' in st.session_state:
+            export_data['data']['saved_jobs'] = st.session_state['saved_jobs']
+        if 'saved_job_sets' in st.session_state:
+            export_data['data']['saved_job_sets'] = st.session_state['saved_job_sets']
     else:
         # 特定の履歴のみエクスポート
         key = f"{history_type}_history"
@@ -2346,6 +2446,14 @@ def import_history_from_json(json_string: str) -> tuple[bool, str]:
 
                 # localStorageにも同期
                 sync_to_localstorage(key.replace('_history', ''))
+            elif key == 'saved_jobs':
+                st.session_state['saved_jobs'] = history
+                imported_count += len(history)
+                sync_saved_jobs_to_localstorage()
+            elif key == 'saved_job_sets':
+                st.session_state['saved_job_sets'] = history
+                imported_count += len(history)
+                sync_saved_job_sets_to_localstorage()
 
         return True, f"✅ {imported_count}件の履歴をインポートしました"
 
@@ -2659,6 +2767,7 @@ def main():
                 "企業紹介文作成（PDF）",
                 "🎯 レジュメ×求人票マッチング分析",
                 "📝 CV提案コメント抽出",
+                "✉️ 求人打診メール作成",
                 "📦 バッチ処理（複数レジュメ）"
             ],
             index=0,
@@ -2715,6 +2824,12 @@ def main():
             2. 「抽出実行」をクリック
             3. 匿名提案用の5項目コメント（各300文字以内・英語）を取得
             4. 複数CVの一括処理にも対応（---NEXT---で区切り）
+
+            **求人打診メール作成**
+            1. 候補者の名前と送信者名を入力
+            2. 求人情報（ポジション名、企業名、URL等）を追加
+            3. 「メール生成」をクリックでメール文面を自動作成
+            4. コピーしてそのままメール送信に利用
 
             *生成結果は右上のコピーボタンで簡単にコピーできます*
             """)
@@ -4607,47 +4722,61 @@ def main():
 
             # 匿名提案資料生成機能
             st.divider()
-            st.markdown("#### 📄 匿名提案資料生成")
-            st.caption("マッチング分析から企業向けの簡潔な匿名候補者提案資料を生成します")
+            st.markdown("#### 📄 候補者提案資料生成")
+            st.caption("マッチング分析から企業向けの簡潔な候補者提案資料を生成します")
+
+            proposal_anon_level = st.radio(
+                "🔒 匿名化レベル",
+                options=["full", "light"],
+                format_func=lambda x: {
+                    "full": "完全匿名化（企業名・大学名も伏せる）",
+                    "light": "軽度匿名化（企業名・大学名は表示）"
+                }[x],
+                horizontal=True,
+                key="proposal_anon_level",
+                help="完全：企業名を「大手SIer」等に置換 / 軽度：企業名・大学名をそのまま表示（個人情報のみ匿名化）"
+            )
 
             col_proposal1, col_proposal2 = st.columns(2)
 
             with col_proposal1:
-                if st.button("📝 日本語版を生成", key="generate_proposal_ja", use_container_width=True, help="匿名提案資料（日本語）を生成"):
+                if st.button("📝 日本語版を生成", key="generate_proposal_ja", use_container_width=True, help="提案資料（日本語）を生成"):
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ レジュメと求人票の入力情報が見つかりません。先にマッチング分析を実行してください。")
                     else:
-                        with st.spinner("🤖 匿名提案資料（日本語）を生成中..."):
+                        with st.spinner("🤖 候補者提案資料（日本語）を生成中..."):
                             try:
                                 prompt = get_anonymous_proposal_prompt(
                                     st.session_state['matching_result'],
                                     st.session_state['matching_resume_input'],
                                     st.session_state['matching_jd_input'],
-                                    language="ja"
+                                    language="ja",
+                                    anonymize_level=proposal_anon_level
                                 )
                                 proposal = call_groq_api(api_key, prompt)
                                 st.session_state['anonymous_proposal'] = proposal
-                                st.success("✅ 匿名提案資料（日本語）の生成が完了しました")
+                                st.success("✅ 候補者提案資料（日本語）の生成が完了しました")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ 生成エラー: {str(e)[:200]}")
 
             with col_proposal2:
-                if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate anonymous proposal (English)"):
+                if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate proposal (English)"):
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ Resume and JD input not found. Please run matching analysis first.")
                     else:
-                        with st.spinner("🤖 Generating anonymous proposal (English)..."):
+                        with st.spinner("🤖 Generating candidate proposal (English)..."):
                             try:
                                 prompt = get_anonymous_proposal_prompt(
                                     st.session_state['matching_result'],
                                     st.session_state['matching_resume_input'],
                                     st.session_state['matching_jd_input'],
-                                    language="en"
+                                    language="en",
+                                    anonymize_level=proposal_anon_level
                                 )
                                 proposal = call_groq_api(api_key, prompt)
                                 st.session_state['anonymous_proposal'] = proposal
-                                st.success("✅ Anonymous proposal (English) generated successfully")
+                                st.success("✅ Candidate proposal (English) generated successfully")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Generation error: {str(e)[:200]}")
@@ -4655,7 +4784,7 @@ def main():
             # 匿名提案資料の表示
             if 'anonymous_proposal' in st.session_state:
                 st.divider()
-                st.markdown("#### 📋 生成された匿名提案資料")
+                st.markdown("#### 📋 生成された候補者提案資料")
 
                 # 表示切替とコピーボタン
                 col_view_prop, col_copy_prop = st.columns([2, 1])
@@ -4744,19 +4873,34 @@ def main():
 
     elif feature == "📝 CV提案コメント抽出":
         st.subheader("📝 CV提案コメント抽出")
-        st.caption("CVから匿名提案用の5項目コメント（英語・各300文字以内）を抽出します。複数CVの一括処理にも対応。")
+        st.caption("CVから提案用の5項目コメント（英語・各300文字以内）を抽出します。複数CVの一括処理にも対応。")
 
-        # 入力モード選択
-        cv_extract_mode = st.radio(
-            "入力モード",
-            options=["single", "batch"],
-            format_func=lambda x: {
-                "single": "単体CV入力",
-                "batch": "複数CV一括処理"
-            }[x],
-            horizontal=True,
-            key="cv_extract_mode"
-        )
+        # 匿名化レベル選択
+        col_mode, col_anon = st.columns(2)
+        with col_mode:
+            # 入力モード選択
+            cv_extract_mode = st.radio(
+                "入力モード",
+                options=["single", "batch"],
+                format_func=lambda x: {
+                    "single": "単体CV入力",
+                    "batch": "複数CV一括処理"
+                }[x],
+                horizontal=True,
+                key="cv_extract_mode"
+            )
+        with col_anon:
+            cv_anon_level = st.radio(
+                "🔒 匿名化レベル",
+                options=["full", "light"],
+                format_func=lambda x: {
+                    "full": "完全匿名化（企業名も伏せる）",
+                    "light": "軽度匿名化（企業名は表示）"
+                }[x],
+                horizontal=True,
+                key="cv_extract_anon_level",
+                help="完全：企業名を「a major IT firm」等に置換 / 軽度：企業名・大学名をそのまま表示"
+            )
 
         if cv_extract_mode == "single":
             col1, col2 = st.columns([1, 1])
@@ -4826,7 +4970,7 @@ def main():
                             with st.spinner("🤖 AIがCVからコメントを抽出しています..."):
                                 try:
                                     start_time = time.time()
-                                    prompt = get_cv_proposal_extract_prompt(cv_extract_input)
+                                    prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level)
                                     result = call_groq_api(api_key, prompt)
                                     elapsed_time = time.time() - start_time
 
@@ -4841,9 +4985,20 @@ def main():
 
                 # 結果表示
                 if 'cv_extract_result' in st.session_state:
-                    col_view, col_copy = st.columns([2, 1])
+                    col_view, col_shorten, col_copy = st.columns([2, 1, 1])
                     with col_view:
                         show_formatted_cv = st.checkbox("📖 整形表示", value=True, key="cv_extract_formatted")
+                    with col_shorten:
+                        if st.button("✂️ さらに短く", key="shorten_cv_extract", use_container_width=True, help="各セクションを150文字以内に短縮"):
+                            with st.spinner("🤖 短縮中..."):
+                                try:
+                                    prompt = get_shorten_proposal_prompt(st.session_state['cv_extract_result'])
+                                    shortened = call_groq_api(api_key, prompt)
+                                    st.session_state['cv_extract_result'] = shortened
+                                    st.success("✅ 短縮完了！")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ 短縮エラー: {str(e)[:200]}")
                     with col_copy:
                         if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
@@ -4984,7 +5139,7 @@ Full-stack Developer...
                         else:
                             try:
                                 item_start = time.time()
-                                prompt = get_cv_proposal_extract_prompt(cv_text)
+                                prompt = get_cv_proposal_extract_prompt(cv_text, anonymize_level=cv_anon_level)
                                 output = call_groq_api(api_key, prompt)
                                 cv_result["status"] = "success"
                                 cv_result["output"] = output
@@ -5021,9 +5176,20 @@ Full-stack Developer...
                     cv_label = cv_r.get('name') or f"CV #{cv_r['index']}"
                     with st.expander(f"{cv_label} - {'✅ 成功' + time_str if cv_r['status'] == 'success' else '❌ エラー'}"):
                         if cv_r['status'] == 'success':
-                            col_view_b, col_copy_b = st.columns([2, 1])
+                            col_view_b, col_shorten_b, col_copy_b = st.columns([2, 1, 1])
                             with col_view_b:
                                 show_fmt = st.checkbox("📖 整形表示", value=True, key=f"batch_cv_fmt_{cv_r['index']}")
+                            with col_shorten_b:
+                                if st.button("✂️ さらに短く", key=f"shorten_batch_cv_{cv_r['index']}", use_container_width=True, help="各セクションを150文字以内に短縮"):
+                                    with st.spinner("🤖 短縮中..."):
+                                        try:
+                                            prompt = get_shorten_proposal_prompt(cv_r['output'])
+                                            shortened = call_groq_api(api_key, prompt)
+                                            cv_r['output'] = shortened
+                                            st.success("✅ 短縮完了！")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ 短縮エラー: {str(e)[:200]}")
                             with col_copy_b:
                                 if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
                                     st.toast("✅ クリップボードにコピーしました")
@@ -5057,6 +5223,379 @@ Full-stack Developer...
                         use_container_width=True,
                         key="batch_cv_extract_download"
                     )
+
+    elif feature == "✉️ 求人打診メール作成":
+        st.subheader("✉️ 求人打診メール作成")
+        st.caption("面談後に候補者へ送る求人打診メールを簡単に作成できます")
+
+        # saved_jobs / saved_job_sets 初期化
+        if 'saved_jobs' not in st.session_state:
+            st.session_state['saved_jobs'] = []
+        if 'saved_job_sets' not in st.session_state:
+            st.session_state['saved_job_sets'] = []
+
+        # --- 基本情報 ---
+        col_name, col_sender = st.columns(2)
+        with col_name:
+            candidate_name = st.text_input(
+                "候補者の名前（First Name）",
+                placeholder="e.g. Taro",
+                key="email_candidate_name"
+            )
+        with col_sender:
+            sender_name = st.selectbox(
+                "送信者名",
+                options=["Shu", "Ilya", "Hiroshi"],
+                key="email_sender_name"
+            )
+
+        st.divider()
+
+        # --- 保存済みデータから読み込み ---
+        saved_jobs_list = st.session_state.get('saved_jobs', [])
+        saved_sets_list = st.session_state.get('saved_job_sets', [])
+
+        if saved_sets_list or saved_jobs_list:
+            st.markdown("##### 📂 保存済みデータから読み込み")
+            load_tab_set, load_tab_individual = st.tabs(["📦 セットから読み込み", "📄 個別求人から選択"])
+
+            with load_tab_set:
+                if saved_sets_list:
+                    set_options = [f"{s['name']}（{len(s['jobs'])}件）" for s in saved_sets_list]
+                    selected_set_idx = st.selectbox(
+                        "求人セットを選択",
+                        options=range(len(set_options)),
+                        format_func=lambda x: set_options[x],
+                        key="selected_job_set"
+                    )
+
+                    # 選択中のセット内容をプレビュー
+                    selected_set = saved_sets_list[selected_set_idx]
+                    preview_lines = [f"- {j.get('company', '')} | {j.get('title', '')}" for j in selected_set['jobs']]
+                    st.caption("\n".join(preview_lines))
+
+                    if st.button("📥 このセットを読み込み", key="load_set_btn", use_container_width=True):
+                        set_jobs = selected_set['jobs']
+                        st.session_state['email_job_count'] = len(set_jobs)
+                        for idx, sj in enumerate(set_jobs):
+                            st.session_state[f'job_title_{idx}'] = sj.get('title', '')
+                            st.session_state[f'company_name_{idx}'] = sj.get('company', '')
+                            st.session_state[f'job_website_{idx}'] = sj.get('website', '')
+                            st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
+                            st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
+                            st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
+                            st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
+                        st.rerun()
+                else:
+                    st.info("保存済みセットはありません。下の求人フォームを入力後「💾 セットとして保存」で作成できます。")
+
+            with load_tab_individual:
+                if saved_jobs_list:
+                    saved_options = [f"{sj['company']} - {sj['title']}" for sj in saved_jobs_list]
+                    selected_saved = st.multiselect(
+                        "メールに含める求人を選択",
+                        options=range(len(saved_options)),
+                        format_func=lambda x: saved_options[x],
+                        key="selected_saved_jobs"
+                    )
+
+                    if selected_saved:
+                        if st.button("📥 選択した求人を読み込み", key="load_saved_jobs_btn", use_container_width=True):
+                            st.session_state['email_job_count'] = len(selected_saved)
+                            for idx, sj_idx in enumerate(selected_saved):
+                                sj = saved_jobs_list[sj_idx]
+                                st.session_state[f'job_title_{idx}'] = sj.get('title', '')
+                                st.session_state[f'company_name_{idx}'] = sj.get('company', '')
+                                st.session_state[f'job_website_{idx}'] = sj.get('website', '')
+                                st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
+                                st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
+                                st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
+                                st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
+                            st.rerun()
+                else:
+                    st.info("保存済みの個別求人はありません。各求人エントリ内の「💾 この求人を保存」で追加できます。")
+
+            st.divider()
+
+        # --- 求人エントリ管理 ---
+        st.markdown("##### 求人情報")
+
+        # 求人数を管理
+        if 'email_job_count' not in st.session_state:
+            st.session_state['email_job_count'] = 1
+
+        col_add, col_remove = st.columns(2)
+        with col_add:
+            if st.button("＋ 求人を追加", key="add_job_btn", use_container_width=True):
+                if st.session_state['email_job_count'] < 10:
+                    st.session_state['email_job_count'] += 1
+                    st.rerun()
+        with col_remove:
+            if st.button("－ 最後の求人を削除", key="remove_job_btn", use_container_width=True,
+                         disabled=st.session_state['email_job_count'] <= 1):
+                st.session_state['email_job_count'] -= 1
+                st.rerun()
+
+        st.caption(f"現在の求人数: {st.session_state['email_job_count']}件（最大10件）")
+
+        jobs = []
+        for i in range(st.session_state['email_job_count']):
+            with st.expander(f"求人 #{i + 1}", expanded=True):
+                jcol1, jcol2 = st.columns(2)
+                with jcol1:
+                    job_title = st.text_input(
+                        "ポジション名",
+                        placeholder="e.g. Robot Deployment / Research Engineer",
+                        key=f"job_title_{i}"
+                    )
+                with jcol2:
+                    company_name = st.text_input(
+                        "企業名",
+                        placeholder="e.g. RLWRLD",
+                        key=f"company_name_{i}"
+                    )
+                website = st.text_input(
+                    "Website URL",
+                    placeholder="e.g. https://www.example.com/",
+                    key=f"job_website_{i}"
+                )
+                overview = st.text_area(
+                    "概要 / Overview（任意）",
+                    placeholder="e.g. A national-scale project aiming to build one of the world's largest VLA models.",
+                    height=80,
+                    key=f"job_overview_{i}"
+                )
+                key_focus = st.text_input(
+                    "Key Focus（任意）",
+                    placeholder='e.g. They are specifically looking for expertise in "real-world implementation."',
+                    key=f"job_keyfocus_{i}"
+                )
+                jd_note = st.text_input(
+                    "JD備考（任意）",
+                    placeholder="e.g. Please refer to the attached file.",
+                    key=f"job_jdnote_{i}"
+                )
+                fit_comment = st.text_area(
+                    "おすすめコメント（任意）",
+                    placeholder="e.g. Given your expertise in AI and computer vision, I believe this would be an excellent match.",
+                    height=68,
+                    key=f"job_fit_{i}"
+                )
+
+                # 💾 この求人を保存ボタン
+                if job_title or company_name:
+                    if st.button("💾 この求人を保存", key=f"save_job_{i}", use_container_width=True):
+                        new_job = {
+                            'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
+                            'title': job_title,
+                            'company': company_name,
+                            'website': website,
+                            'overview': overview,
+                            'key_focus': key_focus,
+                            'jd_note': jd_note,
+                            'fit_comment': fit_comment,
+                            'saved_at': datetime.now().isoformat()
+                        }
+                        # 同じ企業+ポジション名の重複チェック
+                        existing = [
+                            sj for sj in st.session_state['saved_jobs']
+                            if sj['title'] == job_title and sj['company'] == company_name
+                        ]
+                        if existing:
+                            # 既存エントリを更新
+                            for sj in st.session_state['saved_jobs']:
+                                if sj['title'] == job_title and sj['company'] == company_name:
+                                    sj.update(new_job)
+                                    break
+                            st.toast(f"✅ 「{company_name} - {job_title}」を更新しました")
+                        else:
+                            st.session_state['saved_jobs'].append(new_job)
+                            st.toast(f"✅ 「{company_name} - {job_title}」を保存しました")
+                        sync_saved_jobs_to_localstorage()
+
+                jobs.append({
+                    "title": job_title,
+                    "company": company_name,
+                    "website": website,
+                    "overview": overview,
+                    "key_focus": key_focus,
+                    "jd_note": jd_note,
+                    "fit_comment": fit_comment,
+                })
+
+        st.divider()
+
+        # --- セットとして保存 ---
+        has_any_job = any(j["title"] or j["company"] for j in jobs)
+        if has_any_job:
+            with st.expander("💾 現在の求人をセットとして保存"):
+                set_name = st.text_input(
+                    "セット名",
+                    placeholder="e.g. Robotics系3社セット",
+                    key="save_set_name"
+                )
+                if st.button("💾 セットを保存", key="save_set_btn", use_container_width=True, disabled=not set_name):
+                    # 入力されている求人のみ保存
+                    valid_jobs = [j for j in jobs if j["title"] or j["company"]]
+                    new_set = {
+                        'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
+                        'name': set_name,
+                        'jobs': valid_jobs,
+                        'saved_at': datetime.now().isoformat()
+                    }
+                    # 同名セットの重複チェック
+                    existing_idx = next(
+                        (i for i, s in enumerate(st.session_state['saved_job_sets']) if s['name'] == set_name),
+                        None
+                    )
+                    if existing_idx is not None:
+                        st.session_state['saved_job_sets'][existing_idx] = new_set
+                        st.toast(f"✅ セット「{set_name}」を更新しました（{len(valid_jobs)}件）")
+                    else:
+                        st.session_state['saved_job_sets'].append(new_set)
+                        st.toast(f"✅ セット「{set_name}」を保存しました（{len(valid_jobs)}件）")
+                    sync_saved_job_sets_to_localstorage()
+
+        # --- メール生成 ---
+        generate_btn = st.button(
+            "📧 メール生成",
+            type="primary",
+            use_container_width=True,
+            disabled=not candidate_name,
+            key="generate_email_btn"
+        )
+
+        if generate_btn and candidate_name:
+            # メール文面を組み立て
+            lines = []
+            lines.append(f"Hi {candidate_name}\n")
+            lines.append("It was a pleasure speaking with you today.\n")
+            lines.append("As discussed, please find the details of the opportunities below.")
+            lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
+
+            for idx, job in enumerate(jobs, 1):
+                # ヘッダー行: タイトルと企業名の組み合わせ
+                header_parts = []
+                if job["title"]:
+                    header_parts.append(job["title"])
+                if job["company"]:
+                    header_parts.append(job["company"])
+                if header_parts:
+                    lines.append(f"{idx}. {' | '.join(header_parts)}\n")
+                else:
+                    lines.append(f"{idx}. (TBD)\n")
+
+                if job["website"]:
+                    lines.append(f"Website: {job['website']}\n")
+                if job["overview"]:
+                    lines.append(f"Overview: {job['overview']}\n")
+                if job["key_focus"]:
+                    lines.append(f"Key Focus: {job['key_focus']}\n")
+                if job["jd_note"]:
+                    lines.append(f"JD: {job['jd_note']}\n")
+                if job["fit_comment"]:
+                    lines.append(f"{job['fit_comment']}\n")
+
+                lines.append("")  # 求人間の空行
+
+            lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
+            lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
+            lines.append("We look forward to hearing your thoughts on these opportunities.")
+            lines.append("Best regards,")
+            lines.append(sender_name)
+
+            email_text = "\n".join(lines)
+            st.session_state['generated_email'] = email_text
+
+        # --- 結果表示 ---
+        if 'generated_email' in st.session_state:
+            st.divider()
+            st.markdown("##### 生成されたメール")
+
+            col_copy_e, col_dl_e = st.columns(2)
+            with col_copy_e:
+                if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
+                    st.toast("✅ クリップボードにコピーしました")
+                    escaped = st.session_state['generated_email'].replace('`', '\\`').replace('$', '\\$')
+                    st.components.v1.html(f"""
+                        <script>
+                        navigator.clipboard.writeText(`{escaped}`);
+                        </script>
+                    """, height=0)
+            with col_dl_e:
+                st.download_button(
+                    "📄 テキストファイルDL",
+                    data=st.session_state['generated_email'],
+                    file_name=f"job_email_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key="dl_email_btn"
+                )
+
+            st.code(st.session_state['generated_email'], language=None)
+
+        # --- 保存済みデータの管理 ---
+        has_saved_sets = bool(st.session_state.get('saved_job_sets'))
+        has_saved_jobs = bool(st.session_state.get('saved_jobs'))
+
+        if has_saved_sets or has_saved_jobs:
+            st.divider()
+            manage_tab_sets, manage_tab_jobs = st.tabs(["📦 セット管理", "📄 個別求人管理"])
+
+            with manage_tab_sets:
+                if has_saved_sets:
+                    for ss_idx, ss in enumerate(st.session_state['saved_job_sets']):
+                        saved_date = ""
+                        if ss.get('saved_at'):
+                            try:
+                                dt = datetime.fromisoformat(ss['saved_at'])
+                                saved_date = dt.strftime('%Y/%m/%d')
+                            except Exception:
+                                pass
+                        col_info, col_del = st.columns([4, 1])
+                        with col_info:
+                            job_names = ", ".join([j.get('company', '?') for j in ss.get('jobs', [])])
+                            st.markdown(f"**{ss.get('name', '')}**（{len(ss.get('jobs', []))}件）  \n"
+                                        f"{job_names}　📅 {saved_date}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_saved_set_{ss_idx}", help="このセットを削除"):
+                                st.session_state['saved_job_sets'].pop(ss_idx)
+                                sync_saved_job_sets_to_localstorage()
+                                st.rerun()
+
+                    if st.button("🗑️ すべてのセットを削除", key="clear_all_saved_sets"):
+                        st.session_state['saved_job_sets'] = []
+                        sync_saved_job_sets_to_localstorage()
+                        st.rerun()
+                else:
+                    st.caption("保存済みセットはありません")
+
+            with manage_tab_jobs:
+                if has_saved_jobs:
+                    for sj_idx, sj in enumerate(st.session_state['saved_jobs']):
+                        saved_date = ""
+                        if sj.get('saved_at'):
+                            try:
+                                dt = datetime.fromisoformat(sj['saved_at'])
+                                saved_date = dt.strftime('%Y/%m/%d')
+                            except Exception:
+                                pass
+                        col_info, col_del = st.columns([4, 1])
+                        with col_info:
+                            st.markdown(f"**{sj.get('company', '')} - {sj.get('title', '')}**  \n"
+                                        f"🔗 {sj.get('website', '-')}　📅 {saved_date}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_saved_job_{sj_idx}", help="この求人を削除"):
+                                st.session_state['saved_jobs'].pop(sj_idx)
+                                sync_saved_jobs_to_localstorage()
+                                st.rerun()
+
+                    if st.button("🗑️ すべての個別求人を削除", key="clear_all_saved_jobs"):
+                        st.session_state['saved_jobs'] = []
+                        sync_saved_jobs_to_localstorage()
+                        st.rerun()
+                else:
+                    st.caption("保存済みの個別求人はありません")
 
     elif feature == "📦 バッチ処理（複数レジュメ）":
         st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
