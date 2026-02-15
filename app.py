@@ -2079,7 +2079,7 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 def get_shorten_proposal_prompt(proposal_text: str) -> str:
     """CV提案コメントを短縮するプロンプトを生成"""
 
-    return f"""You are an elite recruitment consultant. The following candidate proposal is too long for a presentation slide. Shorten each section while keeping the most impactful information.
+    return f"""You are an elite recruitment consultant. The following candidate proposal is slightly too long for a presentation slide. Condense each section moderately while preserving key details.
 
 【Current Proposal】
 {proposal_text}
@@ -2088,11 +2088,11 @@ def get_shorten_proposal_prompt(proposal_text: str) -> str:
 
 【Instructions】
 - **Catch Copy**: Keep within 60-80 characters. Keep the most memorable phrase.
-- **Summary, Strength, Education/Research, Assessment**: Each MUST be within 150 characters (1-2 sentences MAX). Cut less important details, keep the strongest facts and metrics.
+- **Summary, Strength, Education/Research, Assessment**: Target around 200 characters each (2-3 sentences). Trim redundant phrases and less critical details, but keep enough context so the reader understands the candidate's value.
 - Keep the same section headers (## 1. Catch Copy, ## 2. Summary, etc.)
 - Maintain the same language and anonymization level as the original
 - Prioritize: quantified achievements > rare skills > general descriptions
-- Every sentence must earn its place — if it doesn't add unique value, cut it
+- Do NOT over-compress — the result should still read naturally and be informative
 - Output in English only
 - Do NOT add any new information not present in the original
 """
@@ -4965,7 +4965,7 @@ def main():
                     with col_view:
                         show_formatted_cv = st.checkbox("📖 整形表示", value=True, key="cv_extract_formatted")
                     with col_shorten:
-                        if st.button("✂️ さらに短く", key="shorten_cv_extract", use_container_width=True, help="各セクションを150文字以内に短縮"):
+                        if st.button("✂️ さらに短く", key="shorten_cv_extract", use_container_width=True, help="各セクションを200文字程度に短縮"):
                             with st.spinner("🤖 短縮中..."):
                                 try:
                                     prompt = get_shorten_proposal_prompt(st.session_state['cv_extract_result'])
@@ -5154,7 +5154,7 @@ Full-stack Developer...
                             with col_view_b:
                                 show_fmt = st.checkbox("📖 整形表示", value=True, key=f"batch_cv_fmt_{cv_r['index']}")
                             with col_shorten_b:
-                                if st.button("✂️ さらに短く", key=f"shorten_batch_cv_{cv_r['index']}", use_container_width=True, help="各セクションを150文字以内に短縮"):
+                                if st.button("✂️ さらに短く", key=f"shorten_batch_cv_{cv_r['index']}", use_container_width=True, help="各セクションを200文字程度に短縮"):
                                     with st.spinner("🤖 短縮中..."):
                                         try:
                                             prompt = get_shorten_proposal_prompt(cv_r['output'])
