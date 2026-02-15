@@ -17,6 +17,8 @@ import secrets
 import requests
 from bs4 import BeautifulSoup
 from datetime import timedelta
+import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Supabase設定（オプション）
 try:
@@ -32,20 +34,15 @@ MAX_RETRIES = 3          # API最大リトライ回数
 MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
 
 
-def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
-    """PDFファイルからテキストを抽出
-
-    Returns:
-        tuple: (extracted_text, error_message)
-    """
+@st.cache_data(show_spinner=False)
+def _extract_text_from_pdf_bytes(pdf_raw: bytes) -> tuple[str, str]:
+    """PDFバイナリからテキストを抽出（キャッシュ対応）"""
     try:
-        # ファイルサイズチェック
-        file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+        file_size_mb = len(pdf_raw) / (1024 * 1024)
         if file_size_mb > MAX_PDF_SIZE_MB:
             return "", f"ファイルサイズが大きすぎます（{file_size_mb:.1f}MB）。{MAX_PDF_SIZE_MB}MB以下にしてください"
 
-        # PDFを読み込み
-        pdf_bytes = io.BytesIO(uploaded_file.getvalue())
+        pdf_bytes = io.BytesIO(pdf_raw)
         text_parts = []
 
         with pdfplumber.open(pdf_bytes) as pdf:
@@ -66,6 +63,11 @@ def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
 
     except Exception as e:
         return "", f"PDF読み込みエラー: {str(e)[:100]}"
+
+
+def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
+    """PDFファイルからテキストを抽出（同一ファイルはキャッシュから即時返却）"""
+    return _extract_text_from_pdf_bytes(uploaded_file.getvalue())
 
 
 def extract_text_from_url(url: str) -> tuple[str, str]:
@@ -2315,6 +2317,68 @@ def call_groq_api(api_key: str, prompt: str) -> str:
     raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）: {str(last_error)[:100]}")
 
 
+def call_groq_api_stream(api_key: str, prompt: str):
+    """Groq APIをストリーミングで呼び出し、チャンクを逐次yieldする（リトライ機能付き）"""
+
+    client = Groq(api_key=api_key)
+    last_error = None
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            stream = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=4096,
+                timeout=60,
+                stream=True
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    yield delta.content
+            return
+
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+
+            if "invalid api key" in error_str or "authentication" in error_str:
+                raise ValueError("❌ APIキーが無効です。正しいキーを入力してください")
+
+            if "rate limit" in error_str:
+                if attempt < MAX_RETRIES - 1:
+                    wait_time = (attempt + 1) * 5
+                    time.sleep(wait_time)
+                    continue
+                raise ValueError("⏳ API制限に達しました。しばらく待ってから再試行してください")
+
+            if "timeout" in error_str or "timed out" in error_str:
+                if attempt < MAX_RETRIES - 1:
+                    continue
+                raise ValueError("⏱️ タイムアウトしました。入力を短くするか、再試行してください")
+
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2)
+                continue
+
+    raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）: {str(last_error)[:100]}")
+
+
+def stream_to_container(api_key: str, prompt: str, container=None):
+    """ストリーミングでコンテナにリアルタイム表示し、完成テキストを返す"""
+    if container is None:
+        container = st.empty()
+
+    collected = []
+    for chunk in call_groq_api_stream(api_key, prompt):
+        collected.append(chunk)
+        container.markdown("".join(collected) + "▍")
+
+    full_text = "".join(collected)
+    container.markdown(full_text)
+    return full_text
+
+
 # ========================================
 # 履歴管理機能（ローカルストレージ版）
 # ========================================
@@ -2736,31 +2800,44 @@ def generate_html(content: str, title: str) -> str:
     return html
 
 
+def _process_single_resume(api_key: str, index: int, resume: str, anonymize: str) -> dict:
+    """単一レジュメを処理（スレッド内で実行）"""
+    result = {"index": index, "status": "pending", "output": None, "error": None, "time": 0}
+
+    is_valid, error_msg = validate_input(resume, "resume")
+    if not is_valid:
+        result["status"] = "error"
+        result["error"] = error_msg
+        return result
+
+    try:
+        item_start = time.time()
+        prompt = get_resume_optimization_prompt(resume, anonymize)
+        output = call_groq_api(api_key, prompt)
+        result["status"] = "success"
+        result["output"] = output
+        result["time"] = time.time() - item_start
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = str(e)
+
+    return result
+
+
 def process_batch_resumes(api_key: str, resumes: list[str], anonymize: str) -> list[dict]:
-    """複数のレジュメを一括処理"""
+    """複数のレジュメを並列処理（最大3並列）"""
 
-    results = []
-    for i, resume in enumerate(resumes):
-        result = {"index": i + 1, "status": "pending", "output": None, "error": None}
+    results = [None] * len(resumes)
+    max_workers = min(3, len(resumes))
 
-        # バリデーション
-        is_valid, error_msg = validate_input(resume, "resume")
-        if not is_valid:
-            result["status"] = "error"
-            result["error"] = error_msg
-            results.append(result)
-            continue
-
-        try:
-            prompt = get_resume_optimization_prompt(resume, anonymize)
-            output = call_groq_api(api_key, prompt)
-            result["status"] = "success"
-            result["output"] = output
-        except Exception as e:
-            result["status"] = "error"
-            result["error"] = str(e)
-
-        results.append(result)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_process_single_resume, api_key, i + 1, resume, anonymize): i
+            for i, resume in enumerate(resumes)
+        }
+        for future in as_completed(futures):
+            idx = futures[future]
+            results[idx] = future.result()
 
     return results
 
@@ -3059,21 +3136,23 @@ def main():
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
-                        with st.spinner("🤖 AIがレジュメを解析・構造化しています..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_resume_optimization_prompt(resume_input, anonymize)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_resume_optimization_prompt(resume_input, anonymize)
+                            st.caption("🤖 AIがレジュメを解析・構造化しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['resume_result'] = result
-                                st.session_state['resume_time'] = elapsed_time
-                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+                            st.session_state['resume_result'] = result
+                            st.session_state['resume_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
             # 結果表示
             if 'resume_result' in st.session_state:
@@ -3135,22 +3214,23 @@ def main():
                 st.divider()
                 st.markdown("##### 🔄 追加変換")
                 if st.button("📝 この結果を英語匿名化（English → English）", key="convert_to_en_anonymize", use_container_width=True, help="生成された日本語レジュメを基に英語匿名化レジュメを生成"):
-                    with st.spinner("🤖 英語匿名化レジュメを生成中..."):
-                        try:
-                            # 元の英語レジュメを取得
-                            if 'resume_text_input' in st.session_state and st.session_state['resume_text_input']:
-                                original_english_resume = st.session_state['resume_text_input']
-                                # 英語匿名化プロンプトを生成（完全匿名化）
-                                prompt_en = get_english_anonymization_prompt(original_english_resume, "full")
-                                result_en = call_groq_api(api_key, prompt_en)
-                                st.session_state['resume_en_result'] = result_en
-                                st.success("✅ 英語匿名化レジュメの生成が完了しました")
-                                st.info("💡 下にスクロールして結果を確認してください")
-                                st.rerun()
-                            else:
-                                st.error("❌ 元の英語レジュメが見つかりません。最初から変換し直してください。")
-                        except Exception as e:
-                            st.error(f"❌ 生成エラー: {str(e)[:200]}")
+                    try:
+                        # 元の英語レジュメを取得
+                        if 'resume_text_input' in st.session_state and st.session_state['resume_text_input']:
+                            original_english_resume = st.session_state['resume_text_input']
+                            prompt_en = get_english_anonymization_prompt(original_english_resume, "full")
+                            st.caption("🤖 英語匿名化レジュメを生成中...")
+                            stream_container = st.empty()
+                            result_en = stream_to_container(api_key, prompt_en, stream_container)
+                            st.session_state['resume_en_result'] = result_en
+                            stream_container.empty()
+                            st.success("✅ 英語匿名化レジュメの生成が完了しました")
+                            st.info("💡 下にスクロールして結果を確認してください")
+                            st.rerun()
+                        else:
+                            st.error("❌ 元の英語レジュメが見つかりません。最初から変換し直してください。")
+                    except Exception as e:
+                        st.error(f"❌ 生成エラー: {str(e)[:200]}")
 
                 # 英語匿名化結果の表示
                 if 'resume_en_result' in st.session_state and st.session_state.get('resume_result'):
@@ -3344,20 +3424,22 @@ def main():
                     if not is_valid_en:
                         st.warning(f"⚠️ {error_msg_en}")
                     else:
-                        with st.spinner("🤖 AIがレジュメを匿名化しています..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_english_anonymization_prompt(resume_en_input, anonymize_en)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_english_anonymization_prompt(resume_en_input, anonymize_en)
+                            st.caption("🤖 AIがレジュメを匿名化しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['resume_en_result'] = result
-                                st.session_state['resume_en_time'] = elapsed_time
-                                st.success(f"✅ 匿名化完了！（{elapsed_time:.1f}秒）")
+                            st.session_state['resume_en_result'] = result
+                            st.session_state['resume_en_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 匿名化完了！（{elapsed_time:.1f}秒）")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
                                 st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
             # 結果表示
@@ -3420,22 +3502,22 @@ def main():
                 st.divider()
                 st.markdown("##### 🔄 追加変換")
                 if st.button("🌐 この結果を日本語に翻訳（English → Japanese）", key="convert_to_jp_translate", use_container_width=True, help="英語匿名化レジュメを日本語フォーマットに変換"):
-                    with st.spinner("🤖 日本語レジュメを生成中..."):
-                        try:
-                            # 英語匿名化されたレジュメを取得
-                            if 'resume_en_result' in st.session_state and st.session_state['resume_en_result']:
-                                english_resume = st.session_state['resume_en_result']
-                                # 日本語変換プロンプトを生成（完全匿名化）
-                                prompt_jp = get_resume_optimization_prompt(english_resume, "full")
-                                result_jp = call_groq_api(api_key, prompt_jp)
-                                st.session_state['resume_result'] = result_jp
-                                st.success("✅ 日本語レジュメの生成が完了しました")
-                                st.info("💡 下にスクロールして結果を確認してください")
-                                st.rerun()
-                            else:
-                                st.error("❌ 英語レジュメが見つかりません。最初から変換し直してください。")
-                        except Exception as e:
-                            st.error(f"❌ 生成エラー: {str(e)[:200]}")
+                    try:
+                        if 'resume_en_result' in st.session_state and st.session_state['resume_en_result']:
+                            english_resume = st.session_state['resume_en_result']
+                            prompt_jp = get_resume_optimization_prompt(english_resume, "full")
+                            st.caption("🤖 日本語レジュメを生成中...")
+                            stream_container = st.empty()
+                            result_jp = stream_to_container(api_key, prompt_jp, stream_container)
+                            st.session_state['resume_result'] = result_jp
+                            stream_container.empty()
+                            st.success("✅ 日本語レジュメの生成が完了しました")
+                            st.info("💡 下にスクロールして結果を確認してください")
+                            st.rerun()
+                        else:
+                            st.error("❌ 英語レジュメが見つかりません。最初から変換し直してください。")
+                    except Exception as e:
+                        st.error(f"❌ 生成エラー: {str(e)[:200]}")
 
                 # 日本語変換結果の表示（英語匿名化後の追加変換）
                 if 'resume_result' in st.session_state and st.session_state.get('resume_en_result') and not st.session_state.get('resume_text_input'):
@@ -3568,20 +3650,22 @@ def main():
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
-                        with st.spinner("🤖 AIが求人票を解析・魅力化しています..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_jd_transformation_prompt(jd_input)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_jd_transformation_prompt(jd_input)
+                            st.caption("🤖 AIが求人票を解析・魅力化しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['jd_result'] = result
-                                st.session_state['jd_time'] = elapsed_time
-                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+                            st.session_state['jd_result'] = result
+                            st.session_state['jd_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
                                 st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
             # 結果表示
@@ -3743,21 +3827,23 @@ def main():
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
-                        with st.spinner("🤖 AIが求人票を解析・翻訳しています..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_jd_en_to_jp_prompt(jd_en_input)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_jd_en_to_jp_prompt(jd_en_input)
+                            st.caption("🤖 AIが求人票を解析・翻訳しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['jd_en_result'] = result
-                                st.session_state['jd_en_time'] = elapsed_time
-                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+                            st.session_state['jd_en_result'] = result
+                            st.session_state['jd_en_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
             # 結果表示
             if 'jd_en_result' in st.session_state:
@@ -3918,21 +4004,23 @@ def main():
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
-                        with st.spinner("🤖 AIが求人票を解析・整形しています..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_jd_jp_to_jp_prompt(jd_jp_jp_input)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_jd_jp_to_jp_prompt(jd_jp_jp_input)
+                            st.caption("🤖 AIが求人票を解析・整形しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['jd_jp_jp_result'] = result
-                                st.session_state['jd_jp_jp_time'] = elapsed_time
-                                st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+                            st.session_state['jd_jp_jp_result'] = result
+                            st.session_state['jd_jp_jp_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
             # 結果表示
             if 'jd_jp_jp_result' in st.session_state:
@@ -4093,21 +4181,23 @@ def main():
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
-                        with st.spinner("🤖 AI is analyzing and transforming the job description..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_jd_en_to_en_prompt(jd_en_en_input)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_jd_en_to_en_prompt(jd_en_en_input)
+                            st.caption("🤖 AI is analyzing and transforming the job description...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['jd_en_en_result'] = result
-                                st.session_state['jd_en_en_time'] = elapsed_time
-                                st.success(f"✅ Transformation complete! ({elapsed_time:.1f}s)")
+                            st.session_state['jd_en_en_result'] = result
+                            st.session_state['jd_en_en_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ Transformation complete! ({elapsed_time:.1f}s)")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
-                                st.error(f"❌ Unexpected error: {str(e)[:200]}")
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"❌ Unexpected error: {str(e)[:200]}")
 
             # 結果表示
             if 'jd_en_en_result' in st.session_state:
@@ -4261,21 +4351,23 @@ def main():
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
-                        with st.spinner("🤖 AIが会社紹介資料を解析しています..."):
-                            try:
-                                start_time = time.time()
-                                prompt = get_company_intro_prompt(company_input)
-                                result = call_groq_api(api_key, prompt)
-                                elapsed_time = time.time() - start_time
+                        try:
+                            start_time = time.time()
+                            prompt = get_company_intro_prompt(company_input)
+                            st.caption("🤖 AIが会社紹介資料を解析しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
 
-                                st.session_state['company_result'] = result
-                                st.session_state['company_time'] = elapsed_time
-                                st.success(f"✅ 作成完了！（{elapsed_time:.1f}秒）")
+                            st.session_state['company_result'] = result
+                            st.session_state['company_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 作成完了！（{elapsed_time:.1f}秒）")
 
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
             # 結果表示
             if 'company_result' in st.session_state:
@@ -4662,53 +4754,55 @@ def main():
                 elif not is_valid_jd:
                     st.warning(f"⚠️ 求人票入力エラー: {error_msg_jd}")
                 else:
-                    with st.spinner("🤖 AIがレジュメと求人票を詳細分析しています..."):
-                        try:
-                            start_time = time.time()
-                            prompt = get_matching_analysis_prompt(matching_resume_input, matching_jd_input)
-                            result = call_groq_api(api_key, prompt)
-                            elapsed_time = time.time() - start_time
+                    try:
+                        start_time = time.time()
+                        prompt = get_matching_analysis_prompt(matching_resume_input, matching_jd_input)
+                        st.caption("🤖 AIがレジュメと求人票を詳細分析しています...")
+                        stream_container = st.empty()
+                        result = stream_to_container(api_key, prompt, stream_container)
+                        elapsed_time = time.time() - start_time
 
-                            st.session_state['matching_result'] = result
-                            st.session_state['matching_time'] = elapsed_time
-                            st.session_state['matching_resume_input'] = matching_resume_input
-                            st.session_state['matching_jd_input'] = matching_jd_input
+                        st.session_state['matching_result'] = result
+                        st.session_state['matching_time'] = elapsed_time
+                        st.session_state['matching_resume_input'] = matching_resume_input
+                        st.session_state['matching_jd_input'] = matching_jd_input
 
-                            # 履歴に自動保存
-                            resume_title = extract_title_from_content(matching_resume_input, "resume")
-                            jd_title = extract_title_from_content(matching_jd_input, "jd")
-                            add_to_history("resume", matching_resume_input, resume_title)
-                            add_to_history("jd", matching_jd_input, jd_title)
+                        # 履歴に自動保存
+                        resume_title = extract_title_from_content(matching_resume_input, "resume")
+                        jd_title = extract_title_from_content(matching_jd_input, "jd")
+                        add_to_history("resume", matching_resume_input, resume_title)
+                        add_to_history("jd", matching_jd_input, jd_title)
 
-                            st.success(f"✅ 分析完了！（{elapsed_time:.1f}秒）")
+                        stream_container.empty()
+                        st.success(f"✅ 分析完了！（{elapsed_time:.1f}秒）")
 
-                            # 自動バックアップ通知
-                            st.info("💾 **データの保存を忘れずに！** スマホやタブを閉じると履歴が消える場合があります。")
+                        # 自動バックアップ通知
+                        st.info("💾 **データの保存を忘れずに！** スマホやタブを閉じると履歴が消える場合があります。")
 
-                            # すぐにバックアップできるボタンを表示
-                            resume_count = len(st.session_state.get('resume_history', []))
-                            jd_count = len(st.session_state.get('jd_history', []))
+                        # すぐにバックアップできるボタンを表示
+                        resume_count = len(st.session_state.get('resume_history', []))
+                        jd_count = len(st.session_state.get('jd_history', []))
 
-                            col_backup1, col_backup2 = st.columns([2, 1])
-                            with col_backup1:
-                                st.caption(f"📊 現在の履歴: レジュメ {resume_count}件、求人票 {jd_count}件")
-                            with col_backup2:
-                                if resume_count > 0 or jd_count > 0:
-                                    json_data = export_history_to_json("all")
-                                    st.download_button(
-                                        "💾 今すぐバックアップ",
-                                        data=json_data,
-                                        file_name=f"globalmatch_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                                        mime="application/json",
-                                        use_container_width=True,
-                                        key="quick_backup_btn",
-                                        help="履歴をJSONファイルでダウンロード"
-                                    )
+                        col_backup1, col_backup2 = st.columns([2, 1])
+                        with col_backup1:
+                            st.caption(f"📊 現在の履歴: レジュメ {resume_count}件、求人票 {jd_count}件")
+                        with col_backup2:
+                            if resume_count > 0 or jd_count > 0:
+                                json_data = export_history_to_json("all")
+                                st.download_button(
+                                    "💾 今すぐバックアップ",
+                                    data=json_data,
+                                    file_name=f"globalmatch_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                                    mime="application/json",
+                                    use_container_width=True,
+                                    key="quick_backup_btn",
+                                    help="履歴をJSONファイルでダウンロード"
+                                )
 
-                        except ValueError as e:
-                            st.error(str(e))
-                        except Exception as e:
-                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                    except ValueError as e:
+                        st.error(str(e))
+                    except Exception as e:
+                        st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
         # 結果表示（セッションステートにある場合）
         if 'matching_result' in st.session_state:
@@ -4808,27 +4902,31 @@ def main():
 
             with col_trans1:
                 if st.button("🇯🇵→🇬🇧 日本語→英語", key="translate_to_en", use_container_width=True, help="マッチング分析結果を英語に翻訳"):
-                    with st.spinner("🤖 英語に翻訳中..."):
-                        try:
-                            prompt = get_translate_to_english_prompt(st.session_state['matching_result'])
-                            translated = call_groq_api(api_key, prompt)
-                            st.session_state['matching_result'] = translated
-                            st.success("✅ 英語への翻訳が完了しました")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
+                    try:
+                        prompt = get_translate_to_english_prompt(st.session_state['matching_result'])
+                        st.caption("🤖 英語に翻訳中...")
+                        stream_container = st.empty()
+                        translated = stream_to_container(api_key, prompt, stream_container)
+                        st.session_state['matching_result'] = translated
+                        stream_container.empty()
+                        st.success("✅ 英語への翻訳が完了しました")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
 
             with col_trans2:
                 if st.button("🇬🇧→🇯🇵 英語→日本語", key="translate_to_ja", use_container_width=True, help="マッチング分析結果を日本語に翻訳"):
-                    with st.spinner("🤖 日本語に翻訳中..."):
-                        try:
-                            prompt = get_translate_to_japanese_prompt(st.session_state['matching_result'])
-                            translated = call_groq_api(api_key, prompt)
-                            st.session_state['matching_result'] = translated
-                            st.success("✅ 日本語への翻訳が完了しました")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
+                    try:
+                        prompt = get_translate_to_japanese_prompt(st.session_state['matching_result'])
+                        st.caption("🤖 日本語に翻訳中...")
+                        stream_container = st.empty()
+                        translated = stream_to_container(api_key, prompt, stream_container)
+                        st.session_state['matching_result'] = translated
+                        stream_container.empty()
+                        st.success("✅ 日本語への翻訳が完了しました")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
 
             # 匿名提案資料生成機能
             st.divider()
@@ -4854,42 +4952,46 @@ def main():
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ レジュメと求人票の入力情報が見つかりません。先にマッチング分析を実行してください。")
                     else:
-                        with st.spinner("🤖 候補者提案資料（日本語）を生成中..."):
-                            try:
-                                prompt = get_anonymous_proposal_prompt(
-                                    st.session_state['matching_result'],
-                                    st.session_state['matching_resume_input'],
-                                    st.session_state['matching_jd_input'],
-                                    language="ja",
-                                    anonymize_level=proposal_anon_level
-                                )
-                                proposal = call_groq_api(api_key, prompt)
-                                st.session_state['anonymous_proposal'] = proposal
-                                st.success("✅ 候補者提案資料（日本語）の生成が完了しました")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ 生成エラー: {str(e)[:200]}")
+                        try:
+                            prompt = get_anonymous_proposal_prompt(
+                                st.session_state['matching_result'],
+                                st.session_state['matching_resume_input'],
+                                st.session_state['matching_jd_input'],
+                                language="ja",
+                                anonymize_level=proposal_anon_level
+                            )
+                            st.caption("🤖 候補者提案資料（日本語）を生成中...")
+                            stream_container = st.empty()
+                            proposal = stream_to_container(api_key, prompt, stream_container)
+                            st.session_state['anonymous_proposal'] = proposal
+                            stream_container.empty()
+                            st.success("✅ 候補者提案資料（日本語）の生成が完了しました")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 生成エラー: {str(e)[:200]}")
 
             with col_proposal2:
                 if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate proposal (English)"):
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ Resume and JD input not found. Please run matching analysis first.")
                     else:
-                        with st.spinner("🤖 Generating candidate proposal (English)..."):
-                            try:
-                                prompt = get_anonymous_proposal_prompt(
-                                    st.session_state['matching_result'],
-                                    st.session_state['matching_resume_input'],
-                                    st.session_state['matching_jd_input'],
-                                    language="en",
-                                    anonymize_level=proposal_anon_level
-                                )
-                                proposal = call_groq_api(api_key, prompt)
-                                st.session_state['anonymous_proposal'] = proposal
-                                st.success("✅ Candidate proposal (English) generated successfully")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Generation error: {str(e)[:200]}")
+                        try:
+                            prompt = get_anonymous_proposal_prompt(
+                                st.session_state['matching_result'],
+                                st.session_state['matching_resume_input'],
+                                st.session_state['matching_jd_input'],
+                                language="en",
+                                anonymize_level=proposal_anon_level
+                            )
+                            st.caption("🤖 Generating candidate proposal (English)...")
+                            stream_container = st.empty()
+                            proposal = stream_to_container(api_key, prompt, stream_container)
+                            st.session_state['anonymous_proposal'] = proposal
+                            stream_container.empty()
+                            st.success("✅ Candidate proposal (English) generated successfully")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Generation error: {str(e)[:200]}")
 
             # 匿名提案資料の表示
             if 'anonymous_proposal' in st.session_state:
@@ -5077,21 +5179,23 @@ def main():
                         if not is_valid_cv:
                             st.warning(f"⚠️ {error_msg_cv}")
                         else:
-                            with st.spinner("🤖 AIがCVからコメントを抽出しています..."):
-                                try:
-                                    start_time = time.time()
-                                    prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level)
-                                    result = call_groq_api(api_key, prompt)
-                                    elapsed_time = time.time() - start_time
+                            try:
+                                start_time = time.time()
+                                prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level)
+                                st.caption("🤖 AIがCVからコメントを抽出しています...")
+                                stream_container = st.empty()
+                                result = stream_to_container(api_key, prompt, stream_container)
+                                elapsed_time = time.time() - start_time
 
-                                    st.session_state['cv_extract_result'] = result
-                                    st.session_state['cv_extract_time'] = elapsed_time
-                                    st.success(f"✅ 抽出完了！（{elapsed_time:.1f}秒）")
+                                st.session_state['cv_extract_result'] = result
+                                st.session_state['cv_extract_time'] = elapsed_time
+                                stream_container.empty()
+                                st.success(f"✅ 抽出完了！（{elapsed_time:.1f}秒）")
 
-                                except ValueError as e:
-                                    st.error(str(e))
-                                except Exception as e:
-                                    st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                            except ValueError as e:
+                                st.error(str(e))
+                            except Exception as e:
+                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
 
                 # 結果表示
                 if 'cv_extract_result' in st.session_state:
@@ -5245,14 +5349,12 @@ Full-stack Developer...
                     status_text = st.empty()
 
                     batch_cv_start_time = time.time()
-                    cv_results = []
-                    for i, cv_text in enumerate(cv_list):
-                        cv_name = extract_name_from_cv(cv_text)
-                        name_label = f" - {cv_name}" if cv_name else ""
-                        status_text.text(f"🔄 処理中... ({i + 1}/{len(cv_list)}){name_label}")
-                        progress_bar.progress((i + 1) / len(cv_list))
-                        cv_result = {"index": i + 1, "name": cv_name, "status": "pending", "output": None, "error": None, "time": 0}
 
+                    # CV名を先に抽出
+                    cv_names = [extract_name_from_cv(cv_text) for cv_text in cv_list]
+
+                    def _process_single_cv(index, cv_text, cv_name):
+                        cv_result = {"index": index, "name": cv_name, "status": "pending", "output": None, "error": None, "time": 0}
                         is_valid, error_msg = validate_input(cv_text, "resume")
                         if not is_valid:
                             cv_result["status"] = "error"
@@ -5268,9 +5370,24 @@ Full-stack Developer...
                             except Exception as e:
                                 cv_result["status"] = "error"
                                 cv_result["error"] = str(e)
+                        return cv_result
 
-                        cv_results.append(cv_result)
-                        time.sleep(1)  # レート制限対策
+                    cv_results = [None] * len(cv_list)
+                    max_workers = min(3, len(cv_list))
+                    completed_count = 0
+
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = {
+                            executor.submit(_process_single_cv, i + 1, cv_text, cv_names[i]): i
+                            for i, cv_text in enumerate(cv_list)
+                        }
+                        for future in as_completed(futures):
+                            idx = futures[future]
+                            cv_results[idx] = future.result()
+                            completed_count += 1
+                            name_label = f" - {cv_names[idx]}" if cv_names[idx] else ""
+                            status_text.text(f"🔄 処理中... ({completed_count}/{len(cv_list)}){name_label}")
+                            progress_bar.progress(completed_count / len(cv_list))
 
                     batch_cv_elapsed = time.time() - batch_cv_start_time
                     st.session_state['batch_cv_extract_results'] = cv_results
@@ -5871,21 +5988,17 @@ Full-stack Developer...
                 status_text = st.empty()
 
                 batch_start_time = time.time()
-                results = []
-                for i, resume in enumerate(resumes):
-                    status_text.text(f"🔄 処理中... ({i + 1}/{len(resumes)})")
-                    progress_bar.progress((i + 1) / len(resumes))
 
-                    result = {"index": i + 1, "status": "pending", "output": None, "error": None, "time": 0}
-
-                    is_valid, error_msg = validate_input(resume, "resume")
+                def _process_single_batch_resume(index, resume_text):
+                    result = {"index": index, "status": "pending", "output": None, "error": None, "time": 0}
+                    is_valid, error_msg = validate_input(resume_text, "resume")
                     if not is_valid:
                         result["status"] = "error"
                         result["error"] = error_msg
                     else:
                         try:
                             item_start = time.time()
-                            prompt = get_resume_optimization_prompt(resume, batch_anonymize)
+                            prompt = get_resume_optimization_prompt(resume_text, batch_anonymize)
                             output = call_groq_api(api_key, prompt)
                             result["status"] = "success"
                             result["output"] = output
@@ -5893,9 +6006,23 @@ Full-stack Developer...
                         except Exception as e:
                             result["status"] = "error"
                             result["error"] = str(e)
+                    return result
 
-                    results.append(result)
-                    time.sleep(1)  # レート制限対策
+                results = [None] * len(resumes)
+                max_workers = min(3, len(resumes))
+                completed_count = 0
+
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(_process_single_batch_resume, i + 1, resume): i
+                        for i, resume in enumerate(resumes)
+                    }
+                    for future in as_completed(futures):
+                        idx = futures[future]
+                        results[idx] = future.result()
+                        completed_count += 1
+                        status_text.text(f"🔄 処理中... ({completed_count}/{len(resumes)})")
+                        progress_bar.progress(completed_count / len(resumes))
 
                 batch_elapsed = time.time() - batch_start_time
                 st.session_state['batch_results'] = results
