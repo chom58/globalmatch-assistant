@@ -2076,10 +2076,26 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 """
 
 
-def get_shorten_proposal_prompt(proposal_text: str) -> str:
-    """CV提案コメントを短縮するプロンプトを生成"""
+def get_adjust_length_prompt(proposal_text: str, target_chars: int) -> str:
+    """CV提案コメントの文章量を調整するプロンプトを生成"""
 
-    return f"""You are an elite recruitment consultant. The following candidate proposal is slightly too long for a presentation slide. Condense each section moderately while preserving key details.
+    if target_chars <= 150:
+        style = "Very concise — keep only the single most impactful fact per section. 1-2 sentences max."
+        catch_copy_range = "50-70"
+    elif target_chars <= 200:
+        style = "Concise — keep the strongest 2 facts per section. 2 sentences."
+        catch_copy_range = "60-80"
+    elif target_chars <= 250:
+        style = "Moderately concise — keep key facts and brief context. 2-3 sentences."
+        catch_copy_range = "60-90"
+    elif target_chars <= 300:
+        style = "Standard length — provide good detail with context. 3-4 sentences."
+        catch_copy_range = "60-100"
+    else:
+        style = "Detailed — expand with additional context, examples, and qualitative descriptions. 4-5 sentences."
+        catch_copy_range = "80-120"
+
+    return f"""You are an elite recruitment consultant. Adjust the length of the following candidate proposal to match the target.
 
 【Current Proposal】
 {proposal_text}
@@ -2087,14 +2103,15 @@ def get_shorten_proposal_prompt(proposal_text: str) -> str:
 ---
 
 【Instructions】
-- **Catch Copy**: Keep within 60-80 characters. Keep the most memorable phrase.
-- **Summary, Strength, Education/Research, Assessment**: Target around 200 characters each (2-3 sentences). Trim redundant phrases and less critical details, but keep enough context so the reader understands the candidate's value.
+- **Target**: Each section (except Catch Copy) should be approximately {target_chars} characters.
+- **Style**: {style}
+- **Catch Copy**: Keep within {catch_copy_range} characters.
 - Keep the same section headers (## 1. Catch Copy, ## 2. Summary, etc.)
 - Maintain the same language and anonymization level as the original
 - Prioritize: quantified achievements > rare skills > general descriptions
-- Do NOT over-compress — the result should still read naturally and be informative
+- The result must read naturally — do not sacrifice readability for length
 - Output in English only
-- Do NOT add any new information not present in the original
+- Do NOT add any new information not present in the original. When expanding, elaborate on existing facts with more context, do not fabricate.
 """
 
 
@@ -4961,20 +4978,9 @@ def main():
 
                 # 結果表示
                 if 'cv_extract_result' in st.session_state:
-                    col_view, col_shorten, col_copy = st.columns([2, 1, 1])
+                    col_view, col_copy = st.columns([3, 1])
                     with col_view:
                         show_formatted_cv = st.checkbox("📖 整形表示", value=True, key="cv_extract_formatted")
-                    with col_shorten:
-                        if st.button("✂️ さらに短く", key="shorten_cv_extract", use_container_width=True, help="各セクションを200文字程度に短縮"):
-                            with st.spinner("🤖 短縮中..."):
-                                try:
-                                    prompt = get_shorten_proposal_prompt(st.session_state['cv_extract_result'])
-                                    shortened = call_groq_api(api_key, prompt)
-                                    st.session_state['cv_extract_result'] = shortened
-                                    st.success("✅ 短縮完了！")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ 短縮エラー: {str(e)[:200]}")
                     with col_copy:
                         if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
@@ -4984,6 +4990,28 @@ def main():
                                 navigator.clipboard.writeText(`{escaped_text}`);
                                 </script>
                             """, height=0)
+
+                    # 文章量調整スライダー
+                    col_slider, col_adjust = st.columns([3, 1])
+                    with col_slider:
+                        target_chars = st.slider(
+                            "📏 文章量（各セクションの目安文字数）",
+                            min_value=100, max_value=400, value=250, step=50,
+                            key="cv_extract_length_slider",
+                            help="小さい値＝簡潔、大きい値＝詳細"
+                        )
+                    with col_adjust:
+                        st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+                        if st.button("✏️ 文章量を調整", key="adjust_cv_extract", use_container_width=True):
+                            with st.spinner("🤖 調整中..."):
+                                try:
+                                    prompt = get_adjust_length_prompt(st.session_state['cv_extract_result'], target_chars)
+                                    adjusted = call_groq_api(api_key, prompt)
+                                    st.session_state['cv_extract_result'] = adjusted
+                                    st.success("✅ 調整完了！")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ 調整エラー: {str(e)[:200]}")
 
                     if show_formatted_cv:
                         st.markdown(st.session_state['cv_extract_result'])
@@ -5150,20 +5178,9 @@ Full-stack Developer...
                     time_str = f"（{cv_r['time']:.1f}秒）" if cv_r['time'] > 0 else ""
                     with st.expander(f"CV #{cv_r['index']} - {'✅ 成功' + time_str if cv_r['status'] == 'success' else '❌ エラー'}"):
                         if cv_r['status'] == 'success':
-                            col_view_b, col_shorten_b, col_copy_b = st.columns([2, 1, 1])
+                            col_view_b, col_copy_b = st.columns([3, 1])
                             with col_view_b:
                                 show_fmt = st.checkbox("📖 整形表示", value=True, key=f"batch_cv_fmt_{cv_r['index']}")
-                            with col_shorten_b:
-                                if st.button("✂️ さらに短く", key=f"shorten_batch_cv_{cv_r['index']}", use_container_width=True, help="各セクションを200文字程度に短縮"):
-                                    with st.spinner("🤖 短縮中..."):
-                                        try:
-                                            prompt = get_shorten_proposal_prompt(cv_r['output'])
-                                            shortened = call_groq_api(api_key, prompt)
-                                            cv_r['output'] = shortened
-                                            st.success("✅ 短縮完了！")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ 短縮エラー: {str(e)[:200]}")
                             with col_copy_b:
                                 if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
                                     st.toast("✅ クリップボードにコピーしました")
@@ -5173,6 +5190,28 @@ Full-stack Developer...
                                         navigator.clipboard.writeText(`{escaped_text}`);
                                         </script>
                                     """, height=0)
+
+                            # 文章量調整スライダー
+                            col_slider_b, col_adjust_b = st.columns([3, 1])
+                            with col_slider_b:
+                                batch_target = st.slider(
+                                    "📏 文章量（各セクションの目安文字数）",
+                                    min_value=100, max_value=400, value=250, step=50,
+                                    key=f"batch_cv_length_{cv_r['index']}",
+                                    help="小さい値＝簡潔、大きい値＝詳細"
+                                )
+                            with col_adjust_b:
+                                st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
+                                if st.button("✏️ 文章量を調整", key=f"adjust_batch_cv_{cv_r['index']}", use_container_width=True):
+                                    with st.spinner("🤖 調整中..."):
+                                        try:
+                                            prompt = get_adjust_length_prompt(cv_r['output'], batch_target)
+                                            adjusted = call_groq_api(api_key, prompt)
+                                            cv_r['output'] = adjusted
+                                            st.success("✅ 調整完了！")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"❌ 調整エラー: {str(e)[:200]}")
 
                             if show_fmt:
                                 st.markdown(cv_r['output'])
