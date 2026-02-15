@@ -12,7 +12,10 @@ import re
 from datetime import datetime
 import pdfplumber
 import io
+import json
 import secrets
+import requests
+from bs4 import BeautifulSoup
 from datetime import timedelta
 
 # Supabase設定（オプション）
@@ -63,6 +66,96 @@ def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
 
     except Exception as e:
         return "", f"PDF読み込みエラー: {str(e)[:100]}"
+
+
+def extract_text_from_url(url: str) -> tuple[str, str]:
+    """URLからWebページのテキストを抽出
+
+    Returns:
+        tuple: (extracted_text, error_message)
+    """
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        resp.raise_for_status()
+
+        content_type = resp.headers.get("Content-Type", "")
+
+        # PDFの場合
+        if "application/pdf" in content_type:
+            pdf_bytes = io.BytesIO(resp.content)
+            text_parts = []
+            with pdfplumber.open(pdf_bytes) as pdf:
+                if len(pdf.pages) > 20:
+                    return "", "ページ数が多すぎます（最大20ページ）"
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_parts.append(page_text)
+            extracted = "\n\n".join(text_parts)
+            if not extracted.strip():
+                return "", "PDFからテキストを抽出できませんでした"
+            return extracted, ""
+
+        # HTMLの場合
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # 不要要素を除去
+        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe"]):
+            tag.decompose()
+
+        # メインコンテンツを探す
+        main = soup.find("main") or soup.find("article") or soup.find("div", {"role": "main"})
+        target = main if main else soup.body if soup.body else soup
+        text = target.get_text(separator="\n", strip=True)
+
+        if not text.strip():
+            return "", "ページからテキストを抽出できませんでした"
+
+        # 長すぎる場合は切り詰め
+        if len(text) > 15000:
+            text = text[:15000]
+
+        return text, ""
+
+    except requests.exceptions.Timeout:
+        return "", "タイムアウトしました。URLを確認してください"
+    except requests.exceptions.ConnectionError:
+        return "", "接続エラー。URLを確認してください"
+    except requests.exceptions.HTTPError as e:
+        return "", f"HTTPエラー: {e.response.status_code}"
+    except Exception as e:
+        return "", f"URL読み込みエラー: {str(e)[:100]}"
+
+
+def get_job_extraction_prompt(text: str) -> str:
+    """求人テキストからメールテンプレート用の項目を抽出するプロンプト"""
+    return f"""You are an expert recruitment consultant. Extract structured job information from the following text for use in a candidate outreach email.
+
+【Input Text】
+{text}
+
+---
+
+【Instructions】
+Analyze the text above and extract the following fields. If a field cannot be determined from the text, leave it as an empty string "".
+
+Output ONLY a valid JSON object with these exact keys (no markdown, no explanation):
+{{
+  "title": "The job position/role name (in English, e.g. 'Senior Backend Engineer')",
+  "company": "The company name",
+  "website": "The company or job posting URL if mentioned in the text, otherwise empty",
+  "overview": "A concise 1-3 sentence summary of the company/role in English, suitable for an outreach email (max 300 chars)",
+  "key_focus": "What the company is specifically looking for — key skills, experience, or focus areas in 1 sentence (in English, max 200 chars)"
+}}
+
+Important:
+- All values must be in English
+- Keep overview concise and appealing — this goes directly into an email to candidates
+- For key_focus, highlight what makes this role unique or what specific expertise is sought
+- Do not fabricate information not present in the source text
+- Output valid JSON only — no extra text before or after"""
 
 
 # ========================================
@@ -5380,6 +5473,82 @@ Full-stack Developer...
         jobs = []
         for i in range(st.session_state['email_job_count']):
             with st.expander(f"求人 #{i + 1}", expanded=True):
+                # --- 自動読み取り（PDF / URL） ---
+                st.markdown("📎 **求人を自動読み取り**（PDFまたはURLを入力）")
+                auto_col1, auto_col2 = st.columns(2)
+                with auto_col1:
+                    uploaded_jd_pdf = st.file_uploader(
+                        "求人PDF",
+                        type=["pdf"],
+                        key=f"job_pdf_{i}",
+                        label_visibility="collapsed"
+                    )
+                with auto_col2:
+                    jd_url = st.text_input(
+                        "求人URL",
+                        placeholder="https://... 求人ページのURLを貼り付け",
+                        key=f"job_url_{i}",
+                        label_visibility="collapsed"
+                    )
+
+                extract_btn = st.button(
+                    "🔍 読み取り → 自動入力",
+                    key=f"extract_job_{i}",
+                    use_container_width=True,
+                    disabled=not api_key or (not uploaded_jd_pdf and not jd_url)
+                )
+
+                if extract_btn and api_key:
+                    extracted_text = ""
+                    error_msg = ""
+
+                    if uploaded_jd_pdf:
+                        extracted_text, error_msg = extract_text_from_pdf(uploaded_jd_pdf)
+                    elif jd_url:
+                        extracted_text, error_msg = extract_text_from_url(jd_url)
+
+                    if error_msg:
+                        st.error(error_msg)
+                    elif extracted_text:
+                        with st.spinner("求人情報を解析中..."):
+                            try:
+                                prompt = get_job_extraction_prompt(extracted_text)
+                                result = call_groq_api(api_key, prompt)
+                                # JSON部分を抽出
+                                result = result.strip()
+                                if result.startswith("```"):
+                                    result = re.sub(r'^```(?:json)?\s*', '', result)
+                                    result = re.sub(r'\s*```$', '', result)
+                                job_data = json.loads(result)
+
+                                # フィールドに反映
+                                if job_data.get("title"):
+                                    st.session_state[f'job_title_{i}'] = job_data["title"]
+                                if job_data.get("company"):
+                                    st.session_state[f'company_name_{i}'] = job_data["company"]
+                                if job_data.get("website"):
+                                    st.session_state[f'job_website_{i}'] = job_data["website"]
+                                elif jd_url:
+                                    # URLから読み取った場合、そのURLをwebsiteに設定
+                                    st.session_state[f'job_website_{i}'] = jd_url
+                                if job_data.get("overview"):
+                                    st.session_state[f'job_overview_{i}'] = job_data["overview"]
+                                if job_data.get("key_focus"):
+                                    st.session_state[f'job_keyfocus_{i}'] = job_data["key_focus"]
+
+                                st.toast(f"✅ 求人 #{i + 1} の情報を自動入力しました")
+                                st.rerun()
+                            except json.JSONDecodeError:
+                                st.error("解析結果のパースに失敗しました。再度お試しください。")
+                            except ValueError as e:
+                                st.error(str(e))
+
+                if not api_key and (uploaded_jd_pdf or jd_url):
+                    st.caption("⚠️ 自動読み取りにはサイドバーでAPIキーの設定が必要です")
+
+                st.markdown("---")
+
+                # --- 手動入力フィールド ---
                 jcol1, jcol2 = st.columns(2)
                 with jcol1:
                     job_title = st.text_input(
