@@ -2076,6 +2076,30 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 """
 
 
+def extract_name_from_cv(text: str) -> str:
+    """CVテキストの先頭行から候補者名を抽出する"""
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # 明らかにセクション見出しや連絡先情報はスキップ
+        lower = line.lower()
+        if any(kw in lower for kw in [
+            "resume", "curriculum vitae", "cv", "objective", "summary",
+            "experience", "education", "skills", "phone", "email",
+            "address", "http", "www.", "@", "linkedin"
+        ]):
+            continue
+        # 数字が多い行（電話番号など）はスキップ
+        if sum(c.isdigit() for c in line) > len(line) * 0.3:
+            continue
+        # 長すぎる行は名前ではない（50文字以下を想定）
+        if len(line) > 50:
+            continue
+        return line
+    return ""
+
+
 def get_shorten_proposal_prompt(proposal_text: str) -> str:
     """CV提案コメントを短縮するプロンプトを生成"""
 
@@ -5102,10 +5126,11 @@ Full-stack Developer...
                     batch_cv_start_time = time.time()
                     cv_results = []
                     for i, cv_text in enumerate(cv_list):
-                        status_text.text(f"🔄 処理中... ({i + 1}/{len(cv_list)})")
+                        cv_name = extract_name_from_cv(cv_text)
+                        name_label = f" - {cv_name}" if cv_name else ""
+                        status_text.text(f"🔄 処理中... ({i + 1}/{len(cv_list)}){name_label}")
                         progress_bar.progress((i + 1) / len(cv_list))
-
-                        cv_result = {"index": i + 1, "status": "pending", "output": None, "error": None, "time": 0}
+                        cv_result = {"index": i + 1, "name": cv_name, "status": "pending", "output": None, "error": None, "time": 0}
 
                         is_valid, error_msg = validate_input(cv_text, "resume")
                         if not is_valid:
@@ -5148,7 +5173,8 @@ Full-stack Developer...
                 # 個別結果
                 for cv_r in st.session_state['batch_cv_extract_results']:
                     time_str = f"（{cv_r['time']:.1f}秒）" if cv_r['time'] > 0 else ""
-                    with st.expander(f"CV #{cv_r['index']} - {'✅ 成功' + time_str if cv_r['status'] == 'success' else '❌ エラー'}"):
+                    cv_label = cv_r.get('name') or f"CV #{cv_r['index']}"
+                    with st.expander(f"{cv_label} - {'✅ 成功' + time_str if cv_r['status'] == 'success' else '❌ エラー'}"):
                         if cv_r['status'] == 'success':
                             col_view_b, col_shorten_b, col_copy_b = st.columns([2, 1, 1])
                             with col_view_b:
@@ -5185,7 +5211,7 @@ Full-stack Developer...
                 if success_count > 0:
                     st.divider()
                     all_cv_content = "\n\n---\n\n".join([
-                        f"# CV #{r['index']}\n\n{r['output']}"
+                        f"# {r.get('name') or 'CV #' + str(r['index'])}\n\n{r['output']}"
                         for r in st.session_state['batch_cv_extract_results']
                         if r['status'] == 'success'
                     ])
