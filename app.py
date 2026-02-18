@@ -1856,7 +1856,7 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 # 候補者提案資料
 
 ## 1. Catch Copy（各100文字程度）
-候補者の魅力を3つの視点で表現するキャッチコピーを生成してください。
+候補者の魅力を3つの視点で表現するキャッチコピーを生成してください。必ず経験年数を含めてください。
 
 ### パターンA: スキル重視型
 候補者の技術スキル・専門性を前面に出したキャッチコピー
@@ -1864,53 +1864,57 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 ### パターンB: 実績重視型
 候補者の具体的な成果・実績を強調したキャッチコピー
-例：「月間1000万PVサービスの開発リーダー、パフォーマンス改善で応答速度50%向上を達成」
+例：「エンジニア歴10年、月間1000万PVサービスの開発リーダーとしてパフォーマンス改善で応答速度50%向上を達成」
 
 ### パターンC: ポテンシャル重視型
 候補者の成長性・可能性・人物面を強調したキャッチコピー
-例：「新技術習得に意欲的、チームリーダーとして組織を牽引できるフルスタックエンジニア」
+例：「エンジニア歴8年、新技術習得に意欲的でチームリーダーとして組織を牽引できるフルスタックエンジニア」
 
 ---
 
-## 2. Summary（200文字程度）
-候補者の全体像を簡潔にまとめた概要
+## 2. Summary
+候補者の全体像を箇条書きで簡潔にまとめた概要。各項目は「- 」で始めてください。
 - 総エンジニア経験年数
 - 専門領域・得意分野
 - 主な開発実績
 - 言語能力（レジュメに日本語能力の記載がある場合は必ず含める：N1-N5、conversational、native、business levelなど。記載がなければ省略）
+※ 3〜5項目の箇条書きで出力すること
 
 ---
 
-## 3. Strength（200文字程度）
-この求人に対する候補者の強み・アピールポイント
+## 3. Strength
+この求人に対する候補者の強み・アピールポイントを箇条書きで記載してください。
 - 求人要件に対してマッチする具体的なスキル
 - 特に優れている技術・経験
 - 実績や成果（数値があれば記載）
+※ 3〜5項目の箇条書きで出力すること
 
 ---
 
-## 4. Education / Research（200文字程度）
-学歴・研究実績・資格
+## 4. Education / Research
+学歴・研究実績・資格を箇条書きで記載してください。
 - 最終学歴（大学・専攻）
 - 研究テーマ（ある場合）
 - 関連資格
 - 技術的なバックグラウンド
+※ 2〜4項目の箇条書きで出力すること
 
 ---
 
-## 5. Assessment（200文字程度）
-総合評価とコメント
+## 5. Assessment
+総合評価とコメントを箇条書きで記載してください。
 - マッチング度の総合評価
 - 推薦理由
 - 留意点やギャップ（あれば）
 - 面接時の確認ポイント
+※ 3〜5項目の箇条書きで出力すること
 
 ---
 
 {anonymize_note}
 
 【その他の注意事項】
-1. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
+1. **箇条書き形式**: セクション2〜5は必ず箇条書き（「- 」で始まる）で出力すること。文章形式にしないこと。Catch Copyは各パターン100文字程度で経験年数を必ず含めること。
 2. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
 3. **客観性**: 事実に基づいた評価を行う
 4. **簡潔性**: 要点を絞って分かりやすく記載
@@ -1947,61 +1951,65 @@ Create a **candidate proposal document** for the client company based on the mat
 # Candidate Proposal
 
 ## 1. Catch Copy (approximately 100 characters each)
-Generate catchphrases from three different perspectives to express the candidate's appeal.
+Generate catchphrases from three different perspectives to express the candidate's appeal. Each MUST include years of experience.
 
 ### Pattern A: Skill-focused
 A catchphrase highlighting technical skills and expertise
-Example: "AWS/Kubernetes Specialist with 5 Years Experience in Large-scale Cloud Infrastructure"
+Example: "5-Year AWS/Kubernetes Specialist in Large-scale Cloud Infrastructure"
 
 ### Pattern B: Achievement-focused
 A catchphrase emphasizing concrete results and accomplishments
-Example: "Development Leader of 10M Monthly PV Service, Achieved 50% Performance Improvement"
+Example: "10-Year Development Leader of 10M Monthly PV Service, Achieved 50% Performance Improvement"
 
 ### Pattern C: Potential-focused
 A catchphrase emphasizing growth potential and personal qualities
-Example: "Eager Learner of New Technologies, Full-stack Engineer Who Can Lead Teams"
+Example: "8-Year Full-stack Engineer, Eager Learner of New Technologies Who Can Lead Teams"
 
 ---
 
-## 2. Summary (approximately 200 characters)
-Brief overview of the candidate
+## 2. Summary
+Brief overview of the candidate using bullet points. Each item MUST start with "- ".
 - Total engineering experience years
 - Specialized areas and expertise
 - Major development achievements
 - Language proficiency (If Japanese proficiency is mentioned in resume, must include it: N1-N5, conversational, native, business level, etc. Omit if not mentioned)
+※ Output as 3-5 bullet points. Do NOT write prose paragraphs.
 
 ---
 
-## 3. Strength (approximately 200 characters)
-Candidate's strengths for this position
+## 3. Strength
+Candidate's strengths for this position using bullet points.
 - Specific skills matching job requirements
 - Outstanding technical experience
 - Achievements with metrics (if available)
+※ Output as 3-5 bullet points. Do NOT write prose paragraphs.
 
 ---
 
-## 4. Education / Research (approximately 200 characters)
-Academic background and research
+## 4. Education / Research
+Academic background and research using bullet points.
 - Highest education (university, major)
 - Research topics (if applicable)
 - Relevant certifications
 - Technical background
+※ Output as 2-4 bullet points. Do NOT write prose paragraphs.
 
 ---
 
-## 5. Assessment (approximately 200 characters)
-Overall evaluation and comments
+## 5. Assessment
+Overall evaluation and comments using bullet points.
 - Overall matching score evaluation
 - Recommendation reasons
 - Concerns or gaps (if any)
 - Points to confirm in interview
+※ Output as 3-5 bullet points. Do NOT write prose paragraphs.
 
 ---
 
 {anonymize_note_en}
 
 【Other Important Notes】
-1. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
+1. **Bullet Point Format**: Sections 2-5 MUST use bullet points (starting with "- "). Do NOT write prose paragraphs. Catch Copy must be approximately 100 characters each and MUST include years of experience.
 2. **Specificity**: Use concrete skills and experience, avoid abstract expressions
 3. **Objectivity**: Provide fact-based evaluation
 4. **Brevity**: Focus on key points for clarity
