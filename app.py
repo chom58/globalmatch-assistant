@@ -2038,37 +2038,53 @@ Your goal: Write a proposal that makes the hiring company think "We need to meet
 【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
 
 ## 1. Catch Copy
-A punchy, memorable headline that makes the reader want to learn more. MUST include: years of experience + role/title + the candidate's unique value proposition or differentiator. Frame it as what this person DELIVERS, not just what they ARE.
+A punchy, memorable headline that makes the reader want to learn more. MUST always start with years of experience (e.g., "10-Year", "15+ Years"). Then include role/title + the candidate's unique value proposition. Frame it as what this person DELIVERS, not just what they ARE.
 Example 1: "10-Year Full-Stack Architect Who Delivers Production-Grade AI Platforms from Zero to Scale"
-Example 2: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
+Example 2: "12-Year Senior DevOps Lead | Driving 99.99% Uptime Across Large-Scale Distributed Systems"
 Example 3: "8-Year Data Scientist Turning NLP Research into Revenue-Generating Recommendation Engines"
-※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names.
+※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names. MUST start with "X-Year" or "X+ Years".
 
 ## 2. Summary
-Paint a vivid picture of who this candidate is and what they bring to the table. Start with their most impressive achievement or defining trait, then build context with role, domain, and career highlights. The reader should immediately understand why this person stands out.
-Example: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, he progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
-※ 200-300 characters. Lead with the strongest fact. Include role, years, domain, and measurable achievements.
+Use bullet points to present the candidate's profile clearly. Each bullet should be a concise, impactful fact.
+Example:
+- 15+ years of engineering experience, from backend engineer to Technical Architect
+- Built an AI automation platform serving 2M+ users at a major global IT firm
+- Led a 30-person cross-functional team delivering cloud-native solutions
+- Reduced infrastructure costs by 35% through architecture optimization
+※ 3-5 bullet points. Lead with years of experience. Include role, domain, and measurable achievements.
 
 ## 3. Strength
-Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest.
-Example: "A rare engineer who spans from Linux kernel optimization to production AI systems — he architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams (US, EU, APAC) and translate deep-tech R&D into shipping products."
-※ 200-300 characters. Connect skills → outcomes. Highlight what's rare or hard to find.
+Use bullet points to highlight what this candidate can DO for the hiring company. Connect technical skills to business outcomes.
+Example:
+- Spans from Linux kernel optimization to production AI systems — a rare full-stack depth
+- Architected a custom Agentic AI framework in Golang, cutting deployment cycles by 60%
+- Proven leadership of global teams across US, EU, and APAC regions
+- Translates deep-tech R&D into shipping products with measurable business impact
+※ 3-5 bullet points. Connect skills → outcomes. Highlight what's rare or hard to find.
 
 ## 4. Education / Research
-Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends.
-Example: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university (2026), signaling strong commitment to staying at the cutting edge. Active open-source contributor to container orchestration projects."
-※ 200-300 characters. Frame education as evidence of growth mindset and expertise depth.
+Use bullet points to present academic background and continuous learning.
+Example:
+- M.Sc. in Computer Science with published research in distributed computing
+- Currently pursuing executive technology program at a top US university (2026)
+- Active open-source contributor to container orchestration projects
+- Strong commitment to staying at the cutting edge of technology
+※ 2-4 bullet points. Frame education as evidence of growth mindset and expertise depth.
 
 ## 5. Assessment
-Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential.
-Example: "A builder who constructs AI platforms from scratch — not just an API consumer. His rare combination of low-level systems expertise and AI product delivery makes him ideal for organizations building proprietary AI capabilities. Expect him to elevate both technical standards and team capability."
-※ 200-300 characters. Answer "Why this candidate NOW?" Be specific about fit and potential impact.
+Use bullet points to provide a clear, confident recommendation answering: "Why should we prioritize interviewing this candidate?"
+Example:
+- Builds AI platforms from scratch — not just an API consumer
+- Rare combination of low-level systems expertise and AI product delivery
+- Ideal for organizations building proprietary AI capabilities
+- Expected to elevate both technical standards and team capability
+※ 3-5 bullet points. Answer "Why this candidate NOW?" Be specific about fit and potential impact.
 
 ---
 
 【Important Rules】
 {anonymize_rules}
-2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
+2. **Bullet Point Format**: Sections 2-5 MUST use bullet points (starting with "- "). Do NOT write prose paragraphs. Each bullet should be one concise, impactful fact or statement. Catch Copy MUST be 60-100 characters — never shorter than 60. Always start Catch Copy with years of experience (e.g., "10-Year", "15+ Years").
 3. **English Only**: All output must be in English.
 4. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
 5. **No Markdown Headers in Values**: Output the value text directly after each header.
@@ -2111,8 +2127,8 @@ def get_shorten_proposal_prompt(proposal_text: str) -> str:
 ---
 
 【Instructions】
-- **Catch Copy**: Keep within 60-80 characters. Keep the most memorable phrase.
-- **Summary, Strength, Education/Research, Assessment**: Each MUST be within 150 characters (1-2 sentences MAX). Cut less important details, keep the strongest facts and metrics.
+- **Catch Copy**: Keep within 60-80 characters. Keep the most memorable phrase. MUST start with years of experience (e.g., "10-Year", "15+ Years").
+- **Summary, Strength, Education/Research, Assessment**: Use bullet points (starting with "- "). Reduce to 2-3 bullets per section. Cut less important details, keep the strongest facts and metrics.
 - Keep the same section headers (## 1. Catch Copy, ## 2. Summary, etc.)
 - Maintain the same language and anonymization level as the original
 - Prioritize: quantified achievements > rare skills > general descriptions
