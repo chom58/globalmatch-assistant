@@ -35,6 +35,76 @@ MAX_INPUT_CHARS = 15000  # 最大入力文字数
 MIN_INPUT_CHARS = 100    # 最小入力文字数
 MAX_RETRIES = 3          # API最大リトライ回数
 MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
+RATE_LIMIT_CALLS = 30    # セッションあたりのAPI呼び出し上限（1時間）
+RATE_LIMIT_WINDOW = 3600 # レート制限ウィンドウ（秒）
+SESSION_TIMEOUT_MINUTES = 120  # セッションタイムアウト（分）
+
+
+def _check_rate_limit() -> tuple[bool, str]:
+    """アプリレベルのレート制限チェック"""
+    now = time.time()
+
+    if 'api_call_timestamps' not in st.session_state:
+        st.session_state['api_call_timestamps'] = []
+
+    # 期限切れのタイムスタンプを除去
+    st.session_state['api_call_timestamps'] = [
+        ts for ts in st.session_state['api_call_timestamps']
+        if now - ts < RATE_LIMIT_WINDOW
+    ]
+
+    if len(st.session_state['api_call_timestamps']) >= RATE_LIMIT_CALLS:
+        remaining = int(RATE_LIMIT_WINDOW - (now - st.session_state['api_call_timestamps'][0]))
+        return False, f"API呼び出し上限に達しました。{remaining}秒後に再試行してください"
+
+    return True, ""
+
+
+def _record_api_call():
+    """API呼び出しを記録"""
+    if 'api_call_timestamps' not in st.session_state:
+        st.session_state['api_call_timestamps'] = []
+    st.session_state['api_call_timestamps'].append(time.time())
+
+
+def _check_session_timeout() -> bool:
+    """セッションタイムアウトをチェック。タイムアウトの場合Trueを返す"""
+    now = datetime.now()
+
+    if 'session_last_activity' not in st.session_state:
+        st.session_state['session_last_activity'] = now
+        return False
+
+    elapsed = now - st.session_state['session_last_activity']
+    if elapsed > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        return True
+
+    st.session_state['session_last_activity'] = now
+    return False
+
+
+def _check_authentication() -> bool:
+    """オプション認証チェック。secrets.tomlにAPP_PASSWORDが設定されている場合のみ認証を要求"""
+    try:
+        app_password = st.secrets.get("APP_PASSWORD", "")
+    except Exception:
+        return True  # secrets未設定なら認証不要
+
+    if not app_password:
+        return True  # パスワード未設定なら認証不要
+
+    if st.session_state.get('authenticated'):
+        return True
+
+    st.markdown("# 🔒 認証が必要です")
+    password = st.text_input("パスワードを入力してください", type="password", key="auth_password")
+    if st.button("ログイン", key="auth_login"):
+        if secrets.compare_digest(password, app_password):
+            st.session_state['authenticated'] = True
+            st.rerun()
+        else:
+            st.error("パスワードが正しくありません")
+    return False
 
 
 @st.cache_data(show_spinner=False)
@@ -2317,6 +2387,12 @@ def validate_input(text: str, input_type: str) -> tuple[bool, str]:
 def call_groq_api(api_key: str, prompt: str) -> str:
     """Groq APIを呼び出してテキストを生成（リトライ機能付き）"""
 
+    # アプリレベルのレート制限チェック
+    allowed, msg = _check_rate_limit()
+    if not allowed:
+        raise ValueError(f"⏳ {msg}")
+    _record_api_call()
+
     client = Groq(api_key=api_key)
     last_error = None
 
@@ -2361,6 +2437,12 @@ def call_groq_api(api_key: str, prompt: str) -> str:
 
 def call_groq_api_stream(api_key: str, prompt: str):
     """Groq APIをストリーミングで呼び出し、チャンクを逐次yieldする（リトライ機能付き）"""
+
+    # アプリレベルのレート制限チェック
+    allowed, msg = _check_rate_limit()
+    if not allowed:
+        raise ValueError(f"⏳ {msg}")
+    _record_api_call()
 
     client = Groq(api_key=api_key)
     last_error = None
@@ -2896,6 +2978,18 @@ def main():
     if share_id:
         show_shared_view(share_id)
         return  # 通常のUIは表示しない
+
+    # オプション認証チェック（secrets.tomlにAPP_PASSWORDがある場合のみ）
+    if not _check_authentication():
+        return
+
+    # セッションタイムアウトチェック
+    if _check_session_timeout():
+        # セッション情報をクリア（履歴以外）
+        for key in ['authenticated', 'api_call_timestamps', 'session_last_activity']:
+            st.session_state.pop(key, None)
+        st.warning("セッションがタイムアウトしました。ページを再読み込みしてください。")
+        st.stop()
 
     # localStorage復元スクリプトを実行（初回のみ）
     if 'localstorage_loaded' not in st.session_state:
