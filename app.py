@@ -9,6 +9,7 @@ import streamlit.components.v1
 from groq import Groq
 import time
 import re
+import html as html_module
 from datetime import datetime
 import pdfplumber
 import io
@@ -19,6 +20,8 @@ from bs4 import BeautifulSoup
 from datetime import timedelta
 import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
+import ipaddress
 
 # Supabase設定（オプション）
 try:
@@ -62,12 +65,44 @@ def _extract_text_from_pdf_bytes(pdf_raw: bytes) -> tuple[str, str]:
         return extracted_text, ""
 
     except Exception as e:
-        return "", f"PDF読み込みエラー: {str(e)[:100]}"
+        return "", "PDF読み込みエラー: ファイルの読み込みに失敗しました"
 
 
 def extract_text_from_pdf(uploaded_file) -> tuple[str, str]:
     """PDFファイルからテキストを抽出（同一ファイルはキャッシュから即時返却）"""
     return _extract_text_from_pdf_bytes(uploaded_file.getvalue())
+
+
+def _is_safe_url(url: str) -> tuple[bool, str]:
+    """URLが安全かどうかを検証（SSRF対策）"""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "無効なURLです"
+
+    # スキーム検証: http/httpsのみ許可
+    if parsed.scheme not in ('http', 'https'):
+        return False, "http または https のURLのみ対応しています"
+
+    # ホスト名検証
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "無効なURLです"
+
+    # ローカルホスト・プライベートIPの拒否
+    blocked_hosts = {'localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'}
+    if hostname.lower() in blocked_hosts:
+        return False, "ローカルアドレスへのアクセスは許可されていません"
+
+    # IPアドレスの場合、プライベート範囲を拒否
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False, "プライベートネットワークへのアクセスは許可されていません"
+    except ValueError:
+        pass  # ホスト名（非IP）の場合はそのまま通す
+
+    return True, ""
 
 
 def extract_text_from_url(url: str) -> tuple[str, str]:
@@ -76,6 +111,11 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
     Returns:
         tuple: (extracted_text, error_message)
     """
+    # SSRF対策: URL安全性チェック
+    is_safe, safety_msg = _is_safe_url(url)
+    if not is_safe:
+        return "", safety_msg
+
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -127,8 +167,8 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
         return "", "接続エラー。URLを確認してください"
     except requests.exceptions.HTTPError as e:
         return "", f"HTTPエラー: {e.response.status_code}"
-    except Exception as e:
-        return "", f"URL読み込みエラー: {str(e)[:100]}"
+    except Exception:
+        return "", "URL読み込みエラー: ページの取得に失敗しました"
 
 
 def get_job_extraction_prompt(text: str) -> str:
@@ -286,10 +326,10 @@ def show_shared_view(share_id: str):
 def generate_shared_html(content: str, title: str, expires_at: str, view_count: int) -> str:
     """共有ビュー用のスタイリングされたHTMLを生成（Human & Trust デザイン）"""
 
-    # MarkdownをHTMLに変換
-    html_content = content
+    # まずコンテンツ全体をHTMLエスケープ（XSS対策）
+    html_content = html_module.escape(content)
 
-    # 見出し変換
+    # 見出し変換（エスケープ済みテキストに対して適用）
     html_content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
     html_content = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
     html_content = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
@@ -301,7 +341,7 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
     # リスト
     html_content = re.sub(r'^- (.+)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
 
-    # テーブル変換
+    # テーブル変換（セル内容は既にエスケープ済み）
     def convert_table(match):
         rows = match.group(0).strip().split('\n')
         html_rows = []
@@ -321,12 +361,14 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
     html_content = f'<p>{html_content}</p>'
     html_content = re.sub(r'<p>\s*</p>', '', html_content)
 
+    safe_title = html_module.escape(title)
+
     return f'''<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
+    <title>{safe_title}</title>
     <style>
         /* ===== Reset & Base ===== */
         *, *::before, *::after {{
@@ -572,7 +614,7 @@ def generate_shared_html(content: str, title: str, expires_at: str, view_count: 
 <body>
     <div class="resume-container">
         <header class="resume-header">
-            <h1>{title}</h1>
+            <h1>{safe_title}</h1>
         </header>
 
         <main class="resume-content">
@@ -2314,7 +2356,7 @@ def call_groq_api(api_key: str, prompt: str) -> str:
                 continue
 
     # すべてのリトライが失敗
-    raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）: {str(last_error)[:100]}")
+    raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）。しばらく待ってから再試行してください")
 
 
 def call_groq_api_stream(api_key: str, prompt: str):
@@ -2361,7 +2403,7 @@ def call_groq_api_stream(api_key: str, prompt: str):
                 time.sleep(2)
                 continue
 
-    raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）: {str(last_error)[:100]}")
+    raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）。しばらく待ってから再試行してください")
 
 
 def stream_to_container(api_key: str, prompt: str, container=None):
@@ -2480,16 +2522,13 @@ def sync_to_localstorage(history_type: str):
     """履歴をlocalStorageに同期（JavaScript経由）"""
     key = f"{history_type}_history"
     if key in st.session_state:
-        import json
-        # JSON文字列にエスケープ処理
-        json_data = json.dumps(st.session_state[key])
-        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+        # JSON.parseで安全にデータを渡す（XSS対策）
+        json_data = json.dumps(json.dumps(st.session_state[key], ensure_ascii=True))
 
         st.components.v1.html(f"""
             <script>
             try {{
-                localStorage.setItem('{key}', '{escaped_data}');
-                console.log('Saved to localStorage: {key}');
+                localStorage.setItem('{key}', {json_data});
             }} catch(e) {{
                 console.error('Failed to save to localStorage:', e);
             }}
@@ -2500,15 +2539,12 @@ def sync_to_localstorage(history_type: str):
 def sync_saved_jobs_to_localstorage():
     """保存済み求人をlocalStorageに同期"""
     if 'saved_jobs' in st.session_state:
-        import json
-        json_data = json.dumps(st.session_state['saved_jobs'])
-        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+        json_data = json.dumps(json.dumps(st.session_state['saved_jobs'], ensure_ascii=True))
 
         st.components.v1.html(f"""
             <script>
             try {{
-                localStorage.setItem('saved_jobs', '{escaped_data}');
-                console.log('Saved jobs to localStorage');
+                localStorage.setItem('saved_jobs', {json_data});
             }} catch(e) {{
                 console.error('Failed to save jobs to localStorage:', e);
             }}
@@ -2519,15 +2555,12 @@ def sync_saved_jobs_to_localstorage():
 def sync_saved_job_sets_to_localstorage():
     """保存済み求人セットをlocalStorageに同期"""
     if 'saved_job_sets' in st.session_state:
-        import json
-        json_data = json.dumps(st.session_state['saved_job_sets'])
-        escaped_data = json_data.replace("'", "\\'").replace('"', '\\"')
+        json_data = json.dumps(json.dumps(st.session_state['saved_job_sets'], ensure_ascii=True))
 
         st.components.v1.html(f"""
             <script>
             try {{
-                localStorage.setItem('saved_job_sets', '{escaped_data}');
-                console.log('Saved job sets to localStorage');
+                localStorage.setItem('saved_job_sets', {json_data});
             }} catch(e) {{
                 console.error('Failed to save job sets to localStorage:', e);
             }}
@@ -2606,14 +2639,25 @@ def import_history_from_json(json_string: str) -> tuple[bool, str]:
     try:
         data = json.loads(json_string)
 
-        # バージョンチェック（将来的な互換性のため）
-        if 'data' not in data:
+        # 型チェック
+        if not isinstance(data, dict):
             return False, "無効なファイル形式です"
+
+        # バージョンチェック（将来的な互換性のため）
+        if 'data' not in data or not isinstance(data['data'], dict):
+            return False, "無効なファイル形式です"
+
+        # 許可されたキーのみインポート
+        allowed_keys = {'resume_history', 'jd_history', 'saved_jobs', 'saved_job_sets'}
 
         imported_count = 0
 
         # 履歴をインポート
         for key, history in data['data'].items():
+            if key not in allowed_keys:
+                continue
+            if not isinstance(history, list):
+                continue
             if key in ['resume_history', 'jd_history']:
                 st.session_state[key] = history
                 imported_count += len(history)
@@ -2633,17 +2677,17 @@ def import_history_from_json(json_string: str) -> tuple[bool, str]:
 
     except json.JSONDecodeError:
         return False, "JSONファイルの解析に失敗しました"
-    except Exception as e:
-        return False, f"インポートエラー: {str(e)}"
+    except Exception:
+        return False, "インポートエラー: ファイルの読み込みに失敗しました"
 
 
 def generate_html(content: str, title: str) -> str:
     """MarkdownテキストからHTMLを生成（印刷用スタイル付き）"""
 
-    # MarkdownをHTMLに変換
-    html_content = content
+    # まずコンテンツ全体をHTMLエスケープ（XSS対策）
+    html_content = html_module.escape(content)
 
-    # 見出し変換
+    # 見出し変換（エスケープ済みテキストに対して適用）
     html_content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
     html_content = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
     html_content = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
@@ -2656,7 +2700,7 @@ def generate_html(content: str, title: str) -> str:
     # リスト
     html_content = re.sub(r'^- (.+)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
 
-    # テーブル変換
+    # テーブル変換（セル内容は既にエスケープ済み）
     def convert_table(match):
         rows = match.group(0).strip().split('\n')
         html_rows = []
@@ -2681,13 +2725,15 @@ def generate_html(content: str, title: str) -> str:
     # 空のタグを削除
     html_content = re.sub(r'<p>\s*</p>', '', html_content)
 
+    safe_title = html_module.escape(title)
+
     # HTMLテンプレート
     html = f'''<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
+    <title>{safe_title}</title>
     <style>
         * {{
             margin: 0;
@@ -2788,7 +2834,7 @@ def generate_html(content: str, title: str) -> str:
 </head>
 <body>
     <div class="header">
-        <h1>{title}</h1>
+        <h1>{safe_title}</h1>
     </div>
     <div class="generated">{datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
     <div class="content">
@@ -3152,7 +3198,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
             # 結果表示
             if 'resume_result' in st.session_state:
@@ -3165,7 +3211,7 @@ def main():
                     if st.button("📋 コピー", key="copy_resume", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
                         # JavaScriptでクリップボードにコピー
-                        escaped_text = st.session_state['resume_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -3230,7 +3276,7 @@ def main():
                         else:
                             st.error("❌ 元の英語レジュメが見つかりません。最初から変換し直してください。")
                     except Exception as e:
-                        st.error(f"❌ 生成エラー: {str(e)[:200]}")
+                        st.error("❌ 生成エラーが発生しました。しばらく待ってから再試行してください")
 
                 # 英語匿名化結果の表示
                 if 'resume_en_result' in st.session_state and st.session_state.get('resume_result'):
@@ -3243,7 +3289,7 @@ def main():
                     with col_copy_en2:
                         if st.button("📋 コピー", key="copy_resume_en2", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['resume_en_result'].replace('`', '\\`').replace('$', '\\$')
+                            escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                             st.components.v1.html(f"""
                                 <script>
                                 navigator.clipboard.writeText(`{escaped_text}`);
@@ -3440,7 +3486,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                                st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
             # 結果表示
             if 'resume_en_result' in st.session_state:
@@ -3450,7 +3496,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_resume_en", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['resume_en_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -3517,7 +3563,7 @@ def main():
                         else:
                             st.error("❌ 英語レジュメが見つかりません。最初から変換し直してください。")
                     except Exception as e:
-                        st.error(f"❌ 生成エラー: {str(e)[:200]}")
+                        st.error("❌ 生成エラーが発生しました。しばらく待ってから再試行してください")
 
                 # 日本語変換結果の表示（英語匿名化後の追加変換）
                 if 'resume_result' in st.session_state and st.session_state.get('resume_en_result') and not st.session_state.get('resume_text_input'):
@@ -3530,7 +3576,7 @@ def main():
                     with col_copy_jp2:
                         if st.button("📋 コピー", key="copy_resume_jp2", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['resume_result'].replace('`', '\\`').replace('$', '\\$')
+                            escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                             st.components.v1.html(f"""
                                 <script>
                                 navigator.clipboard.writeText(`{escaped_text}`);
@@ -3666,7 +3712,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                                st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
             # 結果表示
             if 'jd_result' in st.session_state:
@@ -3678,7 +3724,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['jd_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['jd_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -3843,7 +3889,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
             # 結果表示
             if 'jd_en_result' in st.session_state:
@@ -3855,7 +3901,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd_en", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['jd_en_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['jd_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -4020,7 +4066,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
             # 結果表示
             if 'jd_jp_jp_result' in st.session_state:
@@ -4032,7 +4078,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd_jp_jp", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['jd_jp_jp_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['jd_jp_jp_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -4197,7 +4243,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(f"❌ Unexpected error: {str(e)[:200]}")
+                            st.error("❌ Unexpected error. Please try again later")
 
             # 結果表示
             if 'jd_en_en_result' in st.session_state:
@@ -4209,7 +4255,7 @@ def main():
                 with col_copy:
                     if st.button("📋 Copy", key="copy_jd_en_en", use_container_width=True):
                         st.toast("✅ Copied to clipboard")
-                        escaped_text = st.session_state['jd_en_en_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['jd_en_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -4367,7 +4413,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
             # 結果表示
             if 'company_result' in st.session_state:
@@ -4379,7 +4425,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_company", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['company_result'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['company_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -4802,7 +4848,7 @@ def main():
                     except ValueError as e:
                         st.error(str(e))
                     except Exception as e:
-                        st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                        st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
         # 結果表示（セッションステートにある場合）
         if 'matching_result' in st.session_state:
@@ -4843,7 +4889,7 @@ def main():
             with col_copy:
                 if st.button("📋 コピー", key="copy_matching", use_container_width=True):
                     st.toast("✅ クリップボードにコピーしました")
-                    escaped_text = st.session_state['matching_result'].replace('`', '\\`').replace('$', '\\$')
+                    escaped_text = st.session_state['matching_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                     st.components.v1.html(f"""
                         <script>
                         navigator.clipboard.writeText(`{escaped_text}`);
@@ -4912,7 +4958,7 @@ def main():
                         st.success("✅ 英語への翻訳が完了しました")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
+                        st.error("❌ 翻訳エラーが発生しました。しばらく待ってから再試行してください")
 
             with col_trans2:
                 if st.button("🇬🇧→🇯🇵 英語→日本語", key="translate_to_ja", use_container_width=True, help="マッチング分析結果を日本語に翻訳"):
@@ -4926,7 +4972,7 @@ def main():
                         st.success("✅ 日本語への翻訳が完了しました")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ 翻訳エラー: {str(e)[:200]}")
+                        st.error("❌ 翻訳エラーが発生しました。しばらく待ってから再試行してください")
 
             # 匿名提案資料生成機能
             st.divider()
@@ -4968,7 +5014,7 @@ def main():
                             st.success("✅ 候補者提案資料（日本語）の生成が完了しました")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"❌ 生成エラー: {str(e)[:200]}")
+                            st.error("❌ 生成エラーが発生しました。しばらく待ってから再試行してください")
 
             with col_proposal2:
                 if st.button("📝 English Version", key="generate_proposal_en", use_container_width=True, help="Generate proposal (English)"):
@@ -4991,7 +5037,7 @@ def main():
                             st.success("✅ Candidate proposal (English) generated successfully")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"❌ Generation error: {str(e)[:200]}")
+                            st.error("❌ Generation error. Please try again later")
 
             # 匿名提案資料の表示
             if 'anonymous_proposal' in st.session_state:
@@ -5010,7 +5056,7 @@ def main():
                 with col_copy_prop:
                     if st.button("📋 コピー", key="copy_proposal", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['anonymous_proposal'].replace('`', '\\`').replace('$', '\\$')
+                        escaped_text = st.session_state['anonymous_proposal'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
                             navigator.clipboard.writeText(`{escaped_text}`);
@@ -5195,7 +5241,7 @@ def main():
                             except ValueError as e:
                                 st.error(str(e))
                             except Exception as e:
-                                st.error(f"❌ 予期せぬエラー: {str(e)[:200]}")
+                                st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
 
                 # 結果表示
                 if 'cv_extract_result' in st.session_state:
@@ -5205,7 +5251,7 @@ def main():
                     with col_copy:
                         if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['cv_extract_result'].replace('`', '\\`').replace('$', '\\$')
+                            escaped_text = st.session_state['cv_extract_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                             st.components.v1.html(f"""
                                 <script>
                                 navigator.clipboard.writeText(`{escaped_text}`);
@@ -5232,7 +5278,7 @@ def main():
                                     st.success("✅ 調整完了！")
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"❌ 調整エラー: {str(e)[:200]}")
+                                    st.error("❌ 調整エラーが発生しました。しばらく待ってから再試行してください")
 
                     if show_formatted_cv:
                         st.markdown(st.session_state['cv_extract_result'])
@@ -5420,7 +5466,7 @@ Full-stack Developer...
                             with col_copy_b:
                                 if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
                                     st.toast("✅ クリップボードにコピーしました")
-                                    escaped_text = cv_r['output'].replace('`', '\\`').replace('$', '\\$')
+                                    escaped_text = cv_r['output'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                                     st.components.v1.html(f"""
                                         <script>
                                         navigator.clipboard.writeText(`{escaped_text}`);
@@ -5447,7 +5493,7 @@ Full-stack Developer...
                                             st.success("✅ 調整完了！")
                                             st.rerun()
                                         except Exception as e:
-                                            st.error(f"❌ 調整エラー: {str(e)[:200]}")
+                                            st.error("❌ 調整エラーが発生しました。しばらく待ってから再試行してください")
 
                             if show_fmt:
                                 st.markdown(cv_r['output'])
@@ -5841,7 +5887,7 @@ Full-stack Developer...
             with col_copy_e:
                 if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
                     st.toast("✅ クリップボードにコピーしました")
-                    escaped = st.session_state['generated_email'].replace('`', '\\`').replace('$', '\\$')
+                    escaped = st.session_state['generated_email'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                     st.components.v1.html(f"""
                         <script>
                         navigator.clipboard.writeText(`{escaped}`);
@@ -6055,7 +6101,7 @@ Full-stack Developer...
                         with col_copy:
                             if st.button("📋 コピー", key=f"copy_batch_{result['index']}", use_container_width=True):
                                 st.toast("✅ クリップボードにコピーしました")
-                                escaped_text = result['output'].replace('`', '\\`').replace('$', '\\$')
+                                escaped_text = result['output'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                                 st.components.v1.html(f"""
                                     <script>
                                     navigator.clipboard.writeText(`{escaped_text}`);
