@@ -31,7 +31,7 @@ except ImportError:
     SUPABASE_AVAILABLE = False
 
 # 定数
-MAX_INPUT_CHARS = 15000  # 最大入力文字数
+MAX_INPUT_CHARS = 40000  # 最大入力文字数
 MIN_INPUT_CHARS = 100    # 最小入力文字数
 MAX_RETRIES = 3          # API最大リトライ回数
 MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
@@ -226,8 +226,8 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
             return "", "ページからテキストを抽出できませんでした"
 
         # 長すぎる場合は切り詰め
-        if len(text) > 15000:
-            text = text[:15000]
+        if len(text) > MAX_INPUT_CHARS:
+            text = text[:MAX_INPUT_CHARS]
 
         return text, ""
 
