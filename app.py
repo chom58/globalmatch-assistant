@@ -2243,6 +2243,7 @@ Your goal: Write a proposal that makes the hiring company think "We need to meet
 ---
 
 【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
+※ **Sentence Length Rule**: Keep each sentence SHORT — ideally under 80 characters. If a point is complex, split it into 2-3 shorter sentences instead of one long sentence. Avoid run-on sentences connected by commas or dashes. Each sentence should convey one clear idea.
 
 ## 1. Catch Copy
 A punchy, memorable headline that makes the reader want to learn more. MUST include: years of experience + role/title + the candidate's unique value proposition or differentiator. Frame it as what this person DELIVERS, not just what they ARE.
@@ -2276,10 +2277,11 @@ Example: "A builder who constructs AI platforms from scratch — not just an API
 【Important Rules】
 {anonymize_rules}
 2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
-3. **English Only**: All output must be in English.
-4. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
-5. **No Markdown Headers in Values**: Output the value text directly after each header.
-6. **Hiring Manager Perspective**: Write as if presenting to a CTO or VP of Engineering who sees dozens of proposals weekly. Make THIS candidate impossible to skip.
+3. **Short Sentences**: Each sentence MUST be under 80 characters. Break long sentences into multiple shorter ones. One idea per sentence. Never chain multiple clauses with commas, semicolons, or dashes into a single sentence. For example, instead of "He led a 20-person team across 3 regions, delivering a cloud migration that reduced costs by 40% while improving uptime to 99.99%", write: "Led a 20-person team across 3 regions. Delivered a cloud migration that cut costs by 40%. Improved uptime to 99.99%."
+4. **English Only**: All output must be in English.
+5. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
+6. **No Markdown Headers in Values**: Output the value text directly after each header.
+7. **Hiring Manager Perspective**: Write as if presenting to a CTO or VP of Engineering who sees dozens of proposals weekly. Make THIS candidate impossible to skip.
 """
 
 
@@ -2341,6 +2343,7 @@ def get_adjust_length_prompt(proposal_text: str, target_chars: int) -> str:
 - Maintain the same language and anonymization level as the original
 - Prioritize: quantified achievements > rare skills > general descriptions
 - The result must read naturally — do not sacrifice readability for length
+- **Short Sentences**: Keep each sentence under 80 characters. Break long sentences into multiple shorter ones. One idea per sentence. Do not chain clauses with commas or dashes.
 - Output in English only
 - Do NOT add any new information not present in the original. When expanding, elaborate on existing facts with more context, do not fabricate.
 """
