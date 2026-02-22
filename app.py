@@ -38,6 +38,28 @@ MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
 RATE_LIMIT_CALLS = 30    # セッションあたりのAPI呼び出し上限（1時間）
 RATE_LIMIT_WINDOW = 3600 # レート制限ウィンドウ（秒）
 SESSION_TIMEOUT_MINUTES = 120  # セッションタイムアウト（分）
+MAX_IMPORT_SIZE_BYTES = 10 * 1024 * 1024  # インポートファイルの最大サイズ（10MB）
+MAX_IMPORT_ITEMS = 500  # インポートの最大項目数
+MAX_RESPONSE_SIZE_BYTES = 50 * 1024 * 1024  # URLフェッチのレスポンスサイズ上限（50MB）
+
+
+def _safe_clipboard_html(text: str) -> str:
+    """安全なクリップボードコピー用HTML/JSを生成（XSS対策）"""
+    safe_json = json.dumps(text, ensure_ascii=False)
+    return f"""<script>
+navigator.clipboard.writeText({safe_json});
+</script>"""
+
+
+def _validate_api_key(api_key: str) -> tuple[bool, str]:
+    """Groq APIキーの基本フォーマット検証"""
+    if not api_key:
+        return False, "APIキーを入力してください"
+    if not api_key.startswith("gsk_"):
+        return False, "Groq APIキーはgsk_で始まります。正しいキーを確認してください"
+    if len(api_key) < 20:
+        return False, "APIキーが短すぎます。正しいキーを確認してください"
+    return True, ""
 
 
 def _check_rate_limit() -> tuple[bool, str]:
@@ -175,6 +197,43 @@ def _is_safe_url(url: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _safe_request_get(url: str, timeout: int = 15, max_redirects: int = 5) -> requests.Response:
+    """リダイレクト先もSSRF検証するsafe版requests.get"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    current_url = url
+    for _ in range(max_redirects):
+        is_safe, safety_msg = _is_safe_url(current_url)
+        if not is_safe:
+            raise ValueError(safety_msg)
+
+        resp = requests.get(
+            current_url, headers=headers, timeout=timeout,
+            allow_redirects=False, stream=True
+        )
+
+        # レスポンスサイズ制限チェック
+        content_length = resp.headers.get("Content-Length")
+        if content_length and int(content_length) > MAX_RESPONSE_SIZE_BYTES:
+            resp.close()
+            raise ValueError(f"レスポンスが大きすぎます（最大{MAX_RESPONSE_SIZE_BYTES // (1024*1024)}MB）")
+
+        if resp.is_redirect and "Location" in resp.headers:
+            current_url = resp.headers["Location"]
+            # 相対URLを絶対URLに変換
+            if current_url.startswith("/"):
+                parsed = urlparse(url)
+                current_url = f"{parsed.scheme}://{parsed.netloc}{current_url}"
+            resp.close()
+            continue
+
+        resp.raise_for_status()
+        return resp
+
+    raise ValueError("リダイレクトが多すぎます")
+
+
 def extract_text_from_url(url: str) -> tuple[str, str]:
     """URLからWebページのテキストを抽出
 
@@ -187,11 +246,7 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
         return "", safety_msg
 
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
-        resp.raise_for_status()
+        resp = _safe_request_get(url, timeout=15)
 
         content_type = resp.headers.get("Content-Type", "")
 
@@ -231,6 +286,8 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
 
         return text, ""
 
+    except ValueError as e:
+        return "", str(e)
     except requests.exceptions.Timeout:
         return "", "タイムアウトしました。URLを確認してください"
     except requests.exceptions.ConnectionError:
@@ -2387,6 +2444,11 @@ def validate_input(text: str, input_type: str) -> tuple[bool, str]:
 def call_groq_api(api_key: str, prompt: str) -> str:
     """Groq APIを呼び出してテキストを生成（リトライ機能付き）"""
 
+    # APIキーのフォーマット検証
+    is_valid_key, key_msg = _validate_api_key(api_key)
+    if not is_valid_key:
+        raise ValueError(f"❌ {key_msg}")
+
     # アプリレベルのレート制限チェック
     allowed, msg = _check_rate_limit()
     if not allowed:
@@ -2437,6 +2499,11 @@ def call_groq_api(api_key: str, prompt: str) -> str:
 
 def call_groq_api_stream(api_key: str, prompt: str):
     """Groq APIをストリーミングで呼び出し、チャンクを逐次yieldする（リトライ機能付き）"""
+
+    # APIキーのフォーマット検証
+    is_valid_key, key_msg = _validate_api_key(api_key)
+    if not is_valid_key:
+        raise ValueError(f"❌ {key_msg}")
 
     # アプリレベルのレート制限チェック
     allowed, msg = _check_rate_limit()
@@ -2714,9 +2781,25 @@ def export_history_to_json(history_type: str = "all") -> str:
     return json.dumps(export_data, ensure_ascii=False, indent=2)
 
 
+def _validate_history_item(item: dict) -> bool:
+    """履歴アイテムの構造を検証"""
+    if not isinstance(item, dict):
+        return False
+    # 必須キーの存在と型チェック
+    if 'content' not in item or not isinstance(item.get('content'), str):
+        return False
+    # 個別エントリのサイズ制限（1MB）
+    if len(item.get('content', '')) > 1024 * 1024:
+        return False
+    return True
+
+
 def import_history_from_json(json_string: str) -> tuple[bool, str]:
     """JSON文字列から履歴をインポート"""
-    import json
+
+    # ファイルサイズ制限
+    if len(json_string.encode('utf-8')) > MAX_IMPORT_SIZE_BYTES:
+        return False, f"ファイルが大きすぎます（最大{MAX_IMPORT_SIZE_BYTES // (1024*1024)}MB）"
 
     try:
         data = json.loads(json_string)
@@ -2740,19 +2823,27 @@ def import_history_from_json(json_string: str) -> tuple[bool, str]:
                 continue
             if not isinstance(history, list):
                 continue
+
+            # 項目数制限
+            if len(history) > MAX_IMPORT_ITEMS:
+                history = history[:MAX_IMPORT_ITEMS]
+
+            # 各アイテムの構造を検証（不正なアイテムはスキップ）
+            validated = [item for item in history if _validate_history_item(item)]
+
             if key in ['resume_history', 'jd_history']:
-                st.session_state[key] = history
-                imported_count += len(history)
+                st.session_state[key] = validated
+                imported_count += len(validated)
 
                 # localStorageにも同期
                 sync_to_localstorage(key.replace('_history', ''))
             elif key == 'saved_jobs':
-                st.session_state['saved_jobs'] = history
-                imported_count += len(history)
+                st.session_state['saved_jobs'] = validated
+                imported_count += len(validated)
                 sync_saved_jobs_to_localstorage()
             elif key == 'saved_job_sets':
-                st.session_state['saved_job_sets'] = history
-                imported_count += len(history)
+                st.session_state['saved_job_sets'] = validated
+                imported_count += len(validated)
                 sync_saved_job_sets_to_localstorage()
 
         return True, f"✅ {imported_count}件の履歴をインポートしました"
@@ -3304,13 +3395,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_resume", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        # JavaScriptでクリップボードにコピー
-                        escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['resume_result']), height=0)
 
                 if show_formatted:
                     st.markdown(st.session_state['resume_result'])
@@ -3383,12 +3468,7 @@ def main():
                     with col_copy_en2:
                         if st.button("📋 コピー", key="copy_resume_en2", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                            st.components.v1.html(f"""
-                                <script>
-                                navigator.clipboard.writeText(`{escaped_text}`);
-                                </script>
-                            """, height=0)
+                            st.components.v1.html(_safe_clipboard_html(st.session_state['resume_en_result']), height=0)
 
                     if show_formatted_en2:
                         st.markdown(st.session_state['resume_en_result'])
@@ -3590,12 +3670,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_resume_en", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['resume_en_result']), height=0)
 
                 if show_formatted_en:
                     st.markdown(st.session_state['resume_en_result'])
@@ -3670,12 +3745,7 @@ def main():
                     with col_copy_jp2:
                         if st.button("📋 コピー", key="copy_resume_jp2", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                            st.components.v1.html(f"""
-                                <script>
-                                navigator.clipboard.writeText(`{escaped_text}`);
-                                </script>
-                            """, height=0)
+                            st.components.v1.html(_safe_clipboard_html(st.session_state['resume_result']), height=0)
 
                     if show_formatted_jp2:
                         st.markdown(st.session_state['resume_result'])
@@ -3818,12 +3888,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['jd_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['jd_result']), height=0)
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_result'])
@@ -3995,12 +4060,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd_en", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['jd_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['jd_en_result']), height=0)
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_en_result'])
@@ -4172,12 +4232,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_jd_jp_jp", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['jd_jp_jp_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['jd_jp_jp_result']), height=0)
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_jp_jp_result'])
@@ -4349,12 +4404,7 @@ def main():
                 with col_copy:
                     if st.button("📋 Copy", key="copy_jd_en_en", use_container_width=True):
                         st.toast("✅ Copied to clipboard")
-                        escaped_text = st.session_state['jd_en_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['jd_en_en_result']), height=0)
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_en_en_result'])
@@ -4519,12 +4569,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_company", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['company_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['company_result']), height=0)
 
                 if show_formatted:
                     st.markdown(st.session_state['company_result'])
@@ -4983,12 +5028,7 @@ def main():
             with col_copy:
                 if st.button("📋 コピー", key="copy_matching", use_container_width=True):
                     st.toast("✅ クリップボードにコピーしました")
-                    escaped_text = st.session_state['matching_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                    st.components.v1.html(f"""
-                        <script>
-                        navigator.clipboard.writeText(`{escaped_text}`);
-                        </script>
-                    """, height=0)
+                    st.components.v1.html(_safe_clipboard_html(st.session_state['matching_result']), height=0)
 
             if show_formatted:
                 st.markdown(st.session_state['matching_result'])
@@ -5150,12 +5190,7 @@ def main():
                 with col_copy_prop:
                     if st.button("📋 コピー", key="copy_proposal", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['anonymous_proposal'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        st.components.v1.html(_safe_clipboard_html(st.session_state['anonymous_proposal']), height=0)
 
                 if show_formatted_prop:
                     st.markdown(st.session_state['anonymous_proposal'])
@@ -5345,12 +5380,7 @@ def main():
                     with col_copy:
                         if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['cv_extract_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                            st.components.v1.html(f"""
-                                <script>
-                                navigator.clipboard.writeText(`{escaped_text}`);
-                                </script>
-                            """, height=0)
+                            st.components.v1.html(_safe_clipboard_html(st.session_state['cv_extract_result']), height=0)
 
                     # 文章量調整スライダー
                     col_slider, col_adjust = st.columns([3, 1])
@@ -5560,12 +5590,7 @@ Full-stack Developer...
                             with col_copy_b:
                                 if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
                                     st.toast("✅ クリップボードにコピーしました")
-                                    escaped_text = cv_r['output'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                                    st.components.v1.html(f"""
-                                        <script>
-                                        navigator.clipboard.writeText(`{escaped_text}`);
-                                        </script>
-                                    """, height=0)
+                                    st.components.v1.html(_safe_clipboard_html(cv_r['output']), height=0)
 
                             # 文章量調整スライダー
                             col_slider_b, col_adjust_b = st.columns([3, 1])
@@ -5981,12 +6006,7 @@ Full-stack Developer...
             with col_copy_e:
                 if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
                     st.toast("✅ クリップボードにコピーしました")
-                    escaped = st.session_state['generated_email'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                    st.components.v1.html(f"""
-                        <script>
-                        navigator.clipboard.writeText(`{escaped}`);
-                        </script>
-                    """, height=0)
+                    st.components.v1.html(_safe_clipboard_html(st.session_state['generated_email']), height=0)
             with col_dl_e:
                 st.download_button(
                     "📄 テキストファイルDL",
@@ -6195,12 +6215,7 @@ Full-stack Developer...
                         with col_copy:
                             if st.button("📋 コピー", key=f"copy_batch_{result['index']}", use_container_width=True):
                                 st.toast("✅ クリップボードにコピーしました")
-                                escaped_text = result['output'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                                st.components.v1.html(f"""
-                                    <script>
-                                    navigator.clipboard.writeText(`{escaped_text}`);
-                                    </script>
-                                """, height=0)
+                                st.components.v1.html(_safe_clipboard_html(result['output']), height=0)
 
                         if show_formatted:
                             st.markdown(result['output'])
