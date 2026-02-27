@@ -1533,19 +1533,27 @@ Your task is to process the following resume and remove specific personal data w
 
 【CRITICAL INSTRUCTIONS】
 - Do NOT change the language of the resume. If it's in English, output in English. If in Japanese, output in Japanese.
-- Do NOT restructure, reformat, or reorganize the resume content
 - Do NOT add any sections, headers, or content that doesn't exist in the original
 - Do NOT anonymize company names, university names, or project names
 - Do NOT modify work experience, skills, education, or any professional content
-- PRESERVE the exact same formatting and structure as the original resume
 - Simply output the resume with only the 5 types of personal data removed/modified as specified above
 - If the resume has a header/contact section, keep the section but with the personal data removed
+
+【OUTPUT FORMAT - Markdown】
+Output MUST be in clean Markdown format for readability:
+- Use ## for major section headings (e.g., ## Work Experience, ## Education, ## Skills)
+- Use ### for sub-headings (e.g., company names, job titles)
+- Use **bold** for emphasis (job titles, company names, dates)
+- Use bullet points (-) for listing items
+- Use tables where appropriate (e.g., for skills)
+- Separate sections with blank lines
+- Preserve the original section structure and content, but format it as clean Markdown
 
 【INPUT RESUME】
 {resume_text}
 
 【OUTPUT】
-Output the processed resume with personal data removed. Maintain the original format and language exactly.
+Output the processed resume with personal data removed, formatted as clean Markdown.
 """
 
 
