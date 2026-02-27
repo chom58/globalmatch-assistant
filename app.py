@@ -1499,61 +1499,66 @@ Pay special attention to the following:
 
 
 def get_resume_pii_removal_prompt(resume_text: str) -> str:
-    """レジュメから個人情報（メール、LinkedIn、電話番号、住所）を削除し、氏名をFirst nameのみにするプロンプトを生成"""
+    """レジュメから個人情報を削除し、高品質なMarkdown形式に再構成するプロンプトを生成"""
 
-    return f"""You are an expert HR document processor.
-Your task is to process the following resume and remove specific personal data while preserving ALL other content exactly as-is.
+    return f"""You are a professional English resume editing specialist for technical and managerial roles.
+Your task is to convert the provided resume text into a high-quality Markdown format suitable for submission to international companies and recruitment agencies.
 
-【PERSONAL DATA REMOVAL RULES - STRICTLY FOLLOW】
+【1. PERSONAL DATA REMOVAL - STRICTLY FOLLOW】
 
-1. **Full Name → First Name Only**
-   - Keep ONLY the first name (given name)
-   - Remove last name (family name / surname)
-   - Examples:
-     - "John Smith" → "John"
-     - "Maria Garcia Lopez" → "Maria"
-     - "Taro Yamada" → "Taro"
-     - "Wei-Lin Chen" → "Wei-Lin"
+Remove ALL of the following personal information:
+- **Phone numbers**: Any format (e.g., +1-555-123-4567, (03) 1234-5678, 090-1234-5678)
+- **Detailed addresses**: Full street addresses, postal codes, apartment/unit numbers (keep only general location such as city or prefecture if relevant to the header)
+- **Email addresses**: Remove completely (e.g., john@example.com)
+- **LinkedIn URLs**: Remove any LinkedIn profile URLs (e.g., linkedin.com/in/...)
+- **Annotations and timestamps**: Remove notes such as "Resume (PII Removed)", generation timestamps, or any metadata annotations
 
-2. **Email Address → REMOVE completely**
-   - Remove any email addresses (e.g., john@example.com)
-   - Do not replace with placeholder text - simply remove the line or entry
+【2. COMPANY NAME PRESERVATION】
 
-3. **LinkedIn → REMOVE completely**
-   - Remove any LinkedIn profile URLs (e.g., linkedin.com/in/...)
-   - Remove any mention of LinkedIn profile links
+- Do NOT anonymize or remove company names mentioned in the resume
+- Keep all company names, university names, and project names exactly as they appear
 
-4. **Phone Number → REMOVE completely**
-   - Remove any phone numbers in any format (e.g., +1-555-123-4567, (03) 1234-5678, 090-1234-5678)
+【3. SECTION STRUCTURE - RECONSTRUCT IN THIS ORDER】
 
-5. **Address → REMOVE completely**
-   - Remove full street addresses, postal codes, apartment/unit numbers
-   - Remove city, state, country information
-   - Do not keep any location information
+Reorganize the resume into the following sections, in this exact order:
 
-【CRITICAL INSTRUCTIONS】
-- Do NOT change the language of the resume. If it's in English, output in English. If in Japanese, output in Japanese.
-- Do NOT add any sections, headers, or content that doesn't exist in the original
-- Do NOT anonymize company names, university names, or project names
-- Do NOT modify work experience, skills, education, or any professional content
-- Simply output the resume with only the 5 types of personal data removed/modified as specified above
-- If the resume has a header/contact section, keep the section but with the personal data removed
+1. **Header**: Name + Location (city/prefecture only) + Key Credentials (e.g., CPA, CMA)
+2. **Professional Summary** (CREATE NEW): Write a 3-4 line summary that highlights the candidate's unique combination of backgrounds. If the candidate has dual expertise (e.g., accounting credentials like CPA/CMA combined with technical leadership in Engineering Management / DevOps), synthesize both into a compelling narrative.
+3. **Experience**: List in reverse chronological order. If the candidate was promoted within the same company (e.g., from DevOps Engineer to Engineering Manager), group all roles under a single company section with clear timeline indicators.
+4. **Skills**: Categorize into the following groups:
+   - Languages (programming languages)
+   - Infrastructure & DevOps
+   - Web & Robotics
+   - IT Strategy & Security
+   Only include categories that are relevant to the candidate's background. If a category has no applicable skills, omit it entirely.
+5. **Education & Certifications**
 
-【OUTPUT FORMAT - Markdown】
-Output MUST be in clean Markdown format for readability:
-- Use ## for major section headings (e.g., ## Work Experience, ## Education, ## Skills)
-- Use ### for sub-headings (e.g., company names, job titles)
-- Use **bold** for emphasis (job titles, company names, dates)
+【4. FORMATTING RULES】
+
+- Start each work achievement with a strong **Action Verb** (Led, Architected, Optimized, Delivered, Scaled, Drove, Spearheaded, etc.)
+- **Bold** all numerical achievements and metrics (e.g., **5M JPY**, **50% increase**, **$8.1M**, **20-person team**)
+- Use ## for major section headings, ### for sub-headings (company names, job titles)
 - Use bullet points (-) for listing items
 - Use tables where appropriate (e.g., for skills)
 - Separate sections with blank lines
-- Preserve the original section structure and content, but format it as clean Markdown
+
+【5. READABILITY IMPROVEMENTS】
+
+- Fix any OCR scan artifacts: broken line breaks, garbled characters, or incorrectly split sections
+- Ensure logical flow and consistent formatting throughout
+- If dates or timelines appear inconsistent, preserve the original data but arrange it in a clean, readable format
+
+【CRITICAL INSTRUCTIONS】
+- Do NOT anonymize company names, university names, or project names
+- Output the resume in English
+- If information for a section does not exist in the original resume, omit that section entirely (do NOT write "N/A" or "Not available")
+- For the Professional Summary, infer from the candidate's overall profile — do not fabricate information
 
 【INPUT RESUME】
 {resume_text}
 
 【OUTPUT】
-Output the processed resume with personal data removed, formatted as clean Markdown.
+Output the processed resume with personal data removed, restructured and formatted as clean Markdown.
 """
 
 
