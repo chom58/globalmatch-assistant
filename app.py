@@ -1498,6 +1498,57 @@ Pay special attention to the following:
 """
 
 
+def get_resume_pii_removal_prompt(resume_text: str) -> str:
+    """レジュメから個人情報（メール、LinkedIn、電話番号、住所）を削除し、氏名をFirst nameのみにするプロンプトを生成"""
+
+    return f"""You are an expert HR document processor.
+Your task is to process the following resume and remove specific personal data while preserving ALL other content exactly as-is.
+
+【PERSONAL DATA REMOVAL RULES - STRICTLY FOLLOW】
+
+1. **Full Name → First Name Only**
+   - Keep ONLY the first name (given name)
+   - Remove last name (family name / surname)
+   - Examples:
+     - "John Smith" → "John"
+     - "Maria Garcia Lopez" → "Maria"
+     - "Taro Yamada" → "Taro"
+     - "Wei-Lin Chen" → "Wei-Lin"
+
+2. **Email Address → REMOVE completely**
+   - Remove any email addresses (e.g., john@example.com)
+   - Do not replace with placeholder text - simply remove the line or entry
+
+3. **LinkedIn → REMOVE completely**
+   - Remove any LinkedIn profile URLs (e.g., linkedin.com/in/...)
+   - Remove any mention of LinkedIn profile links
+
+4. **Phone Number → REMOVE completely**
+   - Remove any phone numbers in any format (e.g., +1-555-123-4567, (03) 1234-5678, 090-1234-5678)
+
+5. **Address → REMOVE completely**
+   - Remove full street addresses, postal codes, apartment/unit numbers
+   - Remove city, state, country information
+   - Do not keep any location information
+
+【CRITICAL INSTRUCTIONS】
+- Do NOT change the language of the resume. If it's in English, output in English. If in Japanese, output in Japanese.
+- Do NOT restructure, reformat, or reorganize the resume content
+- Do NOT add any sections, headers, or content that doesn't exist in the original
+- Do NOT anonymize company names, university names, or project names
+- Do NOT modify work experience, skills, education, or any professional content
+- PRESERVE the exact same formatting and structure as the original resume
+- Simply output the resume with only the 5 types of personal data removed/modified as specified above
+- If the resume has a header/contact section, keep the section but with the personal data removed
+
+【INPUT RESUME】
+{resume_text}
+
+【OUTPUT】
+Output the processed resume with personal data removed. Maintain the original format and language exactly.
+"""
+
+
 def get_jd_transformation_prompt(jd_text: str) -> str:
     """求人票変換用のプロンプトを生成（日本語→英語）"""
 
@@ -3090,6 +3141,7 @@ def main():
             options=[
                 "レジュメ最適化（英→日）",
                 "レジュメ匿名化（英→英）",
+                "レジュメ個人情報削除",
                 "求人票魅力化（日→英）",
                 "求人票翻訳（英→日）",
                 "求人票フォーマット化（日→日）",
@@ -3118,6 +3170,11 @@ def main():
             1. 英語のレジュメをペーストまたはPDFをアップロード
             2. 匿名化レベルを選択
             3. 英語のまま匿名化されたレジュメを取得
+
+            **レジュメ個人情報削除**
+            1. レジュメをペーストまたはPDFをアップロード
+            2. 「個人情報削除実行」をクリック
+            3. メール・LinkedIn・電話番号・住所が削除され、氏名がFirst nameのみに変更されたレジュメを取得
 
             **求人票魅力化（日→英）**
             1. 日本語の求人票をペースト
@@ -3740,6 +3797,151 @@ def main():
                             st.info("💡 上のURLをコピーしてクライアントに共有してください")
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
+
+    elif feature == "レジュメ個人情報削除":
+        st.subheader("🛡️ レジュメ個人情報削除")
+        st.caption("レジュメからメール・LinkedIn・電話番号・住所を削除し、氏名をFirst nameのみに変更します")
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+
+            with input_tab1:
+                st.markdown("##### 入力：レジュメ")
+
+                resume_pii_input = st.text_area(
+                    "レジュメをペースト",
+                    height=350,
+                    placeholder="Paste the resume here...\n\nレジュメのテキストを貼り付けてください...",
+                    label_visibility="collapsed",
+                    key="resume_pii_text"
+                )
+
+            with input_tab2:
+                st.markdown("##### PDFをアップロード")
+                uploaded_pdf_pii = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="resume_pii_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_pdf_pii:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text_pii, error_pii = extract_text_from_pdf(uploaded_pdf_pii)
+                        if error_pii:
+                            st.error(f"❌ {error_pii}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text_pii):,}文字）")
+                            resume_pii_input = extracted_text_pii
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text_pii[:2000] + ("..." if len(extracted_text_pii) > 2000 else ""))
+                else:
+                    if 'resume_pii_input' not in dir():
+                        resume_pii_input = ""
+
+            # 文字数カウンター
+            char_count_pii = len(resume_pii_input) if resume_pii_input else 0
+            if char_count_pii > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count_pii:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+            elif char_count_pii > 0:
+                st.caption(f"📊 {char_count_pii:,} / {MAX_INPUT_CHARS:,} 文字")
+
+            st.info("🛡️ 削除される情報：メールアドレス、LinkedIn、電話番号、住所\n\n📝 氏名はFirst nameのみに変更されます")
+
+            process_pii_btn = st.button(
+                "🛡️ 個人情報削除実行",
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not resume_pii_input,
+                key="process_pii_btn"
+            )
+
+        with col2:
+            st.markdown("##### 出力：個人情報削除済みレジュメ")
+
+            if process_pii_btn:
+                if not api_key:
+                    st.error("❌ APIキーを入力してください")
+                else:
+                    is_valid_pii, error_msg_pii = validate_input(resume_pii_input, "resume")
+                    if not is_valid_pii:
+                        st.warning(f"⚠️ {error_msg_pii}")
+                    else:
+                        try:
+                            start_time = time.time()
+                            prompt = get_resume_pii_removal_prompt(resume_pii_input)
+                            st.caption("🤖 AIがレジュメから個人情報を削除しています...")
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
+
+                            st.session_state['resume_pii_result'] = result
+                            st.session_state['resume_pii_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 個人情報削除完了！（{elapsed_time:.1f}秒）")
+
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
+
+            # 結果表示
+            if 'resume_pii_result' in st.session_state:
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted_pii = st.checkbox("📖 整形表示", value=False, key="resume_pii_formatted")
+                with col_copy:
+                    if st.button("📋 コピー", key="copy_resume_pii", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        escaped_text = st.session_state['resume_pii_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
+                        st.components.v1.html(f"""
+                            <script>
+                            navigator.clipboard.writeText(`{escaped_text}`);
+                            </script>
+                        """, height=0)
+
+                if show_formatted_pii:
+                    st.markdown(st.session_state['resume_pii_result'])
+                else:
+                    edited_result_pii = st.text_area(
+                        "出力結果（編集可能）",
+                        value=st.session_state['resume_pii_result'],
+                        height=400,
+                        key="edit_resume_result_pii"
+                    )
+                    st.session_state['resume_pii_result'] = edited_result_pii
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['resume_pii_result'],
+                        file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="pii_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        "📝 テキスト",
+                        data=st.session_state['resume_pii_result'],
+                        file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="pii_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['resume_pii_result'], "Resume (PII Removed)")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="pii_html",
+                        help="ブラウザで開いて印刷→PDF保存"
+                    )
 
     elif feature == "求人票魅力化（日→英）":
         st.subheader("📋 求人票魅力化（日本語 → 英語）")
