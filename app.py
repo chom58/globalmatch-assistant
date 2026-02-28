@@ -1274,33 +1274,52 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 ## 1. 基本情報
 {basic_info_format}
 
-## 2. 推薦サマリ
+## 2. 候補者スナップショット
+| 項目 | 内容 |
+|------|------|
+| 専門領域 | （例：LLM / NLP / RAGパイプライン、バックエンド / マイクロサービス等。レジュメの経歴から判断） |
+| エンジニア歴 | （総年数。AI/ML経験があれば「12年（うちAI/ML 7年）」のように内訳も記載） |
+| 現在のレベル | （ジュニア / ミドル / シニア / リード / マネージャー。直近の役職・経験年数から推定） |
+| 直近の注力技術 | （直近1-2年の職歴で使用している主要技術を3-5個） |
+| 所在地 | （レジュメ記載の居住国・都市。記載なしの場合は「記載なし」） |
+
+## 3. 推薦サマリ
 *（300文字程度で、この候補者の経歴の要約と強みを記載。採用担当者が最初に読む部分として魅力的に）*
 
-## 3. 技術スタック・習熟度
-| カテゴリ | スキル | 経験年数 | 習熟度 |
-|---------|--------|----------|--------|
-| プログラミング言語 | | | |
-| フレームワーク | | | |
-| データベース | | | |
-| インフラ/クラウド | | | |
-| ツール/その他 | | | |
+**キャリアパス**: （例：Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead）
+*（職歴から抽出した1行のキャリア遷移。技術的な成長方向が一目でわかるように記載）*
+
+## 4. 技術スタック・習熟度
+| カテゴリ | スキル | 経験年数 | 習熟度 | 最終使用 |
+|---------|--------|----------|--------|---------|
+| プログラミング言語 | | | | |
+| AI/MLフレームワーク | （PyTorch, TensorFlow, JAX, Hugging Face等） | | | |
+| モデル種別・専門領域 | （LLM, CV, NLP, RL, 推薦, RAG等） | | | |
+| MLOps/推論基盤 | （MLflow, Kubeflow, SageMaker, TensorRT等） | | | |
+| データ基盤 | （Spark, Airflow, BigQuery等） | | | |
+| フレームワーク（Web等） | | | | |
+| データベース | | | | |
+| インフラ/クラウド | | | | |
+| ツール/その他 | | | | |
 
 *習熟度: Expert（専門家レベル）/ Advanced（上級）/ Intermediate（中級）/ Beginner（初級）*
+*最終使用: 「現在使用中」「2024年」「2022年」など、職歴の時期から推定*
+*※ 該当カテゴリに情報がない場合はその行を省略*
 
-## 4. 語学・ビザ
+## 5. 語学・ビザ
 - **日本語レベル**: （JLPTレベル、日本滞在歴、実務での使用経験から推定）
 - **英語レベル**:
 - **ビザステータス**: （記載があれば、なければ「要確認」）
 
-## 5. リーダーシップ・ソフトスキル
-*（該当する経験がある場合のみ記載）*
-- メンタリング・チーム管理経験
-- クロスファンクショナルチームでの協業
-- 技術プレゼンテーション・登壇
-- 採用面接への参加
+## 6. 代表プロジェクト
+*（職務経歴の中から最もインパクトのあったプロジェクトを1つ選び、以下の構造で記載）*
+- **課題**: （どんな問題・ニーズがあったか）
+- **解決策**: （候補者が何を設計・実装したか）
+- **技術スタック**: （使用した主要技術）
+- **成果**: （定量的な結果。数値があれば必ず含める）
+- **チーム体制**: （チーム規模と候補者の役割）
 
-## 6. 職務経歴
+## 7. 職務経歴
 *（新しい順に記載）*
 
 ### 【会社名】（期間：YYYY年MM月 〜 YYYY年MM月）
@@ -1313,21 +1332,40 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 - （具体的な成果を数値付きで記載：ユーザー数増加、パフォーマンス改善率、コスト削減額など）
 - （チーム規模、技術的チャレンジ、ビジネスインパクトを含める）
 
-## 7. オープンソース・副業プロジェクト
+## 8. リーダーシップ・ソフトスキル
+*（該当する経験がある場合のみ記載）*
+- メンタリング・チーム管理経験
+- クロスファンクショナルチームでの協業
+- 技術プレゼンテーション・登壇
+- 採用面接への参加
+
+## 9. 研究実績・学術活動
+*（該当する実績がある場合のみ記載）*
+- 論文発表（カンファレンス名・ジャーナル名、論文タイトル、発表年）
+- Kaggle・MLコンペティション実績（ランキング、メダル）
+- 特許（出願・取得）
+
+## 10. オープンソース・副業プロジェクト
 *（該当する活動がある場合のみ記載）*
 - OSS貢献（プロジェクト名、貢献内容、影響度）
 - 個人プロジェクト（概要、技術スタック、ユーザー数など）
 - 技術コミュニティ活動（登壇、記事執筆、コミュニティ運営など）
 
-## 8. 受賞歴・表彰
+## 11. 受賞歴・表彰
 *（該当する実績がある場合のみ記載）*
 - 社内表彰、ハッカソン受賞、競技プログラミング、特許など
 
-## 9. 継続的学習
+## 12. 継続的学習
 *（最近の学習活動がある場合のみ記載）*
 - 最近取得した資格・修了したコース
 - カンファレンス参加・登壇
 - 技術ブログ・記事執筆
+
+## 13. エージェント推薦コメント
+*（以下の3点をレジュメの内容のみに基づいて客観的に記載。面談していない場合でも判断できる情報に限定）*
+- **推薦理由**: この候補者を推薦する最大の理由（技術力、経験の深さ、成長軌跡など、レジュメから読み取れる根拠を明示）
+- **市場希少性**: このスキルセット・経験の組み合わせが市場でどれほど希少か（例：「LLMプロダクション経験×インフラ設計力の両方を持つ人材は極めて少ない」）
+- **想定フィットポジション**: この候補者が最もフィットするポジション（例：MLエンジニア、AIプラットフォームリード、リサーチエンジニア等）
 
 ---
 
@@ -1341,15 +1379,20 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 以下の点に特に注意してください：
 
 1. **成果には必ず数値を含める**: ユーザー数、パフォーマンス改善率、コスト削減額、チーム規模など
-2. **技術スキルには経験年数と習熟度を併記**: 可能な限り推定して記載
-3. **リーダーシップ経験を見逃さない**: メンター、チームリード、採用関与など
-4. **プロジェクトの規模感を記載**: ユーザー数、売上、予算、チーム規模など
-5. **OSS貢献・副業があれば必ず記載**: GitHub、個人プロジェクト、登壇、記事執筆など
-6. **受賞歴・表彰があれば記載**: 社内賞、ハッカソン、競技プログラミングなど
-7. **最近の学習活動を記載**: 資格取得、コース修了、カンファレンス参加など
+2. **AI/ML固有の成果指標も抽出**: モデル精度改善（accuracy, F1スコア等）、推論レイテンシ（p99 latency等）、学習データ規模（トークン数、データ量）、学習コスト削減（GPU時間等）、プロダクション規模（日次リクエスト数等）
+3. **技術スキルには経験年数・習熟度・最終使用時期を併記**: 職歴の時期から推定して記載。特にAI/ML関連技術は細かく分類
+4. **リーダーシップ経験を見逃さない**: メンター、チームリード、採用関与など
+5. **プロジェクトの規模感を記載**: ユーザー数、売上、予算、チーム規模など
+6. **代表プロジェクトの選定**: 職歴の中から最もインパクトのあるプロジェクトを1つ選び、課題→解決策→技術→成果→体制の構造で深掘り
+7. **研究実績・論文を見逃さない**: 学会発表、ジャーナル掲載、Kaggle実績、特許など
+8. **OSS貢献・副業があれば必ず記載**: GitHub、個人プロジェクト、登壇、記事執筆など
+9. **受賞歴・表彰があれば記載**: 社内賞、ハッカソン、競技プログラミングなど
+10. **最近の学習活動を記載**: 資格取得、コース修了、カンファレンス参加など
+11. **キャリアパスの抽出**: 職歴全体を俯瞰し、キャリアの成長方向を1行で表現（例：Backend → ML → AI Platform Lead）
+12. **推薦コメントはレジュメの事実のみに基づく**: 面談情報がなくても判断できる技術力・経験・成長性を根拠に記載。推測や誇張は禁止
 
 **重要**: レジュメに情報が全くない場合のみ「記載なし」とし、少しでも関連する記述があれば必ず抽出して記載してください。
-**重要**: 該当するセクション（OSS、受賞歴など）に情報がない場合は、そのセクション自体を省略してください。
+**重要**: 該当するセクション（研究実績、OSS、受賞歴など）に情報がない場合は、そのセクション自体を省略してください。
 """
 
 
@@ -1418,28 +1461,52 @@ Maintain the resume in English with this standardized structure:
 ## 1. Basic Information
 {basic_info_format_en}
 
-## 2. Professional Summary
+## 2. Candidate Snapshot
+| Item | Details |
+|------|---------|
+| Specialization | (e.g., LLM / NLP / RAG Pipelines, Backend / Microservices. Determine from resume experience) |
+| Engineering Experience | (Total years. If AI/ML experience exists, break down: e.g., "12 years (7 years in AI/ML)") |
+| Current Level | (Junior / Mid / Senior / Lead / Manager. Estimate from most recent role and years of experience) |
+| Recent Focus Technologies | (3-5 key technologies used in the last 1-2 years of work history) |
+| Location | (Country/city from resume. "Not specified" if not mentioned) |
+
+## 3. Professional Summary
 *(2-3 sentences highlighting key qualifications and strengths)*
 
-## 3. Technical Skills & Proficiency
-| Category | Skills | Years of Experience | Proficiency Level |
-|----------|--------|---------------------|-------------------|
-| Programming Languages | | | |
-| Frameworks & Libraries | | | |
-| Databases | | | |
-| Cloud & Infrastructure | | | |
-| Tools & Others | | | |
+**Career Path**: (e.g., Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead)
+*(One-line career progression extracted from work history showing growth direction)*
+
+## 4. Technical Skills & Proficiency
+| Category | Skills | Years of Experience | Proficiency Level | Last Used |
+|----------|--------|---------------------|-------------------|-----------|
+| Programming Languages | | | | |
+| AI/ML Frameworks | (PyTorch, TensorFlow, JAX, Hugging Face, etc.) | | | |
+| Model Types & Domains | (LLM, CV, NLP, RL, Recommendation, RAG, etc.) | | | |
+| MLOps & Inference | (MLflow, Kubeflow, SageMaker, TensorRT, etc.) | | | |
+| Data Infrastructure | (Spark, Airflow, BigQuery, etc.) | | | |
+| Frameworks (Web, etc.) | | | | |
+| Databases | | | | |
+| Cloud & Infrastructure | | | | |
+| Tools & Others | | | | |
 
 *Proficiency Levels: Expert / Advanced / Intermediate / Beginner*
+*Last Used: "Currently using", "2024", "2022", etc. — estimate from work history dates*
+*Omit categories with no relevant information*
 
-## 4. Leadership & Soft Skills
-*(Include only if applicable)*
-- Mentoring & team management experience
-- Cross-functional collaboration
-- Technical presentations & speaking
-- Interview participation
+## 5. Languages & Visa
+- **Japanese Level**: (JLPT level, Japan residency history, business use if applicable)
+- **English Level**:
+- **Visa Status**: (If mentioned, otherwise "To be confirmed")
 
-## 5. Work Experience
+## 6. Highlight Project
+*(Select the single most impactful project from work history and describe in this structure)*
+- **Challenge**: (What problem or need existed)
+- **Solution**: (What the candidate designed and implemented)
+- **Tech Stack**: (Key technologies used)
+- **Results**: (Quantitative outcomes — include numbers where available)
+- **Team**: (Team size and the candidate's role)
+
+## 7. Work Experience
 *(Most recent first)*
 
 ### [Company Description] (Period: MMM YYYY – MMM YYYY)
@@ -1452,27 +1519,46 @@ Maintain the resume in English with this standardized structure:
 - (Specific achievements with metrics: user growth, performance improvements, cost savings, etc.)
 - (Team size, technical challenges, business impact)
 
-## 6. Open Source & Side Projects
+## 8. Leadership & Soft Skills
+*(Include only if applicable)*
+- Mentoring & team management experience
+- Cross-functional collaboration
+- Technical presentations & speaking
+- Interview participation
+
+## 9. Research & Academic Activities
+*(Include only if applicable)*
+- Published papers (conference/journal name, paper title, year)
+- Kaggle / ML competition results (ranking, medals)
+- Patents (filed or granted)
+
+## 10. Open Source & Side Projects
 *(Include only if applicable)*
 - OSS contributions (project name, contribution type, impact metrics)
 - Personal projects (overview, tech stack, user metrics)
 - Technical community involvement (speaking, writing, organizing)
 
-## 7. Awards & Recognition
+## 11. Awards & Recognition
 *(Include only if applicable)*
 - Company awards, hackathon wins, competitive programming, patents, etc.
 
-## 8. Continuous Learning
+## 12. Continuous Learning
 *(Include only if applicable)*
 - Recent certifications or completed courses
 - Conference attendance or speaking
 - Technical blog posts or articles
 
-## 9. Education
+## 13. Education
 - **Degree** - [University Description], Year
 
-## 10. Certifications
+## 14. Certifications
 - Certification names (without ID numbers)
+
+## 15. Agent Recommendation
+*(Based solely on resume content — objective assessment without interview information)*
+- **Recommendation Reason**: The strongest reason to recommend this candidate (technical depth, breadth of experience, growth trajectory — cite specific evidence from the resume)
+- **Market Scarcity**: How rare this combination of skills and experience is in the market (e.g., "Candidates with both LLM production experience and infrastructure design capability are extremely rare")
+- **Best-Fit Positions**: Positions this candidate would be most suited for (e.g., ML Engineer, AI Platform Lead, Research Engineer, etc.)
 
 ---
 
@@ -1486,15 +1572,20 @@ Parse the above resume and output in the specified format in English.
 Pay special attention to the following:
 
 1. **Always include metrics in achievements**: User numbers, performance improvement %, cost savings, team size, etc.
-2. **Specify experience years and proficiency for technical skills**: Estimate if necessary
-3. **Don't miss leadership experience**: Mentoring, team lead, hiring involvement, etc.
-4. **Include project scale information**: User count, revenue, budget, team size, etc.
-5. **Extract OSS contributions & side projects**: GitHub, personal projects, speaking, writing, etc.
-6. **Include awards & recognition**: Company awards, hackathons, competitive programming, etc.
-7. **Capture recent learning activities**: Certifications, courses, conference attendance, etc.
+2. **Extract AI/ML-specific metrics**: Model accuracy improvements (accuracy, F1 score, etc.), inference latency (p99 latency, etc.), training data scale (token count, data volume), training cost reduction (GPU hours, etc.), production scale (daily request volume, etc.)
+3. **Specify experience years, proficiency, and last-used date for technical skills**: Estimate from work history dates. Classify AI/ML technologies in detail
+4. **Don't miss leadership experience**: Mentoring, team lead, hiring involvement, etc.
+5. **Include project scale information**: User count, revenue, budget, team size, etc.
+6. **Select highlight project**: Choose the single most impactful project from work history and describe using the Challenge → Solution → Tech → Results → Team structure
+7. **Don't miss research & publications**: Conference papers, journal publications, Kaggle results, patents
+8. **Extract OSS contributions & side projects**: GitHub, personal projects, speaking, writing, etc.
+9. **Include awards & recognition**: Company awards, hackathons, competitive programming, etc.
+10. **Capture recent learning activities**: Certifications, courses, conference attendance, etc.
+11. **Extract career path**: Summarize the overall career progression in one line (e.g., Backend → ML → AI Platform Lead)
+12. **Agent recommendation must be fact-based**: Base the recommendation solely on resume evidence — cite specific technical skills, experience depth, and growth trajectory. No speculation or exaggeration
 
 **IMPORTANT**: Only use "Not specified" when there is absolutely NO related information in the resume. If there's any relevant mention, extract and include it.
-**IMPORTANT**: Omit entire sections (OSS, Awards, etc.) if there's no information, rather than listing them as empty.
+**IMPORTANT**: Omit entire sections (Research, OSS, Awards, etc.) if there's no information, rather than listing them as empty.
 """
 
 
@@ -2001,10 +2092,16 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 | 技術カテゴリ | 求人要件 | 候補者スキル | マッチ判定 |
 |------------|---------|------------|----------|
 | プログラミング言語 | | | ✅/⚠️/❌ |
-| フレームワーク | | | |
+| AI/MLフレームワーク | （PyTorch, TensorFlow, JAX等） | | |
+| モデル種別・専門領域 | （LLM, CV, NLP, RL, RAG等） | | |
+| MLOps/推論基盤 | （MLflow, SageMaker, TensorRT等） | | |
+| データ基盤 | （Spark, Airflow, BigQuery等） | | |
+| フレームワーク（Web等） | | | |
 | データベース | | | |
 | インフラ/クラウド | | | |
 | その他技術 | | | |
+
+*※ 求人・候補者に該当カテゴリがない場合はその行を省略*
 
 **判定記号の意味**:
 - ✅ 完全マッチ（要件を満たしている）
@@ -2018,8 +2115,10 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 | 項目 | 求人要件 | 候補者 | 評価 |
 |-----|---------|--------|------|
 | 総エンジニア経験 | | | |
+| AI/ML領域の経験 | （該当する場合のみ記載） | | |
 | 該当領域の経験 | | | |
 | リーダーシップ | | | |
+| 研究実績・論文 | （該当する場合のみ記載） | | |
 | 言語レベル | | | |
 
 ---
@@ -2090,14 +2189,19 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 1. 上記フォーマットに厳密に従って出力してください
 2. マッチスコアは以下の観点で総合的に評価:
    - 技術スキルのマッチ度（40点）
+     - AI/MLポジションの場合: モデル開発経験、MLフレームワーク習熟度、MLOps/推論基盤経験を重点的に評価
+     - 「APIを呼ぶだけ」と「モデルを自分で学習・ファインチューニング・デプロイできる」は明確に区別
    - 経験年数・レベルのマッチ度（30点）
+     - AI/MLポジションの場合: 総エンジニア歴だけでなくAI/ML専門領域の経験年数も重視
+     - 研究実績（論文、Kaggle、特許）があれば経験年数以上の専門性として加点評価
    - 言語・コミュニケーション能力（20点）
    - その他（文化フィット、志向性など）（10点）
 3. 判定は楽観的すぎず、現実的に評価してください
 4. ギャップがある場合でも、ポテンシャルや学習意欲を考慮してください
 5. 数値や具体的な経験があれば積極的に引用してください
-6. 見出しに絵文字は使用しないでください（判定記号としての絵文字は可）
-7. リスト項目の行頭記号は中黒（・）ではなく、番号またはハイフン（-）を使用してください
+6. AI/ML固有の成果指標（モデル精度、推論レイテンシ、学習データ規模、プロダクション規模など）があれば、強みやマッチ度の根拠として積極的に引用してください
+7. 見出しに絵文字は使用しないでください（判定記号としての絵文字は可）
+8. リスト項目の行頭記号は中黒（・）ではなく、番号またはハイフン（-）を使用してください
 """
 
 
@@ -2353,6 +2457,7 @@ Your goal: Write a proposal that makes the hiring company think "We need to meet
 - **Use power verbs**: Led, Architected, Delivered, Scaled, Transformed, Pioneered, Spearheaded — not "worked on" or "was involved in"
 - **Focus on problems solved**: Frame experience as "challenges tackled → results delivered", not just duties performed
 - **Highlight rarity**: What makes this candidate hard to find? Unique skill combinations, cross-domain expertise, bilingual ability, etc.
+- **AI/ML-specific appeal**: If the candidate has AI/ML experience, emphasize: model types and domains (LLM, CV, NLP, RAG, etc.), production-scale AI deployment, research-to-product translation ability, training infrastructure expertise, and AI-specific metrics (model accuracy, inference latency, data scale). Distinguish between "API consumers" and "builders who train/fine-tune/deploy models from scratch"
 
 ---
 
@@ -2361,29 +2466,34 @@ Your goal: Write a proposal that makes the hiring company think "We need to meet
 
 ## 1. Catch Copy
 A punchy, memorable headline that makes the reader want to learn more. MUST include: years of experience + role/title + the candidate's unique value proposition or differentiator. Frame it as what this person DELIVERS, not just what they ARE.
-Example 1: "10-Year Full-Stack Architect Who Delivers Production-Grade AI Platforms from Zero to Scale"
-Example 2: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
-Example 3: "8-Year Data Scientist Turning NLP Research into Revenue-Generating Recommendation Engines"
+Example 1: "10-Year ML Engineer Who Deploys LLM Pipelines from Research Prototype to Million-User Production"
+Example 2: "Senior AI Platform Lead | 8 Years Building End-to-End MLOps Infrastructure at Global Scale"
+Example 3: "7-Year Computer Vision Engineer Turning Research Papers into Real-Time Inference Systems at 50ms Latency"
+Example 4: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
 ※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names.
 
 ## 2. Summary
 Paint a vivid picture of who this candidate is and what they bring to the table. Start with their most impressive achievement or defining trait, then build context with role, domain, and career highlights. The reader should immediately understand why this person stands out.
-Example: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, he progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
+Example 1: "A Senior ML Engineer who built a RAG-based enterprise search platform processing 500K+ daily queries. Over 8 years, progressed from data analyst to leading a 12-person AI team, shipping production LLM applications that reduced customer support costs by 40%."
+Example 2: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
 ※ 200-300 characters. Lead with the strongest fact. Include role, years, domain, and measurable achievements.
 
 ## 3. Strength
-Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest.
-Example: "A rare engineer who spans from Linux kernel optimization to production AI systems — he architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams (US, EU, APAC) and translate deep-tech R&D into shipping products."
+Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest. For AI/ML candidates, distinguish between API-level usage and deep expertise (model training, fine-tuning, custom architecture design, production deployment at scale).
+Example 1: "Bridges the gap between ML research and production — fine-tuned open-source LLMs (LLaMA, Mistral) for domain-specific tasks, achieving 15% accuracy gains over GPT-4 API baselines. Built custom inference infrastructure handling 10K+ concurrent requests on AWS GPU clusters."
+Example 2: "A rare engineer who spans from Linux kernel optimization to production AI systems — architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams and translate deep-tech R&D into shipping products."
 ※ 200-300 characters. Connect skills → outcomes. Highlight what's rare or hard to find.
 
 ## 4. Education / Research
-Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends.
-Example: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university (2026), signaling strong commitment to staying at the cutting edge. Active open-source contributor to container orchestration projects."
+Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends. For AI/ML candidates, emphasize: publications at top venues (NeurIPS, ICML, CVPR, ACL, etc.), Kaggle/ML competition rankings, research-to-production track record, and patents.
+Example 1: "Ph.D. in Machine Learning with 5 published papers at NeurIPS and ICML. Kaggle Competition Master with 2 gold medals in NLP tasks. Translated doctoral research on transformer architectures into a production recommendation engine serving 3M+ users."
+Example 2: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university, signaling strong commitment to staying at the cutting edge. Active open-source contributor with 500+ GitHub stars."
 ※ 200-300 characters. Frame education as evidence of growth mindset and expertise depth.
 
 ## 5. Assessment
-Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential.
-Example: "A builder who constructs AI platforms from scratch — not just an API consumer. His rare combination of low-level systems expertise and AI product delivery makes him ideal for organizations building proprietary AI capabilities. Expect him to elevate both technical standards and team capability."
+Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential. For AI/ML candidates, clarify whether they are best suited as: a research engineer, applied ML engineer, AI platform/infrastructure engineer, or ML team lead.
+Example 1: "A builder who constructs AI systems end-to-end — from data pipeline to model training to production serving. Ideal for organizations moving beyond API wrappers to build proprietary AI capabilities. Expect this candidate to reduce ML experiment-to-production cycles significantly."
+Example 2: "Combines deep research background with production engineering discipline — a rare profile. Best suited for teams that need to ship novel ML solutions, not just maintain existing ones. Would immediately strengthen both technical depth and mentorship capacity."
 ※ 200-300 characters. Answer "Why this candidate NOW?" Be specific about fit and potential impact.
 
 ---
