@@ -1283,11 +1283,14 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 | 直近の注力技術 | （直近1-2年の職歴で使用している主要技術を3-5個） |
 | 所在地 | （レジュメ記載の居住国・都市。記載なしの場合は「記載なし」） |
 
-## 3. 推薦サマリ
-*（300文字程度で、この候補者の経歴の要約と強みを記載。採用担当者が最初に読む部分として魅力的に）*
+## 3. 経歴サマリ
+*（200文字程度で、レジュメに記載された事実のみを列挙。「優秀」「卓越」等の主観的な形容は禁止）*
+- 総経験年数と主な役職
+- 主要な技術領域・業界
+- レジュメに明記されている定量的な実績（あれば）
 
 **キャリアパス**: （例：Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead）
-*（職歴から抽出した1行のキャリア遷移。技術的な成長方向が一目でわかるように記載）*
+*（職歴から抽出した1行のキャリア遷移。事実のみ記載）*
 
 ## 4. 技術スタック・習熟度
 | カテゴリ | スキル | 経験年数 | 習熟度 | 最終使用 |
@@ -1361,12 +1364,6 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 - カンファレンス参加・登壇
 - 技術ブログ・記事執筆
 
-## 13. エージェント推薦コメント
-*（以下の3点をレジュメの内容のみに基づいて客観的に記載。面談していない場合でも判断できる情報に限定）*
-- **推薦理由**: この候補者を推薦する最大の理由（技術力、経験の深さ、成長軌跡など、レジュメから読み取れる根拠を明示）
-- **市場希少性**: このスキルセット・経験の組み合わせが市場でどれほど希少か（例：「LLMプロダクション経験×インフラ設計力の両方を持つ人材は極めて少ない」）
-- **想定フィットポジション**: この候補者が最もフィットするポジション（例：MLエンジニア、AIプラットフォームリード、リサーチエンジニア等）
-
 ---
 
 【入力レジュメ】
@@ -1388,8 +1385,7 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 8. **OSS貢献・副業があれば必ず記載**: GitHub、個人プロジェクト、登壇、記事執筆など
 9. **受賞歴・表彰があれば記載**: 社内賞、ハッカソン、競技プログラミングなど
 10. **最近の学習活動を記載**: 資格取得、コース修了、カンファレンス参加など
-11. **キャリアパスの抽出**: 職歴全体を俯瞰し、キャリアの成長方向を1行で表現（例：Backend → ML → AI Platform Lead）
-12. **推薦コメントはレジュメの事実のみに基づく**: 面談情報がなくても判断できる技術力・経験・成長性を根拠に記載。推測や誇張は禁止
+11. **キャリアパスの抽出**: 職歴全体を俯瞰し、キャリアの遷移を1行で表現（例：Backend → ML → AI Platform Lead）
 
 **重要**: レジュメに情報が全くない場合のみ「記載なし」とし、少しでも関連する記述があれば必ず抽出して記載してください。
 **重要**: 該当するセクション（研究実績、OSS、受賞歴など）に情報がない場合は、そのセクション自体を省略してください。
@@ -1470,11 +1466,14 @@ Maintain the resume in English with this standardized structure:
 | Recent Focus Technologies | (3-5 key technologies used in the last 1-2 years of work history) |
 | Location | (Country/city from resume. "Not specified" if not mentioned) |
 
-## 3. Professional Summary
-*(2-3 sentences highlighting key qualifications and strengths)*
+## 3. Career Summary
+*(2-3 sentences listing only verifiable facts from the resume. No subjective adjectives like "seasoned", "exceptional", or "passionate". No characterizing skills as "rare" or "unique".)*
+- Total years of experience and primary job titles held
+- Key technical domains and industries worked in
+- Notable quantified achievements (only if explicitly stated in the resume)
 
 **Career Path**: (e.g., Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead)
-*(One-line career progression extracted from work history showing growth direction)*
+*(One-line career progression extracted from work history — facts only)*
 
 ## 4. Technical Skills & Proficiency
 | Category | Skills | Years of Experience | Proficiency Level | Last Used |
@@ -1554,12 +1553,6 @@ Maintain the resume in English with this standardized structure:
 ## 14. Certifications
 - Certification names (without ID numbers)
 
-## 15. Agent Recommendation
-*(Based solely on resume content — objective assessment without interview information)*
-- **Recommendation Reason**: The strongest reason to recommend this candidate (technical depth, breadth of experience, growth trajectory — cite specific evidence from the resume)
-- **Market Scarcity**: How rare this combination of skills and experience is in the market (e.g., "Candidates with both LLM production experience and infrastructure design capability are extremely rare")
-- **Best-Fit Positions**: Positions this candidate would be most suited for (e.g., ML Engineer, AI Platform Lead, Research Engineer, etc.)
-
 ---
 
 【INPUT RESUME】
@@ -1582,7 +1575,6 @@ Pay special attention to the following:
 9. **Include awards & recognition**: Company awards, hackathons, competitive programming, etc.
 10. **Capture recent learning activities**: Certifications, courses, conference attendance, etc.
 11. **Extract career path**: Summarize the overall career progression in one line (e.g., Backend → ML → AI Platform Lead)
-12. **Agent recommendation must be fact-based**: Base the recommendation solely on resume evidence — cite specific technical skills, experience depth, and growth trajectory. No speculation or exaggeration
 
 **IMPORTANT**: Only use "Not specified" when there is absolutely NO related information in the resume. If there's any relevant mention, extract and include it.
 **IMPORTANT**: Omit entire sections (Research, OSS, Awards, etc.) if there's no information, rather than listing them as empty.
@@ -1631,11 +1623,13 @@ Reorganize the resume into the following sections, in this exact order.
 1. **Header**: First Name + Location (city/prefecture only) + Key Credentials (e.g., CPA, CMA, PMP — only if present in the original)
 
 2. **Professional Summary** (CREATE NEW — replaces any existing Objective/Summary):
-   Write a 3-4 line summary **in third person** (e.g., "A seasoned engineer with..." or "Brings 10+ years of...") as this is written from the recruitment agency's perspective for presentation to hiring companies.
-   - Identify the candidate's core strengths, domain expertise, and career trajectory from the resume content, then synthesize them into a compelling narrative
-   - If the candidate has cross-domain expertise (e.g., finance + technology, research + engineering), emphasize that rare combination
-   - If the candidate is a specialist, highlight depth of expertise and measurable impact
-   - Base the summary strictly on information present in the resume — do NOT fabricate credentials or achievements
+   Write a 2-3 line factual summary **in third person** that lists only verifiable facts from the resume:
+   - Total years of experience and primary job titles held
+   - Key technical domains and industries worked in
+   - Notable quantified achievements (only if explicitly stated in the resume)
+   - Do NOT add adjectives like "seasoned", "passionate", "driven", or "exceptional"
+   - Do NOT characterize skill combinations as "rare" or "unique"
+   - Do NOT fabricate or embellish any credentials, achievements, or descriptions
 
 3. **Experience**: List in reverse chronological order.
    - If the candidate was promoted within the same company, group all roles under a single company section with clear timeline indicators for each role
@@ -1660,15 +1654,15 @@ Reorganize the resume into the following sections, in this exact order.
 
 6. **Education & Certifications**
 
-【4. FORMATTING & WRITING PRINCIPLES】
+【4. FORMATTING PRINCIPLES】
 
-Apply these principles to maximize appeal to hiring managers and recruitment agencies:
+Apply these formatting rules:
 
-- **Lead with business impact**: Instead of "Used Python and SQL", write "Reduced data processing time by 40% through optimized Python/SQL pipelines"
-- Start each achievement with a strong **Action Verb** (Led, Architected, Optimized, Delivered, Scaled, Drove, Spearheaded, Transformed, Pioneered, etc.)
+- Start each achievement bullet with an **Action Verb** (Led, Built, Designed, Implemented, Managed, etc.)
 - **Bold** all numerical achievements and metrics (e.g., **5M JPY**, **50% increase**, **$8.1M**, **20-person team**)
-- **Show progression**: Highlight career growth — promotions, expanding scope, increasing responsibility
-- **Highlight rarity**: Surface unique skill combinations, cross-domain expertise, or bilingual ability that make the candidate stand out
+- Do NOT add subjective adjectives like "seasoned", "exceptional", "passionate", "driven"
+- Do NOT characterize skills as "rare", "unique", or "hard to find"
+- Preserve the candidate's original wording where possible — do NOT embellish
 - **Date format**: Standardize all dates to "MMM YYYY" format (e.g., "Apr 2022", "Jan 2020"). Convert any other format (2022/04, 04/2022, 2022年4月) to this standard.
 - Use ## for major section headings, ### for sub-headings (company names, job titles)
 - Use bullet points (-) for listing items
@@ -1693,7 +1687,7 @@ Apply these principles to maximize appeal to hiring managers and recruitment age
 - Output the resume in English
 - If information for a section does not exist in the original resume, omit that section entirely (do NOT write "N/A" or "Not available")
 - Every claim in the Professional Summary and Experience must be grounded in the original resume content
-- Write as if presenting to a hiring manager or CTO who reviews dozens of resumes weekly — make this candidate stand out
+- Do NOT add marketing language, subjective evaluation, or embellishment
 
 【INPUT RESUME】
 {resume_text}
@@ -2069,8 +2063,14 @@ def get_company_intro_prompt(company_text: str) -> str:
 def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
     """レジュメ×求人票マッチング分析用のプロンプトを生成"""
 
-    return f"""あなたは人材紹介のマッチングエキスパートです。
-候補者のレジュメと企業の求人票を詳細に分析し、マッチング評価レポートを作成してください。
+    return f"""あなたは人材紹介のマッチング分析担当です。
+候補者のレジュメと企業の求人票を事実ベースで比較し、客観的な分析レポートを作成してください。
+
+【重要】
+- スコアや点数による評価は行わないでください
+- 推薦文やアドバイスなど主観的なコメントは含めないでください
+- レジュメと求人票に記載された事実のみを抽出・比較してください
+- 解釈や推測を加えないでください
 
 【出力フォーマット - 厳守】
 以下の構造で必ず出力してください：
@@ -2079,18 +2079,10 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 
 # マッチング分析レポート
 
-## マッチスコア: X/100
-
-⭐⭐⭐⭐⭐（5段階評価も併記）
-
-**総合判定**: ✅ 強く推奨 / ⚠️ 条件付き推奨 / ❌ 要検討
-
----
-
 ## スキルマッチ詳細
 
-| 技術カテゴリ | 求人要件 | 候補者スキル | マッチ判定 |
-|------------|---------|------------|----------|
+| 技術カテゴリ | 求人要件 | 候補者スキル | 判定 |
+|------------|---------|------------|------|
 | プログラミング言語 | | | ✅/⚠️/❌ |
 | AI/MLフレームワーク | （PyTorch, TensorFlow, JAX等） | | |
 | モデル種別・専門領域 | （LLM, CV, NLP, RL, RAG等） | | |
@@ -2104,74 +2096,45 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 *※ 求人・候補者に該当カテゴリがない場合はその行を省略*
 
 **判定記号の意味**:
-- ✅ 完全マッチ（要件を満たしている）
-- ⚠️ 部分マッチ（一部経験あり、要トレーニング）
-- ❌ ギャップあり（未経験）
+- ✅ 求人要件に対して経験あり
+- ⚠️ 関連技術の経験はあるが直接の経験なし
+- ❌ 該当する経験の記載なし
 
 ---
 
 ## 経験年数・キャリアレベル
 
-| 項目 | 求人要件 | 候補者 | 評価 |
-|-----|---------|--------|------|
-| 総エンジニア経験 | | | |
-| AI/ML領域の経験 | （該当する場合のみ記載） | | |
-| 該当領域の経験 | | | |
-| リーダーシップ | | | |
-| 研究実績・論文 | （該当する場合のみ記載） | | |
-| 言語レベル | | | |
+| 項目 | 求人要件 | 候補者（レジュメ記載） |
+|-----|---------|---------------------|
+| 総エンジニア経験 | | |
+| AI/ML領域の経験 | （該当する場合のみ記載） | |
+| 該当領域の経験 | | |
+| リーダーシップ | | |
+| 研究実績・論文 | （該当する場合のみ記載） | |
+| 言語レベル | | |
 
 ---
 
-## 強み・アピールポイント
+## 求人要件との一致点
 
-候補者が求人票の要件に対して特に優れている点を3-5項目で記載：
+候補者のレジュメに記載されている経験・スキルのうち、求人要件と一致する事実を列挙：
 
-1. **[強み1のタイトル]**
-   - 詳細説明（具体的な経験・実績）
-   - なぜこれが求人票にマッチするか
+1. **[一致点1]**: レジュメの記載内容と求人要件の対応を記載
+2. **[一致点2]**: 同上
+3. **[一致点3]**: 同上
 
-2. **[強み2のタイトル]**
-   - 詳細説明
-   - なぜこれが求人票にマッチするか
-
-3. **[強み3のタイトル]**
-   - 詳細説明
-   - なぜこれが求人票にマッチするか
+*レジュメに記載された事実のみを引用。解釈や評価は加えない*
 
 ---
 
-## ギャップ・改善提案
+## 求人要件との差分
 
-求人票の要件に対して不足している点と、その対応策：
+求人要件に記載されているがレジュメに該当する記載がない項目を列挙：
 
-### ギャップ1: [技術/経験の不足点]
-- **影響度**: 高/中/低
-- **対応策**: （トレーニング期間、OJT、並行学習など）
+1. **[差分1]**: 求人要件の内容と、レジュメ側の状況を記載
+2. **[差分2]**: 同上
 
-### ギャップ2: [技術/経験の不足点]
-- **影響度**: 高/中/低
-- **対応策**:
-
-（ギャップがない場合は「特筆すべきギャップなし」と記載）
-
----
-
-## 企業向け推薦コメント
-
-（200-300文字程度）
-
-企業の採用担当者に向けて、この候補者を推薦する理由を簡潔かつ魅力的に記載してください。
-求人票の要件とのマッチング、候補者の強み、採用メリットを含めること。
-
----
-
-## 候補者向けコメント
-
-（200-300文字程度）
-
-候補者に向けて、このポジションへの適性とアドバイスを記載してください。
-強みを活かせる点、準備すべきスキル、面接でアピールすべきポイントを含めること。
+*差分がない場合は「求人要件に対して未記載の項目なし」と記載*
 
 ---
 
@@ -2187,21 +2150,13 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 
 【分析指示】
 1. 上記フォーマットに厳密に従って出力してください
-2. マッチスコアは以下の観点で総合的に評価:
-   - 技術スキルのマッチ度（40点）
-     - AI/MLポジションの場合: モデル開発経験、MLフレームワーク習熟度、MLOps/推論基盤経験を重点的に評価
-     - 「APIを呼ぶだけ」と「モデルを自分で学習・ファインチューニング・デプロイできる」は明確に区別
-   - 経験年数・レベルのマッチ度（30点）
-     - AI/MLポジションの場合: 総エンジニア歴だけでなくAI/ML専門領域の経験年数も重視
-     - 研究実績（論文、Kaggle、特許）があれば経験年数以上の専門性として加点評価
-   - 言語・コミュニケーション能力（20点）
-   - その他（文化フィット、志向性など）（10点）
-3. 判定は楽観的すぎず、現実的に評価してください
-4. ギャップがある場合でも、ポテンシャルや学習意欲を考慮してください
-5. 数値や具体的な経験があれば積極的に引用してください
-6. AI/ML固有の成果指標（モデル精度、推論レイテンシ、学習データ規模、プロダクション規模など）があれば、強みやマッチ度の根拠として積極的に引用してください
+2. スコア・点数・星評価は一切出力しないでください
+3. 「推薦」「アドバイス」「ポテンシャル」「期待」などの主観的な表現は使わないでください
+4. レジュメと求人票に書かれている事実のみを比較してください
+5. 数値や具体的な経験があれば正確に引用してください
+6. AI/ML固有の指標（モデル精度、推論レイテンシ、学習データ規模等）があればそのまま引用してください
 7. 見出しに絵文字は使用しないでください（判定記号としての絵文字は可）
-8. リスト項目の行頭記号は中黒（・）ではなく、番号またはハイフン（-）を使用してください
+8. リスト項目の行頭記号は番号またはハイフン（-）を使用してください
 """
 
 
@@ -2261,8 +2216,13 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 - 企業名は「大手SIer」「外資系IT企業」などの一般表現に置換する
 - 大学名は「国内トップ大学」「海外有名大学」などに置換する"""
 
-        return f"""あなたは人材紹介のプロフェッショナルです。
-以下のマッチング分析結果とレジュメ、求人票から、企業向けの**候補者提案資料**を作成してください。
+        return f"""あなたは人材紹介の事実整理担当です。
+以下のマッチング分析結果とレジュメ、求人票から、企業向けの**候補者情報資料**を作成してください。
+
+【重要】
+- レジュメと求人票に記載された事実のみを抽出してください
+- 主観的な評価・推薦・ポテンシャルへの言及は禁止です
+- 「優秀」「卓越」「期待」「推薦」等の主観的表現は使わないでください
 
 【入力情報】
 ■ マッチング分析結果:
@@ -2278,66 +2238,54 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 【出力フォーマット】※厳密に従ってください
 
-# 候補者提案資料
+# 候補者情報資料
 
-## 1. Catch Copy（各100文字程度）
-候補者の魅力を3つの視点で表現するキャッチコピーを生成してください。
-
-### パターンA: スキル重視型
-候補者の技術スキル・専門性を前面に出したキャッチコピー
-例：「AWS/Kubernetes経験5年、大規模クラウド基盤構築のスペシャリスト」
-
-### パターンB: 実績重視型
-候補者の具体的な成果・実績を強調したキャッチコピー
-例：「月間1000万PVサービスの開発リーダー、パフォーマンス改善で応答速度50%向上を達成」
-
-### パターンC: ポテンシャル重視型
-候補者の成長性・可能性・人物面を強調したキャッチコピー
-例：「新技術習得に意欲的、チームリーダーとして組織を牽引できるフルスタックエンジニア」
+## 1. 見出し
+候補者の直近の役職、総経験年数、主要技術領域を1行で記載。
+形式：「[直近の役職] | 経験[X]年 | [主要技術領域]」
+例：「MLエンジニア | 経験10年 | LLMパイプライン・プロダクションML」
+※ 主観的な形容（「優秀な」「卓越した」等）は禁止
 
 ---
 
-## 2. Summary（200文字程度）
-候補者の全体像を簡潔にまとめた概要
+## 2. 経歴概要（200文字程度）
+候補者の経歴事実を簡潔にまとめた概要
 - 総エンジニア経験年数
-- 専門領域・得意分野
-- 主な開発実績
-- 言語能力（レジュメに日本語能力の記載がある場合は必ず含める：N1-N5、conversational、native、business levelなど。記載がなければ省略）
+- 経験した役職と業界
+- レジュメに明記されている定量的な実績
+- 言語能力（レジュメに日本語能力の記載がある場合は必ず含める。記載がなければ省略）
 
 ---
 
-## 3. Strength（200文字程度）
-この求人に対する候補者の強み・アピールポイント
-- 求人要件に対してマッチする具体的なスキル
-- 特に優れている技術・経験
-- 実績や成果（数値があれば記載）
+## 3. 求人要件との一致スキル（200文字程度）
+求人要件に記載されたスキル・経験のうち、レジュメに該当する記載があるものを列挙
+- スキル名と、レジュメでの使用実績を対応づけて記載
+- 該当なしの場合は「該当するスキルの記載なし」と記載
 
 ---
 
-## 4. Education / Research（200文字程度）
-学歴・研究実績・資格
-- 最終学歴（大学・専攻）
-- 研究テーマ（ある場合）
-- 関連資格
-- 技術的なバックグラウンド
+## 4. 学歴・研究実績・資格（200文字程度）
+レジュメに記載された学歴・研究・資格の事実
+- 最終学歴（大学名・専攻）
+- 論文・発表（ある場合、タイトルと学会名）
+- 資格名と取得年
+- 記載がない場合は「記載なし」
 
 ---
 
-## 5. Assessment（200文字程度）
-総合評価とコメント
-- マッチング度の総合評価
-- 推薦理由
-- 留意点やギャップ（あれば）
-- 面接時の確認ポイント
+## 5. 求人要件との差分（200文字程度）
+求人要件に記載されているがレジュメに該当する記載がない項目
+- 差分がない場合は「求人要件に対して未記載の項目なし」
+- 主観的な「対策」や「ポテンシャル」への言及は禁止
 
 ---
 
 {anonymize_note}
 
 【その他の注意事項】
-1. **文字数厳守**: 各セクションの文字数制限を守る（Catch Copyは各パターン100文字程度、他は200文字程度）
-2. **具体性**: 抽象的な表現を避け、具体的なスキル・経験を記載
-3. **客観性**: 事実に基づいた評価を行う
+1. **文字数厳守**: 各セクションの文字数制限を守る（見出しは1行、他は200文字程度）
+2. **事実のみ**: レジュメと求人票に記載された情報のみを使用
+3. **主観禁止**: 評価・推薦・予測・ポテンシャルへの言及は一切禁止
 4. **簡潔性**: 要点を絞って分かりやすく記載
 """
     else:  # English
@@ -2352,8 +2300,10 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 - Replace company names with generic terms (e.g., "a major global IT firm", "a leading SaaS company")
 - Replace university names with generic terms (e.g., "a top US university", "a prestigious Japanese university")"""
 
-        return f"""You are a professional recruitment consultant.
-Create a **candidate proposal document** for the client company based on the matching analysis result, resume, and job description below.
+        return f"""You are a recruitment data analyst extracting factual information.
+Create a **candidate information document** for the client company based on the matching analysis result, resume, and job description below.
+
+IMPORTANT: Extract only verifiable facts. Do NOT add evaluation, recommendation, or subjective language.
 
 【Input Information】
 ■ Matching Analysis Result:
@@ -2369,67 +2319,56 @@ Create a **candidate proposal document** for the client company based on the mat
 
 【Output Format】※Strictly follow this format
 
-# Candidate Proposal
+# Candidate Information
 
-## 1. Catch Copy (approximately 100 characters each)
-Generate catchphrases from three different perspectives to express the candidate's appeal.
-
-### Pattern A: Skill-focused
-A catchphrase highlighting technical skills and expertise
-Example: "AWS/Kubernetes Specialist with 5 Years Experience in Large-scale Cloud Infrastructure"
-
-### Pattern B: Achievement-focused
-A catchphrase emphasizing concrete results and accomplishments
-Example: "Development Leader of 10M Monthly PV Service, Achieved 50% Performance Improvement"
-
-### Pattern C: Potential-focused
-A catchphrase emphasizing growth potential and personal qualities
-Example: "Eager Learner of New Technologies, Full-stack Engineer Who Can Lead Teams"
+## 1. Headline
+State the candidate's most recent job title, total years of experience, and primary domain.
+Format: "[Most recent title] | [X] years of experience | [Primary domain]"
+Example: "ML Engineer | 10 years | LLM pipelines and production ML systems"
+※ No subjective adjectives. Facts only.
 
 ---
 
 ## 2. Summary (approximately 200 characters)
-Brief overview of the candidate
+Factual overview of the candidate
 - Total engineering experience years
-- Specialized areas and expertise
-- Major development achievements
-- Language proficiency (If Japanese proficiency is mentioned in resume, must include it: N1-N5, conversational, native, business level, etc. Omit if not mentioned)
+- Job titles held and industries worked in
+- Quantified achievements explicitly stated in the resume
+- Language proficiency (if mentioned in resume. Omit if not mentioned)
 
 ---
 
-## 3. Strength (approximately 200 characters)
-Candidate's strengths for this position
-- Specific skills matching job requirements
-- Outstanding technical experience
-- Achievements with metrics (if available)
+## 3. Skills Matching Job Requirements (approximately 200 characters)
+Skills and experience from the resume that correspond to job requirements
+- List each matching skill with evidence from the resume
+- If no match, state "No matching skills found in resume"
 
 ---
 
 ## 4. Education / Research (approximately 200 characters)
-Academic background and research
+Academic background and research as stated in the resume
 - Highest education (university, major)
-- Research topics (if applicable)
-- Relevant certifications
-- Technical background
+- Publications (if any, with venue names)
+- Certifications with year obtained
+- Write "Not stated in resume" if missing
 
 ---
 
-## 5. Assessment (approximately 200 characters)
-Overall evaluation and comments
-- Overall matching score evaluation
-- Recommendation reasons
-- Concerns or gaps (if any)
-- Points to confirm in interview
+## 5. Gaps vs Job Requirements (approximately 200 characters)
+Job requirements not evidenced in the resume
+- List specific requirements with no corresponding resume entry
+- If no gaps, state "All job requirements have corresponding resume entries"
+- Do NOT suggest remedies, potential, or training plans
 
 ---
 
 {anonymize_note_en}
 
 【Other Important Notes】
-1. **Character Limit**: Strictly follow character limits (approximately 100 for each Catch Copy pattern, ~200 for others)
-2. **Specificity**: Use concrete skills and experience, avoid abstract expressions
-3. **Objectivity**: Provide fact-based evaluation
-4. **Brevity**: Focus on key points for clarity
+1. **Character Limit**: Strictly follow character limits (Headline is 1 line, others ~200 characters)
+2. **Facts only**: Use only information from the resume and job description
+3. **No evaluation**: Do not assess, recommend, or predict. Only extract facts
+4. **Brevity**: Focus on key facts for clarity
 """
 
 
@@ -2441,71 +2380,62 @@ def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "ful
     else:
         anonymize_rules = """1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university")."""
 
-    return f"""You are an elite recruitment consultant who writes compelling candidate proposals that make hiring managers eager to interview.
+    return f"""You are a recruitment consultant extracting factual information from a CV for a candidate proposal.
 
-Your goal: Write a proposal that makes the hiring company think "We need to meet this person immediately." Stay strictly factual — every claim must be supported by the CV — but frame facts to maximize business appeal.
+Your goal: Extract and organize verifiable facts from the CV. Do NOT add interpretation, evaluation, or marketing language. Do NOT use adjectives like "seasoned", "exceptional", "passionate", "driven", or "rare". Do NOT characterize skill combinations as "unique" or "hard to find".
 
 【CV/Resume】
 {resume_text}
 
 ---
 
-【Writing Principles — Apply to ALL sections】
-- **Lead with business impact**: Instead of "Used Python and SQL", write "Reduced data processing time by 40% through optimized Python/SQL pipelines"
-- **Quantify whenever possible**: Revenue impact, team size, scale (users/requests/data), cost savings, speed improvements
-- **Show progression & ambition**: Highlight career growth trajectory — promotions, expanding scope, increasing responsibility
-- **Use power verbs**: Led, Architected, Delivered, Scaled, Transformed, Pioneered, Spearheaded — not "worked on" or "was involved in"
-- **Focus on problems solved**: Frame experience as "challenges tackled → results delivered", not just duties performed
-- **Highlight rarity**: What makes this candidate hard to find? Unique skill combinations, cross-domain expertise, bilingual ability, etc.
-- **AI/ML-specific appeal**: If the candidate has AI/ML experience, emphasize: model types and domains (LLM, CV, NLP, RAG, etc.), production-scale AI deployment, research-to-product translation ability, training infrastructure expertise, and AI-specific metrics (model accuracy, inference latency, data scale). Distinguish between "API consumers" and "builders who train/fine-tune/deploy models from scratch"
+【Extraction Principles — Apply to ALL sections】
+- **Facts only**: Extract information that is explicitly stated in the CV
+- **Preserve numbers**: Include all metrics exactly as stated (team sizes, percentages, revenue, user counts)
+- **No embellishment**: Do not rephrase achievements to sound more impressive
+- **No inference**: Do not infer skills or achievements not explicitly mentioned
+- **If information is missing**: Write "Not stated in CV" — do NOT fill gaps with assumptions
 
 ---
 
 【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
-※ **Sentence Length Rule**: Each sentence MUST be 50-80 characters. If a point is complex, split it into 2-3 shorter sentences instead of one long sentence. Avoid run-on sentences connected by commas or dashes. Each sentence should convey one clear idea. Never write sentences shorter than 50 characters — add specific context (numbers, scope, domain) to reach the minimum.
 
-## 1. Catch Copy
-A punchy, memorable headline that makes the reader want to learn more. MUST include: years of experience + role/title + the candidate's unique value proposition or differentiator. Frame it as what this person DELIVERS, not just what they ARE.
-Example 1: "10-Year ML Engineer Who Deploys LLM Pipelines from Research Prototype to Million-User Production"
-Example 2: "Senior AI Platform Lead | 8 Years Building End-to-End MLOps Infrastructure at Global Scale"
-Example 3: "7-Year Computer Vision Engineer Turning Research Papers into Real-Time Inference Systems at 50ms Latency"
-Example 4: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
-※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names.
+## 1. Headline
+State the candidate's most recent job title, total years of experience, and primary technical domain. No marketing language.
+Format: "[Most recent title] | [X] years of experience | [Primary domain]"
+Example 1: "ML Engineer | 10 years of experience | LLM pipelines and production ML systems"
+Example 2: "DevOps Lead | 12 years of experience | Cloud infrastructure and CI/CD"
+※ 60-100 characters. No names or company names. No subjective adjectives.
 
 ## 2. Summary
-Paint a vivid picture of who this candidate is and what they bring to the table. Start with their most impressive achievement or defining trait, then build context with role, domain, and career highlights. The reader should immediately understand why this person stands out.
-Example 1: "A Senior ML Engineer who built a RAG-based enterprise search platform processing 500K+ daily queries. Over 8 years, progressed from data analyst to leading a 12-person AI team, shipping production LLM applications that reduced customer support costs by 40%."
-Example 2: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
-※ 200-300 characters. Lead with the strongest fact. Include role, years, domain, and measurable achievements.
+List the candidate's career facts: total experience, job titles held, industries worked in, and key quantified achievements (only those explicitly stated in the CV).
+Example: "ML Engineer with 8 years of experience. Worked at Company A and Company B. Built a search platform processing 500K+ daily queries. Led a 12-person team."
+※ 200-300 characters. Only verifiable facts from the CV.
 
-## 3. Strength
-Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest. For AI/ML candidates, distinguish between API-level usage and deep expertise (model training, fine-tuning, custom architecture design, production deployment at scale).
-Example 1: "Bridges the gap between ML research and production — fine-tuned open-source LLMs (LLaMA, Mistral) for domain-specific tasks, achieving 15% accuracy gains over GPT-4 API baselines. Built custom inference infrastructure handling 10K+ concurrent requests on AWS GPU clusters."
-Example 2: "A rare engineer who spans from Linux kernel optimization to production AI systems — architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams and translate deep-tech R&D into shipping products."
-※ 200-300 characters. Connect skills → outcomes. Highlight what's rare or hard to find.
+## 3. Technical Skills
+List the candidate's technical skills as stated in the CV, grouped by category. Include years of experience only if explicitly mentioned. Do not infer proficiency levels.
+Example: "Languages: Python (8 years), Go (3 years). ML: PyTorch, TensorFlow, Hugging Face. Infrastructure: AWS, Kubernetes, Docker. Data: PostgreSQL, BigQuery."
+※ 200-300 characters. Only skills mentioned in the CV.
 
 ## 4. Education / Research
-Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends. For AI/ML candidates, emphasize: publications at top venues (NeurIPS, ICML, CVPR, ACL, etc.), Kaggle/ML competition rankings, research-to-production track record, and patents.
-Example 1: "Ph.D. in Machine Learning with 5 published papers at NeurIPS and ICML. Kaggle Competition Master with 2 gold medals in NLP tasks. Translated doctoral research on transformer architectures into a production recommendation engine serving 3M+ users."
-Example 2: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university, signaling strong commitment to staying at the cutting edge. Active open-source contributor with 500+ GitHub stars."
-※ 200-300 characters. Frame education as evidence of growth mindset and expertise depth.
+List academic degrees, certifications, publications, and competition results exactly as stated in the CV. Do not interpret or embellish.
+Example: "M.Sc. in Computer Science from University X. Published 2 papers at NeurIPS. AWS Solutions Architect Professional certified."
+※ 200-300 characters. Only facts from the CV. Write "Not stated in CV" for missing sections.
 
-## 5. Assessment
-Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential. For AI/ML candidates, clarify whether they are best suited as: a research engineer, applied ML engineer, AI platform/infrastructure engineer, or ML team lead.
-Example 1: "A builder who constructs AI systems end-to-end — from data pipeline to model training to production serving. Ideal for organizations moving beyond API wrappers to build proprietary AI capabilities. Expect this candidate to reduce ML experiment-to-production cycles significantly."
-Example 2: "Combines deep research background with production engineering discipline — a rare profile. Best suited for teams that need to ship novel ML solutions, not just maintain existing ones. Would immediately strengthen both technical depth and mentorship capacity."
-※ 200-300 characters. Answer "Why this candidate NOW?" Be specific about fit and potential impact.
+## 5. Key Achievements
+List the 2-3 most notable quantified achievements from the CV. Include only achievements with specific metrics or outcomes stated in the CV.
+Example: "Reduced inference latency from 200ms to 50ms. Migrated monolith to microservices serving 2M daily users. Cut infrastructure costs by $240K annually."
+※ 200-300 characters. Only achievements with metrics from the CV. If no quantified achievements, write "No quantified achievements stated in CV."
 
 ---
 
 【Important Rules】
 {anonymize_rules}
-2. **Character Targets**: Each section (except Catch Copy) should be 200-300 characters (2-4 sentences). Catch Copy MUST be 60-100 characters — never shorter than 60. Always include years of experience, role, and domain. Write enough detail for a presentation slide.
-3. **Sentence Length (50-80 characters)**: Each sentence MUST be 50-80 characters. Break long sentences into multiple shorter ones. One idea per sentence. Never chain multiple clauses with commas, semicolons, or dashes into a single sentence. Never write sentences shorter than 50 characters — if too short, add specific context such as numbers, scope, or domain. For example, instead of "He led a 20-person team across 3 regions, delivering a cloud migration that reduced costs by 40% while improving uptime to 99.99%", write: "Led a 20-person team across 3 regions. Delivered a cloud migration that cut costs by 40%. Improved system uptime from 99.9% to 99.99%." Instead of "Built cloud infrastructure." (too short), write: "Built cloud-native infrastructure serving 2M+ daily active users."
-4. **English Only**: All output must be in English.
-5. **Strictly Factual**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences not present in the source material. If the CV lacks specific numbers, describe impact qualitatively but accurately.
-6. **No Markdown Headers in Values**: Output the value text directly after each header.
-7. **Hiring Manager Perspective**: Write as if presenting to a CTO or VP of Engineering who sees dozens of proposals weekly. Make THIS candidate impossible to skip.
+2. **Character Targets**: Each section (except Headline) should be 200-300 characters (2-4 sentences). Headline MUST be 60-100 characters.
+3. **English Only**: All output must be in English.
+4. **Strictly Factual**: Every claim must be directly from the CV. Do NOT invent metrics, achievements, or experiences. Do NOT add subjective evaluation or marketing language.
+5. **No Markdown Headers in Values**: Output the value text directly after each header.
+6. **No evaluation or recommendation**: Do not assess the candidate's fit, potential, or value. Only extract facts.
 """
 
 
@@ -3377,12 +3307,12 @@ def main():
             1. 最適化済みレジュメと求人票を入力
             2. テキスト直接入力、または過去の変換結果から選択可能
             3. 「マッチング分析を実行」をクリック
-            4. マッチスコア、スキル比較、強み・ギャップ分析、推薦コメントを取得
+            4. スキル比較、一致点・差分の事実ベース分析を取得
 
             **CV提案コメント抽出**
             1. 英語のCVをテキスト入力またはPDFアップロード
             2. 「抽出実行」をクリック
-            3. 匿名提案用の5項目コメント（各300文字以内・英語）を取得
+            3. 匿名提案用の事実ベース5項目（各300文字以内・英語）を取得
             4. 複数CVの一括処理にも対応（---NEXT---で区切り）
 
             **求人打診メール作成**
@@ -5324,31 +5254,6 @@ def main():
 
         # 結果表示（セッションステートにある場合）
         if 'matching_result' in st.session_state:
-            # スコアの可視化
-            import re
-            score_match = re.search(r'マッチスコア[：:]\s*(\d+)/100', st.session_state['matching_result'])
-            if score_match:
-                score = int(score_match.group(1))
-                st.divider()
-                st.markdown("#### 📊 マッチング評価")
-
-                # プログレスバーの色を決定
-                if score >= 80:
-                    color_text = "🟢 優秀なマッチング"
-                elif score >= 60:
-                    color_text = "🟡 良いマッチング"
-                else:
-                    color_text = "🟠 要検討"
-
-                col_prog, col_score = st.columns([3, 1])
-                with col_prog:
-                    st.progress(score / 100)
-                with col_score:
-                    st.metric("スコア", f"{score}/100")
-
-                st.caption(f"{color_text}")
-                st.divider()
-
             # 表示切替とコピーボタン
             col_view, col_copy = st.columns([2, 1])
             with col_view:
