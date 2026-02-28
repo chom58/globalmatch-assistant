@@ -1502,16 +1502,30 @@ def get_resume_pii_removal_prompt(resume_text: str) -> str:
     """レジュメから個人情報を削除し、高品質なMarkdown形式に再構成するプロンプトを生成"""
 
     return f"""You are a professional English resume editing specialist for technical and managerial roles.
-Your task is to convert the provided resume text into a high-quality Markdown format suitable for submission to international companies and recruitment agencies.
+Your task is to convert the provided resume text into a high-quality Markdown format suitable for submission by a recruitment agency to hiring companies.
 
 【1. PERSONAL DATA REMOVAL - STRICTLY FOLLOW】
 
-Remove ALL of the following personal information:
-- **Phone numbers**: Any format (e.g., +1-555-123-4567, (03) 1234-5678, 090-1234-5678)
-- **Detailed addresses**: Full street addresses, postal codes, apartment/unit numbers (keep only general location such as city or prefecture if relevant to the header)
-- **Email addresses**: Remove completely (e.g., john@example.com)
-- **LinkedIn URLs**: Remove any LinkedIn profile URLs (e.g., linkedin.com/in/...)
-- **Annotations and timestamps**: Remove notes such as "Resume (PII Removed)", generation timestamps, or any metadata annotations
+Remove or modify ALL of the following personal information:
+
+1. **Full Name → First Name Only**
+   - Keep ONLY the first name (given name)
+   - Remove last name (family name / surname)
+   - Examples: "John Smith" → "John", "Taro Yamada" → "Taro", "Wei-Lin Chen" → "Wei-Lin"
+
+2. **Phone numbers**: Remove any format (e.g., +1-555-123-4567, (03) 1234-5678, 090-1234-5678)
+
+3. **Detailed addresses**: Remove full street addresses, postal codes, apartment/unit numbers. Keep only general location (city or prefecture) for the header.
+
+4. **Email addresses**: Remove completely (e.g., john@example.com)
+
+5. **All profile and social URLs**: Remove LinkedIn, GitHub, Twitter/X, Qiita, personal blogs, portfolio sites, and any other personal URLs
+
+6. **Annotations and timestamps**: Remove notes such as "Resume (PII Removed)", generation timestamps, or any metadata annotations
+
+7. **Personal attributes (compliance-sensitive)**: Remove date of birth, age, gender, nationality, marital status, religion, photo references, or any other protected characteristics. These must not appear in the output.
+
+8. **References**: Remove any "References available upon request" statements and any listed references (names, titles, contact info of referees)
 
 【2. COMPANY NAME PRESERVATION】
 
@@ -1520,39 +1534,75 @@ Remove ALL of the following personal information:
 
 【3. SECTION STRUCTURE - RECONSTRUCT IN THIS ORDER】
 
-Reorganize the resume into the following sections, in this exact order:
+Reorganize the resume into the following sections, in this exact order.
+**Important**: Remove any original "Objective", "Summary", "Profile", or "About Me" section from the input — the Professional Summary below replaces them entirely. Do NOT output both.
 
-1. **Header**: Name + Location (city/prefecture only) + Key Credentials (e.g., CPA, CMA)
-2. **Professional Summary** (CREATE NEW): Write a 3-4 line summary that highlights the candidate's unique combination of backgrounds. If the candidate has dual expertise (e.g., accounting credentials like CPA/CMA combined with technical leadership in Engineering Management / DevOps), synthesize both into a compelling narrative.
-3. **Experience**: List in reverse chronological order. If the candidate was promoted within the same company (e.g., from DevOps Engineer to Engineering Manager), group all roles under a single company section with clear timeline indicators.
-4. **Skills**: Categorize into the following groups:
+1. **Header**: First Name + Location (city/prefecture only) + Key Credentials (e.g., CPA, CMA, PMP — only if present in the original)
+
+2. **Professional Summary** (CREATE NEW — replaces any existing Objective/Summary):
+   Write a 3-4 line summary **in third person** (e.g., "A seasoned engineer with..." or "Brings 10+ years of...") as this is written from the recruitment agency's perspective for presentation to hiring companies.
+   - Identify the candidate's core strengths, domain expertise, and career trajectory from the resume content, then synthesize them into a compelling narrative
+   - If the candidate has cross-domain expertise (e.g., finance + technology, research + engineering), emphasize that rare combination
+   - If the candidate is a specialist, highlight depth of expertise and measurable impact
+   - Base the summary strictly on information present in the resume — do NOT fabricate credentials or achievements
+
+3. **Experience**: List in reverse chronological order.
+   - If the candidate was promoted within the same company, group all roles under a single company section with clear timeline indicators for each role
+   - Each bullet should follow the pattern: Action Verb + What was done + Scale/Scope + Result/Impact
+
+4. **Skills**: Analyze the candidate's background and categorize skills into logical groups. Suggested categories include (but are not limited to):
    - Languages (programming languages)
+   - Frameworks & Libraries
    - Infrastructure & DevOps
-   - Web & Robotics
+   - Cloud & Platforms
+   - Data & AI/ML
+   - Mobile & Frontend
    - IT Strategy & Security
-   Only include categories that are relevant to the candidate's background. If a category has no applicable skills, omit it entirely.
-5. **Education & Certifications**
+   - Other relevant categories based on the candidate's profile
+   Only include categories that are relevant. Omit empty categories entirely.
 
-【4. FORMATTING RULES】
+5. **Language Proficiency & Visa Status** (if mentioned in the resume):
+   - Japanese proficiency level (e.g., JLPT N1, N2, business level, conversational, native)
+   - Other language proficiencies
+   - Visa status (e.g., Permanent Resident, Engineer/Specialist in Humanities visa, etc.)
+   If no language or visa information is present in the resume, omit this section entirely.
 
-- Start each work achievement with a strong **Action Verb** (Led, Architected, Optimized, Delivered, Scaled, Drove, Spearheaded, etc.)
+6. **Education & Certifications**
+
+【4. FORMATTING & WRITING PRINCIPLES】
+
+Apply these principles to maximize appeal to hiring managers and recruitment agencies:
+
+- **Lead with business impact**: Instead of "Used Python and SQL", write "Reduced data processing time by 40% through optimized Python/SQL pipelines"
+- Start each achievement with a strong **Action Verb** (Led, Architected, Optimized, Delivered, Scaled, Drove, Spearheaded, Transformed, Pioneered, etc.)
 - **Bold** all numerical achievements and metrics (e.g., **5M JPY**, **50% increase**, **$8.1M**, **20-person team**)
+- **Show progression**: Highlight career growth — promotions, expanding scope, increasing responsibility
+- **Highlight rarity**: Surface unique skill combinations, cross-domain expertise, or bilingual ability that make the candidate stand out
+- **Date format**: Standardize all dates to "MMM YYYY" format (e.g., "Apr 2022", "Jan 2020"). Convert any other format (2022/04, 04/2022, 2022年4月) to this standard.
 - Use ## for major section headings, ### for sub-headings (company names, job titles)
 - Use bullet points (-) for listing items
 - Use tables where appropriate (e.g., for skills)
 - Separate sections with blank lines
 
-【5. READABILITY IMPROVEMENTS】
+【5. HANDLING MISSING METRICS】
+
+- If the original resume contains numerical metrics, preserve and bold them
+- If the original resume lacks specific numbers, describe impact qualitatively but accurately (e.g., "Significantly reduced deployment time" or "Expanded client base across the APAC region")
+- Do NOT invent or fabricate metrics, percentages, dollar amounts, or team sizes that are not present in the original resume
+
+【6. READABILITY IMPROVEMENTS】
 
 - Fix any OCR scan artifacts: broken line breaks, garbled characters, or incorrectly split sections
 - Ensure logical flow and consistent formatting throughout
 - If dates or timelines appear inconsistent, preserve the original data but arrange it in a clean, readable format
+- **Mixed-language handling**: If the resume contains non-English text (e.g., Japanese company descriptions or job duties), translate them into natural English while preserving the original meaning. Keep proper nouns (company names, product names) in their commonly used form.
 
 【CRITICAL INSTRUCTIONS】
 - Do NOT anonymize company names, university names, or project names
 - Output the resume in English
 - If information for a section does not exist in the original resume, omit that section entirely (do NOT write "N/A" or "Not available")
-- For the Professional Summary, infer from the candidate's overall profile — do not fabricate information
+- Every claim in the Professional Summary and Experience must be grounded in the original resume content
+- Write as if presenting to a hiring manager or CTO who reviews dozens of resumes weekly — make this candidate stand out
 
 【INPUT RESUME】
 {resume_text}
