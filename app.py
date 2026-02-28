@@ -2092,10 +2092,16 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 | 技術カテゴリ | 求人要件 | 候補者スキル | マッチ判定 |
 |------------|---------|------------|----------|
 | プログラミング言語 | | | ✅/⚠️/❌ |
-| フレームワーク | | | |
+| AI/MLフレームワーク | （PyTorch, TensorFlow, JAX等） | | |
+| モデル種別・専門領域 | （LLM, CV, NLP, RL, RAG等） | | |
+| MLOps/推論基盤 | （MLflow, SageMaker, TensorRT等） | | |
+| データ基盤 | （Spark, Airflow, BigQuery等） | | |
+| フレームワーク（Web等） | | | |
 | データベース | | | |
 | インフラ/クラウド | | | |
 | その他技術 | | | |
+
+*※ 求人・候補者に該当カテゴリがない場合はその行を省略*
 
 **判定記号の意味**:
 - ✅ 完全マッチ（要件を満たしている）
@@ -2109,8 +2115,10 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 | 項目 | 求人要件 | 候補者 | 評価 |
 |-----|---------|--------|------|
 | 総エンジニア経験 | | | |
+| AI/ML領域の経験 | （該当する場合のみ記載） | | |
 | 該当領域の経験 | | | |
 | リーダーシップ | | | |
+| 研究実績・論文 | （該当する場合のみ記載） | | |
 | 言語レベル | | | |
 
 ---
@@ -2181,14 +2189,19 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 1. 上記フォーマットに厳密に従って出力してください
 2. マッチスコアは以下の観点で総合的に評価:
    - 技術スキルのマッチ度（40点）
+     - AI/MLポジションの場合: モデル開発経験、MLフレームワーク習熟度、MLOps/推論基盤経験を重点的に評価
+     - 「APIを呼ぶだけ」と「モデルを自分で学習・ファインチューニング・デプロイできる」は明確に区別
    - 経験年数・レベルのマッチ度（30点）
+     - AI/MLポジションの場合: 総エンジニア歴だけでなくAI/ML専門領域の経験年数も重視
+     - 研究実績（論文、Kaggle、特許）があれば経験年数以上の専門性として加点評価
    - 言語・コミュニケーション能力（20点）
    - その他（文化フィット、志向性など）（10点）
 3. 判定は楽観的すぎず、現実的に評価してください
 4. ギャップがある場合でも、ポテンシャルや学習意欲を考慮してください
 5. 数値や具体的な経験があれば積極的に引用してください
-6. 見出しに絵文字は使用しないでください（判定記号としての絵文字は可）
-7. リスト項目の行頭記号は中黒（・）ではなく、番号またはハイフン（-）を使用してください
+6. AI/ML固有の成果指標（モデル精度、推論レイテンシ、学習データ規模、プロダクション規模など）があれば、強みやマッチ度の根拠として積極的に引用してください
+7. 見出しに絵文字は使用しないでください（判定記号としての絵文字は可）
+8. リスト項目の行頭記号は中黒（・）ではなく、番号またはハイフン（-）を使用してください
 """
 
 
@@ -2444,6 +2457,7 @@ Your goal: Write a proposal that makes the hiring company think "We need to meet
 - **Use power verbs**: Led, Architected, Delivered, Scaled, Transformed, Pioneered, Spearheaded — not "worked on" or "was involved in"
 - **Focus on problems solved**: Frame experience as "challenges tackled → results delivered", not just duties performed
 - **Highlight rarity**: What makes this candidate hard to find? Unique skill combinations, cross-domain expertise, bilingual ability, etc.
+- **AI/ML-specific appeal**: If the candidate has AI/ML experience, emphasize: model types and domains (LLM, CV, NLP, RAG, etc.), production-scale AI deployment, research-to-product translation ability, training infrastructure expertise, and AI-specific metrics (model accuracy, inference latency, data scale). Distinguish between "API consumers" and "builders who train/fine-tune/deploy models from scratch"
 
 ---
 
@@ -2452,29 +2466,34 @@ Your goal: Write a proposal that makes the hiring company think "We need to meet
 
 ## 1. Catch Copy
 A punchy, memorable headline that makes the reader want to learn more. MUST include: years of experience + role/title + the candidate's unique value proposition or differentiator. Frame it as what this person DELIVERS, not just what they ARE.
-Example 1: "10-Year Full-Stack Architect Who Delivers Production-Grade AI Platforms from Zero to Scale"
-Example 2: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
-Example 3: "8-Year Data Scientist Turning NLP Research into Revenue-Generating Recommendation Engines"
+Example 1: "10-Year ML Engineer Who Deploys LLM Pipelines from Research Prototype to Million-User Production"
+Example 2: "Senior AI Platform Lead | 8 Years Building End-to-End MLOps Infrastructure at Global Scale"
+Example 3: "7-Year Computer Vision Engineer Turning Research Papers into Real-Time Inference Systems at 50ms Latency"
+Example 4: "Senior DevOps Lead | 12 Years Driving 99.99% Uptime Across Large-Scale Distributed Systems"
 ※ MUST be 60-100 characters. Never shorter than 60 characters. No names or company names.
 
 ## 2. Summary
 Paint a vivid picture of who this candidate is and what they bring to the table. Start with their most impressive achievement or defining trait, then build context with role, domain, and career highlights. The reader should immediately understand why this person stands out.
-Example: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, he progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
+Example 1: "A Senior ML Engineer who built a RAG-based enterprise search platform processing 500K+ daily queries. Over 8 years, progressed from data analyst to leading a 12-person AI team, shipping production LLM applications that reduced customer support costs by 40%."
+Example 2: "A Technical Architect who built an AI automation platform serving 2M+ users at a major global IT firm. Over 15 years, progressed from backend engineer to leading a 30-person cross-functional team, delivering cloud-native solutions that reduced infrastructure costs by 35%."
 ※ 200-300 characters. Lead with the strongest fact. Include role, years, domain, and measurable achievements.
 
 ## 3. Strength
-Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest.
-Example: "A rare engineer who spans from Linux kernel optimization to production AI systems — he architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams (US, EU, APAC) and translate deep-tech R&D into shipping products."
+Highlight what this candidate can DO for the hiring company — not just what they know. Connect technical skills to business outcomes. Emphasize rare or hard-to-find skill combinations that justify immediate interest. For AI/ML candidates, distinguish between API-level usage and deep expertise (model training, fine-tuning, custom architecture design, production deployment at scale).
+Example 1: "Bridges the gap between ML research and production — fine-tuned open-source LLMs (LLaMA, Mistral) for domain-specific tasks, achieving 15% accuracy gains over GPT-4 API baselines. Built custom inference infrastructure handling 10K+ concurrent requests on AWS GPU clusters."
+Example 2: "A rare engineer who spans from Linux kernel optimization to production AI systems — architected a custom Agentic AI framework in Golang that cut deployment cycles by 60%. Proven ability to lead global teams and translate deep-tech R&D into shipping products."
 ※ 200-300 characters. Connect skills → outcomes. Highlight what's rare or hard to find.
 
 ## 4. Education / Research
-Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends.
-Example: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university (2026), signaling strong commitment to staying at the cutting edge. Active open-source contributor to container orchestration projects."
+Position academic background as evidence of intellectual depth and commitment to growth. Highlight any ongoing learning that signals the candidate stays ahead of industry trends. For AI/ML candidates, emphasize: publications at top venues (NeurIPS, ICML, CVPR, ACL, etc.), Kaggle/ML competition rankings, research-to-production track record, and patents.
+Example 1: "Ph.D. in Machine Learning with 5 published papers at NeurIPS and ICML. Kaggle Competition Master with 2 gold medals in NLP tasks. Translated doctoral research on transformer architectures into a production recommendation engine serving 3M+ users."
+Example 2: "M.Sc. in Computer Science with published research in distributed computing. Currently pursuing an executive technology program at a top US university, signaling strong commitment to staying at the cutting edge. Active open-source contributor with 500+ GitHub stars."
 ※ 200-300 characters. Frame education as evidence of growth mindset and expertise depth.
 
 ## 5. Assessment
-Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential.
-Example: "A builder who constructs AI platforms from scratch — not just an API consumer. His rare combination of low-level systems expertise and AI product delivery makes him ideal for organizations building proprietary AI capabilities. Expect him to elevate both technical standards and team capability."
+Write a clear, confident recommendation that answers: "Why should we prioritize interviewing this candidate?" Address the specific value they would bring and what type of organization would benefit most. End with a forward-looking statement about their potential. For AI/ML candidates, clarify whether they are best suited as: a research engineer, applied ML engineer, AI platform/infrastructure engineer, or ML team lead.
+Example 1: "A builder who constructs AI systems end-to-end — from data pipeline to model training to production serving. Ideal for organizations moving beyond API wrappers to build proprietary AI capabilities. Expect this candidate to reduce ML experiment-to-production cycles significantly."
+Example 2: "Combines deep research background with production engineering discipline — a rare profile. Best suited for teams that need to ship novel ML solutions, not just maintain existing ones. Would immediately strengthen both technical depth and mentorship capacity."
 ※ 200-300 characters. Answer "Why this candidate NOW?" Be specific about fit and potential impact.
 
 ---
