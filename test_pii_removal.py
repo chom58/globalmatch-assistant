@@ -153,12 +153,14 @@ def main():
         # --- Language/Visa ---
         ("Language/Visa セクション", "Japanese" in result and ("Native" in result or "native" in result)),
         ("Visa情報維持", "Permanent Resident" in result),
-        # --- 三人称 ---
-        ("Professional Summary三人称",
+        # --- 三人称・事実ベース ---
+        ("Professional Summary事実ベース",
          any(phrase in result for phrase in [
-             "A seasoned", "An experienced", "Brings", "a seasoned", "an experienced",
-             "with over", "with a rare", "combining", "who has", "the candidate",
-             "engineer with", "leader with", "professional with",
+             "years of experience", "years experience",
+             "engineer with", "manager with", "consultant with",
+             "worked at", "worked in",
+         ]) and not any(phrase in result.lower() for phrase in [
+             "seasoned", "passionate", "driven", "exceptional", "rare",
          ])),
         # --- 日本語混在→英語変換 ---
         ("日本語テキストの英語化", "大規模決済" not in result),
