@@ -1502,7 +1502,7 @@ def get_resume_pii_removal_prompt(resume_text: str) -> str:
     """レジュメから個人情報を削除し、高品質なMarkdown形式に再構成するプロンプトを生成"""
 
     return f"""You are a professional English resume editing specialist for technical and managerial roles.
-Your task is to convert the provided resume text into a high-quality Markdown format suitable for submission to international companies and recruitment agencies.
+Your task is to convert the provided resume text into a high-quality Markdown format suitable for submission by a recruitment agency to hiring companies.
 
 【1. PERSONAL DATA REMOVAL - STRICTLY FOLLOW】
 
@@ -1519,9 +1519,13 @@ Remove or modify ALL of the following personal information:
 
 4. **Email addresses**: Remove completely (e.g., john@example.com)
 
-5. **LinkedIn URLs**: Remove any LinkedIn profile URLs (e.g., linkedin.com/in/...)
+5. **All profile and social URLs**: Remove LinkedIn, GitHub, Twitter/X, Qiita, personal blogs, portfolio sites, and any other personal URLs
 
 6. **Annotations and timestamps**: Remove notes such as "Resume (PII Removed)", generation timestamps, or any metadata annotations
+
+7. **Personal attributes (compliance-sensitive)**: Remove date of birth, age, gender, nationality, marital status, religion, photo references, or any other protected characteristics. These must not appear in the output.
+
+8. **References**: Remove any "References available upon request" statements and any listed references (names, titles, contact info of referees)
 
 【2. COMPANY NAME PRESERVATION】
 
@@ -1530,12 +1534,14 @@ Remove or modify ALL of the following personal information:
 
 【3. SECTION STRUCTURE - RECONSTRUCT IN THIS ORDER】
 
-Reorganize the resume into the following sections, in this exact order:
+Reorganize the resume into the following sections, in this exact order.
+**Important**: Remove any original "Objective", "Summary", "Profile", or "About Me" section from the input — the Professional Summary below replaces them entirely. Do NOT output both.
 
 1. **Header**: First Name + Location (city/prefecture only) + Key Credentials (e.g., CPA, CMA, PMP — only if present in the original)
 
-2. **Professional Summary** (CREATE NEW):
-   Write a 3-4 line summary that highlights the candidate's unique value proposition. Identify the candidate's core strengths, domain expertise, and career trajectory from the resume content, then synthesize them into a compelling narrative.
+2. **Professional Summary** (CREATE NEW — replaces any existing Objective/Summary):
+   Write a 3-4 line summary **in third person** (e.g., "A seasoned engineer with..." or "Brings 10+ years of...") as this is written from the recruitment agency's perspective for presentation to hiring companies.
+   - Identify the candidate's core strengths, domain expertise, and career trajectory from the resume content, then synthesize them into a compelling narrative
    - If the candidate has cross-domain expertise (e.g., finance + technology, research + engineering), emphasize that rare combination
    - If the candidate is a specialist, highlight depth of expertise and measurable impact
    - Base the summary strictly on information present in the resume — do NOT fabricate credentials or achievements
@@ -1572,6 +1578,7 @@ Apply these principles to maximize appeal to hiring managers and recruitment age
 - **Bold** all numerical achievements and metrics (e.g., **5M JPY**, **50% increase**, **$8.1M**, **20-person team**)
 - **Show progression**: Highlight career growth — promotions, expanding scope, increasing responsibility
 - **Highlight rarity**: Surface unique skill combinations, cross-domain expertise, or bilingual ability that make the candidate stand out
+- **Date format**: Standardize all dates to "MMM YYYY" format (e.g., "Apr 2022", "Jan 2020"). Convert any other format (2022/04, 04/2022, 2022年4月) to this standard.
 - Use ## for major section headings, ### for sub-headings (company names, job titles)
 - Use bullet points (-) for listing items
 - Use tables where appropriate (e.g., for skills)
@@ -1588,6 +1595,7 @@ Apply these principles to maximize appeal to hiring managers and recruitment age
 - Fix any OCR scan artifacts: broken line breaks, garbled characters, or incorrectly split sections
 - Ensure logical flow and consistent formatting throughout
 - If dates or timelines appear inconsistent, preserve the original data but arrange it in a clean, readable format
+- **Mixed-language handling**: If the resume contains non-English text (e.g., Japanese company descriptions or job duties), translate them into natural English while preserving the original meaning. Keep proper nouns (company names, product names) in their commonly used form.
 
 【CRITICAL INSTRUCTIONS】
 - Do NOT anonymize company names, university names, or project names
