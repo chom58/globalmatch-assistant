@@ -1632,7 +1632,12 @@ Remove or modify ALL of the following personal information:
 Reorganize the resume into the following sections, in this exact order.
 **Important**: Remove any original "Objective", "Summary", "Profile", or "About Me" section from the input — the Professional Summary below replaces them entirely. Do NOT output both.
 
-1. **Header**: First Name + Location (city/prefecture only) + Key Credentials (e.g., CPA, CMA, PMP — only if present in the original)
+1. **Header**: Output as simple key-value lines. Include only items that exist in the original resume:
+   - **Name**: First name only (given name)
+   - **Location**: City/prefecture and country (e.g., "Tokyo, Japan")
+   - **Visa**: Visa status (e.g., "Engineer/Specialist in Humanities", "Permanent Resident")
+   - **Key Credentials**: Only if present (e.g., CPA, CMA, PMP)
+   - Do NOT include any title like "Resume", "CV", "Resume (PII Removed)", or any generation timestamps/metadata
 
 2. **Professional Summary** (CREATE NEW — replaces any existing Objective/Summary):
    Write a 2-3 line factual summary **in third person** that lists only verifiable facts from the resume:
@@ -1650,13 +1655,13 @@ Reorganize the resume into the following sections, in this exact order.
 4. **Skills**: Analyze the candidate's background and categorize skills into logical groups. Suggested categories include (but are not limited to):
    - Languages (programming languages)
    - Frameworks & Libraries
+   - Data & AI/ML (include AI tools such as Claude, ChatGPT, GitHub Copilot, Gemini, Cursor, etc. in this category — these are high-demand skills and should be prominently listed here, NOT buried under "Other")
    - Infrastructure & DevOps
    - Cloud & Platforms
-   - Data & AI/ML
    - Mobile & Frontend
    - IT Strategy & Security
-   - Other relevant categories based on the candidate's profile
    Only include categories that are relevant. Omit empty categories entirely.
+   **IMPORTANT — No Duplicates**: Each skill must appear in exactly ONE category. If a skill (e.g., Git, Shell/Bash, Docker) could fit multiple categories, place it in the single most relevant one and do not repeat it elsewhere.
 
 5. **Language Proficiency & Visa Status** (if mentioned in the resume):
    - Japanese proficiency level (e.g., JLPT N1, N2, business level, conversational, native)
@@ -3102,12 +3107,6 @@ def generate_html(content: str, title: str) -> str:
             text-align: center;
             margin-bottom: 30px;
         }}
-        .generated {{
-            text-align: right;
-            color: #999;
-            font-size: 12px;
-            margin-bottom: 20px;
-        }}
         @media print {{
             body {{
                 padding: 20px;
@@ -3122,7 +3121,7 @@ def generate_html(content: str, title: str) -> str:
     <div class="header">
         <h1>{safe_title}</h1>
     </div>
-    <div class="generated">{datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
+    <!-- timestamp removed for clean output -->
     <div class="content">
         {html_content}
     </div>
@@ -4083,7 +4082,7 @@ def main():
                         key="pii_txt"
                     )
                 with col_dl3:
-                    html_content = generate_html(st.session_state['resume_pii_result'], "Resume (PII Removed)")
+                    html_content = generate_html(st.session_state['resume_pii_result'], "Candidate Resume")
                     st.download_button(
                         "🌐 HTML",
                         data=html_content,
