@@ -1260,8 +1260,9 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
     else:
         basic_info_format = "- 氏名：\n- 連絡先：\n- 所在地："
 
-    return f"""あなたは人材紹介会社のエキスパートコンサルタントです。
-外国人エンジニアの英語レジュメを、日本企業の採用担当者向けに最適化された日本語ドキュメントに変換してください。
+    return f"""あなたはIT・専門職領域に強いハイクラス人材エージェントです。
+候補者の英語レジュメを読み込み、クライアント企業への推薦用に「匿名化」しつつ、その「市場価値を最大化」した紹介資料を作成してください。
+日本企業の採用担当者向けに最適化された日本語ドキュメントに変換してください。
 
 {anonymize_instruction}
 
@@ -1283,11 +1284,12 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 | 直近の注力技術 | （直近1-2年の職歴で使用している主要技術を3-5個） |
 | 所在地 | （レジュメ記載の居住国・都市。記載なしの場合は「記載なし」） |
 
-## 3. 経歴サマリ
-*（200文字程度で、レジュメに記載された事実のみを列挙。「優秀」「卓越」等の主観的な形容は禁止）*
+## 3. Professional Summary（経歴サマリ）
+*（3〜5行で、候補者の最大の「売り」を記載。経験年数×技術×強みの掛け合わせで市場価値を表現する。ただし事実に基づくこと。「優秀」「卓越」等の主観的形容は使わず、具体的な数字・技術名・実績で説得力を持たせる）*
 - 総経験年数と主な役職
 - 主要な技術領域・業界
 - レジュメに明記されている定量的な実績（あれば）
+- 他の候補者と差別化できる経験の組み合わせ（例：「MLエンジニアリング×大規模プロダクション×マネジメント」）
 
 **キャリアパス**: （例：Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead）
 *（職歴から抽出した1行のキャリア遷移。事実のみ記載）*
@@ -1310,8 +1312,9 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 *※ 該当カテゴリに情報がない場合はその行を省略*
 
 ## 5. 語学・ビザ
-- **日本語レベル**: （JLPTレベル、日本滞在歴、実務での使用経験から推定）
-- **英語レベル**:
+- **日本語レベル**: （JLPTレベルだけでなく、実務でどう活用しているかを文脈から読み取って補足。例：「JLPT N2。日本語での仕様書作成、クライアントとの要件定義MTGに参加」「JLPT N3。日常会話レベル、技術文書は英語メイン」。日本滞在歴があれば記載）
+- **英語レベル**: （同様に実務活用を補足。例：「ネイティブ」「ビジネスレベル。海外ベンダーとの技術折衝、英語での技術プレゼン経験あり」）
+- **その他の言語**: （該当があれば記載）
 - **ビザステータス**: （記載があれば、なければ「要確認」）
 
 ## 6. 代表プロジェクト
@@ -1386,6 +1389,9 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 9. **受賞歴・表彰があれば記載**: 社内賞、ハッカソン、競技プログラミングなど
 10. **最近の学習活動を記載**: 資格取得、コース修了、カンファレンス参加など
 11. **キャリアパスの抽出**: 職歴全体を俯瞰し、キャリアの遷移を1行で表現（例：Backend → ML → AI Platform Lead）
+12. **語学力の解釈**: 単なる資格名（JLPT N3, TOEIC等）だけでなく、実務でどう活用しているか（仕様書作成、海外ベンダー調整、クライアントとの折衝等）を文脈から読み取って補足する
+13. **最新トレンドの反映**: AIツール（GitHub Copilot, ChatGPT API等）の活用やモダンな開発手法（Agile, Scrum, DevOps, CI/CD, IaC等）の経験があれば必ず強調する
+14. **実績の抽象化と具体化のバランス**: 守秘義務に触れない範囲で、数字や技術名を用いて「何ができるか」を具体化する。抽象的すぎる表現（「様々なプロジェクトに参画」）は避け、規模・技術・成果を含めた具体的な記述に変換する
 
 **重要**: レジュメに情報が全くない場合のみ「記載なし」とし、少しでも関連する記述があれば必ず抽出して記載してください。
 **重要**: 該当するセクション（研究実績、OSS、受賞歴など）に情報がない場合は、そのセクション自体を省略してください。
@@ -1444,8 +1450,9 @@ Only anonymize personal contact information (keep company names):
     else:
         basic_info_format_en = "- Name:\n- Contact:\n- Location:"
 
-    return f"""You are an expert HR consultant.
-Anonymize the following English resume while keeping it in English and maintaining a professional format.
+    return f"""You are a high-end talent agent specializing in IT and technical professionals.
+Read the candidate's resume and create a professional introduction document that anonymizes personal information while maximizing the candidate's market value.
+Keep the output in English and maintain a professional format.
 
 {anonymize_instruction}
 
@@ -1466,11 +1473,12 @@ Maintain the resume in English with this standardized structure:
 | Recent Focus Technologies | (3-5 key technologies used in the last 1-2 years of work history) |
 | Location | (Country/city from resume. "Not specified" if not mentioned) |
 
-## 3. Career Summary
-*(2-3 sentences listing only verifiable facts from the resume. No subjective adjectives like "seasoned", "exceptional", or "passionate". No characterizing skills as "rare" or "unique".)*
+## 3. Professional Summary
+*(3-5 lines highlighting the candidate's key selling points: years of experience × technology × strengths. Express market value through the combination of these factors. Use specific numbers, technology names, and achievements for persuasiveness — but no subjective adjectives like "seasoned", "exceptional", or "passionate". No characterizing skills as "rare" or "unique".)*
 - Total years of experience and primary job titles held
 - Key technical domains and industries worked in
 - Notable quantified achievements (only if explicitly stated in the resume)
+- Differentiating combination of experiences (e.g., "ML engineering × large-scale production × team management")
 
 **Career Path**: (e.g., Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead)
 *(One-line career progression extracted from work history — facts only)*
@@ -1493,8 +1501,9 @@ Maintain the resume in English with this standardized structure:
 *Omit categories with no relevant information*
 
 ## 5. Languages & Visa
-- **Japanese Level**: (JLPT level, Japan residency history, business use if applicable)
-- **English Level**:
+- **Japanese Level**: (Beyond just the JLPT level — interpret from context how the language is used in practice. E.g., "JLPT N2. Writes technical specifications in Japanese, participates in client requirements meetings in Japanese" or "JLPT N3. Conversational level, primarily uses English for technical work". Include Japan residency history if available)
+- **English Level**: (Similarly interpret practical usage. E.g., "Native" or "Business level. Experience in technical negotiations with overseas vendors, technical presentations in English")
+- **Other Languages**: (If applicable)
 - **Visa Status**: (If mentioned, otherwise "To be confirmed")
 
 ## 6. Highlight Project
@@ -1575,6 +1584,9 @@ Pay special attention to the following:
 9. **Include awards & recognition**: Company awards, hackathons, competitive programming, etc.
 10. **Capture recent learning activities**: Certifications, courses, conference attendance, etc.
 11. **Extract career path**: Summarize the overall career progression in one line (e.g., Backend → ML → AI Platform Lead)
+12. **Interpret language proficiency**: Go beyond just listing certification names (JLPT N3, TOEIC, etc.). Read from context how the language is actually used in practice (e.g., writing specifications, coordinating with overseas vendors, client-facing meetings)
+13. **Highlight modern trends**: If the candidate uses AI tools (GitHub Copilot, ChatGPT API, etc.) or modern development practices (Agile, Scrum, DevOps, CI/CD, IaC, etc.), always emphasize these
+14. **Balance abstraction and specificity**: Use numbers and technology names to concretize "what they can do" within the bounds of confidentiality. Avoid overly abstract expressions (e.g., "participated in various projects") — instead, include scale, technology, and outcomes
 
 **IMPORTANT**: Only use "Not specified" when there is absolutely NO related information in the resume. If there's any relevant mention, extract and include it.
 **IMPORTANT**: Omit entire sections (Research, OSS, Awards, etc.) if there's no information, rather than listing them as empty.
@@ -2216,13 +2228,14 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 - 企業名は「大手SIer」「外資系IT企業」などの一般表現に置換する
 - 大学名は「国内トップ大学」「海外有名大学」などに置換する"""
 
-        return f"""あなたは人材紹介の事実整理担当です。
-以下のマッチング分析結果とレジュメ、求人票から、企業向けの**候補者情報資料**を作成してください。
+        return f"""あなたはIT・専門職領域に強いハイクラス人材エージェントです。
+以下のマッチング分析結果とレジュメ、求人票から、クライアント企業への推薦用に候補者の「市場価値を最大化」した**候補者紹介資料**を作成してください。
 
 【重要】
-- レジュメと求人票に記載された事実のみを抽出してください
-- 主観的な評価・推薦・ポテンシャルへの言及は禁止です
-- 「優秀」「卓越」「期待」「推薦」等の主観的表現は使わないでください
+- レジュメと求人票に記載された事実をベースにしてください
+- 「優秀」「卓越」等の漠然とした主観的形容は使わないでください
+- 語学力は資格名だけでなく、実務での活用状況を文脈から読み取って補足してください
+- AIツールの活用やモダンな開発手法（Agile/DevOps等）があれば必ず強調してください
 
 【入力情報】
 ■ マッチング分析結果:
@@ -2238,27 +2251,29 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 【出力フォーマット】※厳密に従ってください
 
-# 候補者情報資料
+# 候補者紹介資料
 
 ## 1. 見出し
 候補者の直近の役職、総経験年数、主要技術領域を1行で記載。
 形式：「[直近の役職] | 経験[X]年 | [主要技術領域]」
 例：「MLエンジニア | 経験10年 | LLMパイプライン・プロダクションML」
-※ 主観的な形容（「優秀な」「卓越した」等）は禁止
+※ 漠然とした主観的な形容（「優秀な」「卓越した」等）は使わず、具体的に書く
 
 ---
 
-## 2. 経歴概要（200文字程度）
-候補者の経歴事実を簡潔にまとめた概要
+## 2. Professional Summary（200文字程度）
+候補者の最大の「売り」を経験年数×技術×強みの掛け合わせで記載
 - 総エンジニア経験年数
 - 経験した役職と業界
 - レジュメに明記されている定量的な実績
-- 言語能力（レジュメに日本語能力の記載がある場合は必ず含める。記載がなければ省略）
+- 言語能力（資格名だけでなく実務での活用状況を文脈から読み取って補足。例：「JLPT N2。日本語での仕様書作成経験あり」）
+- AIツール活用やモダン開発手法（Agile/DevOps等）があれば強調
 
 ---
 
-## 3. 求人要件との一致スキル（200文字程度）
-求人要件に記載されたスキル・経験のうち、レジュメに該当する記載があるものを列挙
+## 3. Technical Skills（200文字程度）
+求人要件に記載されたスキル・経験のうち、レジュメに該当する記載があるものをカテゴリ別に整理
+- Languages, Frameworks, Tools, Cloud/Infra, AI/ML等に分類
 - スキル名と、レジュメでの使用実績を対応づけて記載
 - 該当なしの場合は「該当するスキルの記載なし」と記載
 
@@ -2276,7 +2291,16 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 ## 5. 求人要件との差分（200文字程度）
 求人要件に記載されているがレジュメに該当する記載がない項目
 - 差分がない場合は「求人要件に対して未記載の項目なし」
-- 主観的な「対策」や「ポテンシャル」への言及は禁止
+
+---
+
+## 6. コンサルタント所見（推薦ポイント）（200文字程度）
+エージェント視点で、この候補者の注目すべきポイントを3点記載。
+レジュメに記載された事実に基づき、以下の観点から記載すること：
+- **経験の希少な組み合わせ**: 例「MLエンジニアリング×大規模プロダクション運用×チームマネジメントの三領域を跨ぐ経験」
+- **求人ポジションとのフィット**: 例「求人要件のLLMパイプライン構築について、前職で同規模のシステム構築実績あり」
+- **付加価値**: 例「日英バイリンガルで海外チームとの橋渡し可能」「Agile/DevOps文化での実務経験あり」
+※ 「優秀」「卓越」等の漠然とした形容は使わず、具体的な事実・数字に基づいて記載
 
 ---
 
@@ -2284,8 +2308,8 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 
 【その他の注意事項】
 1. **文字数厳守**: 各セクションの文字数制限を守る（見出しは1行、他は200文字程度）
-2. **事実のみ**: レジュメと求人票に記載された情報のみを使用
-3. **主観禁止**: 評価・推薦・予測・ポテンシャルへの言及は一切禁止
+2. **事実ベース**: レジュメと求人票に記載された情報をベースにする
+3. **具体性重視**: 漠然とした形容は避け、数字・技術名・実績で表現する
 4. **簡潔性**: 要点を絞って分かりやすく記載
 """
     else:  # English
@@ -2300,10 +2324,14 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 - Replace company names with generic terms (e.g., "a major global IT firm", "a leading SaaS company")
 - Replace university names with generic terms (e.g., "a top US university", "a prestigious Japanese university")"""
 
-        return f"""You are a recruitment data analyst extracting factual information.
-Create a **candidate information document** for the client company based on the matching analysis result, resume, and job description below.
+        return f"""You are a high-end talent agent specializing in IT and technical professionals.
+Create a **candidate introduction document** for the client company that maximizes the candidate's market value, based on the matching analysis result, resume, and job description below.
 
-IMPORTANT: Extract only verifiable facts. Do NOT add evaluation, recommendation, or subjective language.
+IMPORTANT:
+- Base all claims on facts from the resume and job description
+- Do NOT use vague subjective adjectives like "exceptional", "outstanding", "passionate"
+- Interpret language proficiency beyond just certification names — describe practical usage from context
+- Always highlight AI tool usage and modern development practices (Agile/DevOps) if present
 
 【Input Information】
 ■ Matching Analysis Result:
@@ -2319,27 +2347,29 @@ IMPORTANT: Extract only verifiable facts. Do NOT add evaluation, recommendation,
 
 【Output Format】※Strictly follow this format
 
-# Candidate Information
+# Candidate Introduction
 
 ## 1. Headline
 State the candidate's most recent job title, total years of experience, and primary domain.
 Format: "[Most recent title] | [X] years of experience | [Primary domain]"
 Example: "ML Engineer | 10 years | LLM pipelines and production ML systems"
-※ No subjective adjectives. Facts only.
+※ No vague subjective adjectives. Be specific.
 
 ---
 
-## 2. Summary (approximately 200 characters)
-Factual overview of the candidate
+## 2. Professional Summary (approximately 200 characters)
+Highlight the candidate's key selling points through the combination of experience × technology × strengths
 - Total engineering experience years
 - Job titles held and industries worked in
 - Quantified achievements explicitly stated in the resume
-- Language proficiency (if mentioned in resume. Omit if not mentioned)
+- Language proficiency (beyond just certification names — interpret practical usage from context. E.g., "JLPT N2. Experience writing technical specifications in Japanese")
+- AI tool usage and modern development practices (Agile/DevOps) if present
 
 ---
 
-## 3. Skills Matching Job Requirements (approximately 200 characters)
-Skills and experience from the resume that correspond to job requirements
+## 3. Technical Skills (approximately 200 characters)
+Skills and experience from the resume that correspond to job requirements, organized by category
+- Group into: Languages, Frameworks, Tools, Cloud/Infra, AI/ML, etc.
 - List each matching skill with evidence from the resume
 - If no match, state "No matching skills found in resume"
 
@@ -2358,7 +2388,16 @@ Academic background and research as stated in the resume
 Job requirements not evidenced in the resume
 - List specific requirements with no corresponding resume entry
 - If no gaps, state "All job requirements have corresponding resume entries"
-- Do NOT suggest remedies, potential, or training plans
+
+---
+
+## 6. Consultant's View (Key Recommendation Points) (approximately 200 characters)
+From the agent's perspective, list 3 noteworthy points about this candidate.
+Based on facts stated in the resume, address the following angles:
+- **Rare combination of experience**: E.g., "Spans three domains: ML engineering × large-scale production operations × team management"
+- **Fit with the position**: E.g., "Has built a system of comparable scale to the LLM pipeline construction required in this role"
+- **Added value**: E.g., "Bilingual (Japanese/English) capable of bridging overseas teams" or "Hands-on experience in Agile/DevOps culture"
+※ Do NOT use vague adjectives like "exceptional" or "outstanding" — support each point with specific facts and numbers
 
 ---
 
@@ -2366,9 +2405,9 @@ Job requirements not evidenced in the resume
 
 【Other Important Notes】
 1. **Character Limit**: Strictly follow character limits (Headline is 1 line, others ~200 characters)
-2. **Facts only**: Use only information from the resume and job description
-3. **No evaluation**: Do not assess, recommend, or predict. Only extract facts
-4. **Brevity**: Focus on key facts for clarity
+2. **Fact-based**: Base all claims on information from the resume and job description
+3. **Specificity over vagueness**: Use numbers, technology names, and achievements instead of vague adjectives
+4. **Brevity**: Focus on key points for clarity
 """
 
 
@@ -2380,9 +2419,9 @@ def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "ful
     else:
         anonymize_rules = """1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university")."""
 
-    return f"""You are a recruitment consultant extracting factual information from a CV for a candidate proposal.
+    return f"""You are a high-end talent agent specializing in IT and technical professionals, creating a candidate proposal document.
 
-Your goal: Extract and organize verifiable facts from the CV. Do NOT add interpretation, evaluation, or marketing language. Do NOT use adjectives like "seasoned", "exceptional", "passionate", "driven", or "rare". Do NOT characterize skill combinations as "unique" or "hard to find".
+Your goal: Extract and organize facts from the CV to maximize the candidate's market value. Use specific numbers, technology names, and achievements for persuasiveness. Do NOT use vague adjectives like "seasoned", "exceptional", "passionate", "driven". Interpret language proficiency beyond just certification names — describe practical usage from context. Highlight AI tools and modern development practices (Agile/DevOps) if present.
 
 【CV/Resume】
 {resume_text}
@@ -2407,10 +2446,10 @@ Example 1: "ML Engineer | 10 years of experience | LLM pipelines and production 
 Example 2: "DevOps Lead | 12 years of experience | Cloud infrastructure and CI/CD"
 ※ 60-100 characters. No names or company names. No subjective adjectives.
 
-## 2. Summary
-List the candidate's career facts: total experience, job titles held, industries worked in, and key quantified achievements (only those explicitly stated in the CV).
-Example: "ML Engineer with 8 years of experience. Worked at Company A and Company B. Built a search platform processing 500K+ daily queries. Led a 12-person team."
-※ 200-300 characters. Only verifiable facts from the CV.
+## 2. Professional Summary
+Highlight the candidate's key selling points through the combination of experience × technology × strengths. Include total experience, job titles held, industries worked in, key quantified achievements, and language proficiency (interpret practical usage, not just certification names).
+Example: "ML Engineer with 8 years of experience. Worked at Company A and Company B. Built a search platform processing 500K+ daily queries. Led a 12-person team. JLPT N2 — writes technical specs in Japanese."
+※ 200-300 characters. Facts from the CV.
 
 ## 3. Technical Skills
 List the candidate's technical skills as stated in the CV, grouped by category. Include years of experience only if explicitly mentioned. Do not infer proficiency levels.
@@ -2427,15 +2466,23 @@ List the 2-3 most notable quantified achievements from the CV. Include only achi
 Example: "Reduced inference latency from 200ms to 50ms. Migrated monolith to microservices serving 2M daily users. Cut infrastructure costs by $240K annually."
 ※ 200-300 characters. Only achievements with metrics from the CV. If no quantified achievements, write "No quantified achievements stated in CV."
 
+## 6. Consultant's View (Key Recommendation Points)
+From the agent's perspective, list 3 noteworthy points about this candidate based on facts from the CV:
+- **Rare combination of experience**: What makes this candidate's experience profile distinctive (e.g., "Spans ML engineering × production systems × team leadership")
+- **Added value**: Practical advantages such as bilingual ability, Agile/DevOps culture experience, AI tool proficiency, cross-functional collaboration
+- **Standout achievement**: The single most impressive concrete achievement from the CV, with numbers
+Example: "1. Combines 8 years of ML engineering with production-scale deployment (500K+ daily queries) and team leadership (12 engineers). 2. Bilingual (EN/JP) with JLPT N2, writes technical specs in Japanese. 3. Reduced model inference latency by 75% (200ms → 50ms) in production."
+※ 200-300 characters. Support each point with specific facts and numbers from the CV. Do NOT use vague adjectives.
+
 ---
 
 【Important Rules】
 {anonymize_rules}
 2. **Character Targets**: Each section (except Headline) should be 200-300 characters (2-4 sentences). Headline MUST be 60-100 characters.
 3. **English Only**: All output must be in English.
-4. **Strictly Factual**: Every claim must be directly from the CV. Do NOT invent metrics, achievements, or experiences. Do NOT add subjective evaluation or marketing language.
+4. **Fact-based**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences. Use specific numbers and technology names instead of vague adjectives.
 5. **No Markdown Headers in Values**: Output the value text directly after each header.
-6. **No evaluation or recommendation**: Do not assess the candidate's fit, potential, or value. Only extract facts.
+6. **Specificity over vagueness**: Express value through concrete facts, not marketing language.
 """
 
 
