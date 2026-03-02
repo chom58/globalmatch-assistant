@@ -39,6 +39,7 @@ MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
 RATE_LIMIT_CALLS = 30    # セッションあたりのAPI呼び出し上限（1時間）
 RATE_LIMIT_WINDOW = 3600 # レート制限ウィンドウ（秒）
 SESSION_TIMEOUT_MINUTES = 120  # セッションタイムアウト（分）
+DEFAULT_APP_URL = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
 
 
 def _check_rate_limit() -> tuple[bool, str]:
@@ -116,6 +117,9 @@ def _extract_text_from_pdf_bytes(pdf_raw: bytes) -> tuple[str, str]:
         if file_size_mb > MAX_PDF_SIZE_MB:
             return "", f"ファイルサイズが大きすぎます（{file_size_mb:.1f}MB）。{MAX_PDF_SIZE_MB}MB以下にしてください"
 
+        if not pdf_raw[:5].startswith(b"%PDF-"):
+            return "", "有効なPDFファイルではありません"
+
         pdf_bytes = io.BytesIO(pdf_raw)
         text_parts = []
 
@@ -191,13 +195,26 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=False)
+
+        # リダイレクト先もSSRF検証（最大5回まで追跡）
+        redirect_count = 0
+        while resp.is_redirect and redirect_count < 5:
+            redirect_url = resp.headers.get("Location", "")
+            is_safe_redirect, redirect_msg = _is_safe_url(redirect_url)
+            if not is_safe_redirect:
+                return "", f"リダイレクト先が安全ではありません: {redirect_msg}"
+            resp = requests.get(redirect_url, headers=headers, timeout=15, allow_redirects=False)
+            redirect_count += 1
+
         resp.raise_for_status()
 
         content_type = resp.headers.get("Content-Type", "")
 
         # PDFの場合
         if "application/pdf" in content_type:
+            if not resp.content[:5].startswith(b"%PDF-"):
+                return "", "有効なPDFファイルではありません"
             pdf_bytes = io.BytesIO(resp.content)
             text_parts = []
             with pdfplumber.open(pdf_bytes) as pdf:
@@ -3180,6 +3197,25 @@ def t(key: str) -> str:
     return TRANSLATIONS.get(lang, TRANSLATIONS['ja']).get(key, key)
 
 
+def _get_app_base_url() -> str:
+    """アプリのベースURLを取得（secrets優先、なければデフォルト）"""
+    try:
+        return st.secrets["APP_URL"]
+    except (KeyError, FileNotFoundError):
+        return DEFAULT_APP_URL
+
+
+def _copy_to_clipboard(text: str) -> None:
+    """テキストをクリップボードにコピーするJSを安全に実行する。
+    json.dumpsでエスケープすることでJS注入を防止。"""
+    safe_json = json.dumps(text)
+    st.components.v1.html(f"""
+        <script>
+        navigator.clipboard.writeText({safe_json});
+        </script>
+    """, height=0)
+
+
 def main():
     """メインアプリケーション"""
 
@@ -3461,13 +3497,7 @@ def main():
                 with col_copy:
                     if st.button(t("copy_btn"), key="copy_resume", use_container_width=True):
                         st.toast(t("copied"))
-                        # JavaScriptでクリップボードにコピー
-                        escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['resume_result'])
 
                 if show_formatted:
                     st.markdown(st.session_state['resume_result'])
@@ -3540,12 +3570,7 @@ def main():
                     with col_copy_en2:
                         if st.button(t("copy_btn"), key="copy_resume_en2", use_container_width=True):
                             st.toast(t("copied"))
-                            escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                            st.components.v1.html(f"""
-                                <script>
-                                navigator.clipboard.writeText(`{escaped_text}`);
-                                </script>
-                            """, height=0)
+                            _copy_to_clipboard(st.session_state['resume_en_result'])
 
                     if show_formatted_en2:
                         st.markdown(st.session_state['resume_en_result'])
@@ -3597,11 +3622,7 @@ def main():
                                 "候補者レジュメ（匿名化済み）"
                             )
                         if share_id:
-                            # アプリのベースURLを取得
-                            try:
-                                base_url = st.secrets["APP_URL"]
-                            except KeyError:
-                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            base_url = _get_app_base_url()
                             share_url = f"{base_url}/?share={share_id}"
                             st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
@@ -3747,12 +3768,7 @@ def main():
                 with col_copy:
                     if st.button(t("copy_btn"), key="copy_resume_en", use_container_width=True):
                         st.toast(t("copied"))
-                        escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['resume_en_result'])
 
                 if show_formatted_en:
                     st.markdown(st.session_state['resume_en_result'])
@@ -3827,12 +3843,7 @@ def main():
                     with col_copy_jp2:
                         if st.button(t("copy_btn"), key="copy_resume_jp2", use_container_width=True):
                             st.toast(t("copied"))
-                            escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                            st.components.v1.html(f"""
-                                <script>
-                                navigator.clipboard.writeText(`{escaped_text}`);
-                                </script>
-                            """, height=0)
+                            _copy_to_clipboard(st.session_state['resume_result'])
 
                     if show_formatted_jp2:
                         st.markdown(st.session_state['resume_result'])
@@ -3884,10 +3895,7 @@ def main():
                                 "Anonymized Resume"
                             )
                         if share_id:
-                            try:
-                                base_url = st.secrets["APP_URL"]
-                            except KeyError:
-                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            base_url = _get_app_base_url()
                             share_url = f"{base_url}/?share={share_id}"
                             st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
@@ -3993,12 +4001,7 @@ def main():
                 with col_copy:
                     if st.button(t("copy_btn"), key="copy_resume_pii", use_container_width=True):
                         st.toast(t("copied"))
-                        escaped_text = st.session_state['resume_pii_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['resume_pii_result'])
 
                 if show_formatted_pii:
                     st.markdown(st.session_state['resume_pii_result'])
@@ -4120,12 +4123,7 @@ def main():
                 with col_copy:
                     if st.button(t("copy_btn"), key="copy_jd", use_container_width=True):
                         st.toast(t("copied"))
-                        escaped_text = st.session_state['jd_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['jd_result'])
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_result'])
@@ -4178,10 +4176,7 @@ def main():
                                 "Job Description"
                             )
                         if share_id:
-                            try:
-                                base_url = st.secrets["APP_URL"]
-                            except KeyError:
-                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            base_url = _get_app_base_url()
                             share_url = f"{base_url}/?share={share_id}"
                             st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
@@ -4297,12 +4292,7 @@ def main():
                 with col_copy:
                     if st.button(t("copy_btn"), key="copy_jd_en", use_container_width=True):
                         st.toast(t("copied"))
-                        escaped_text = st.session_state['jd_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['jd_en_result'])
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_en_result'])
@@ -4355,10 +4345,7 @@ def main():
                                 "求人票"
                             )
                         if share_id:
-                            try:
-                                base_url = st.secrets["APP_URL"]
-                            except KeyError:
-                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            base_url = _get_app_base_url()
                             share_url = f"{base_url}/?share={share_id}"
                             st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
@@ -4474,12 +4461,7 @@ def main():
                 with col_copy:
                     if st.button(t("copy_btn"), key="copy_jd_jp_jp", use_container_width=True):
                         st.toast(t("copied"))
-                        escaped_text = st.session_state['jd_jp_jp_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['jd_jp_jp_result'])
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_jp_jp_result'])
@@ -4532,10 +4514,7 @@ def main():
                                 "求人票"
                             )
                         if share_id:
-                            try:
-                                base_url = st.secrets["APP_URL"]
-                            except KeyError:
-                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            base_url = _get_app_base_url()
                             share_url = f"{base_url}/?share={share_id}"
                             st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                             st.code(share_url)
@@ -4651,12 +4630,7 @@ def main():
                 with col_copy:
                     if st.button("📋 Copy", key="copy_jd_en_en", use_container_width=True):
                         st.toast("✅ Copied to clipboard")
-                        escaped_text = st.session_state['jd_en_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['jd_en_en_result'])
 
                 if show_formatted:
                     st.markdown(st.session_state['jd_en_en_result'])
@@ -4709,10 +4683,7 @@ def main():
                                 "Job Description"
                             )
                         if share_id:
-                            try:
-                                base_url = st.secrets["APP_URL"]
-                            except KeyError:
-                                base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                            base_url = _get_app_base_url()
                             share_url = f"{base_url}/?share={share_id}"
                             st.success("✅ Share link created (valid for 1 month)")
                             st.code(share_url)
@@ -4821,12 +4792,7 @@ def main():
                 with col_copy:
                     if st.button("📋 コピー", key="copy_company", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['company_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['company_result'])
 
                 if show_formatted:
                     st.markdown(st.session_state['company_result'])
@@ -5260,12 +5226,7 @@ def main():
             with col_copy:
                 if st.button("📋 コピー", key="copy_matching", use_container_width=True):
                     st.toast("✅ クリップボードにコピーしました")
-                    escaped_text = st.session_state['matching_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                    st.components.v1.html(f"""
-                        <script>
-                        navigator.clipboard.writeText(`{escaped_text}`);
-                        </script>
-                    """, height=0)
+                    _copy_to_clipboard(st.session_state['matching_result'])
 
             if show_formatted:
                 st.markdown(st.session_state['matching_result'])
@@ -5427,12 +5388,7 @@ def main():
                 with col_copy_prop:
                     if st.button("📋 コピー", key="copy_proposal", use_container_width=True):
                         st.toast("✅ クリップボードにコピーしました")
-                        escaped_text = st.session_state['anonymous_proposal'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                        st.components.v1.html(f"""
-                            <script>
-                            navigator.clipboard.writeText(`{escaped_text}`);
-                            </script>
-                        """, height=0)
+                        _copy_to_clipboard(st.session_state['anonymous_proposal'])
 
                 if show_formatted_prop:
                     st.markdown(st.session_state['anonymous_proposal'])
@@ -5489,10 +5445,7 @@ def main():
                             "マッチング分析レポート"
                         )
                     if share_id:
-                        try:
-                            base_url = st.secrets["APP_URL"]
-                        except KeyError:
-                            base_url = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
+                        base_url = _get_app_base_url()
                         share_url = f"{base_url}/?share={share_id}"
                         st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
                         st.code(share_url)
@@ -5622,12 +5575,7 @@ def main():
                     with col_copy:
                         if st.button("📋 コピー", key="copy_cv_extract", use_container_width=True):
                             st.toast("✅ クリップボードにコピーしました")
-                            escaped_text = st.session_state['cv_extract_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                            st.components.v1.html(f"""
-                                <script>
-                                navigator.clipboard.writeText(`{escaped_text}`);
-                                </script>
-                            """, height=0)
+                            _copy_to_clipboard(st.session_state['cv_extract_result'])
 
                     # 文章量調整スライダー
                     col_slider, col_adjust = st.columns([3, 1])
@@ -5837,12 +5785,7 @@ Full-stack Developer...
                             with col_copy_b:
                                 if st.button("📋 コピー", key=f"copy_batch_cv_{cv_r['index']}", use_container_width=True):
                                     st.toast("✅ クリップボードにコピーしました")
-                                    escaped_text = cv_r['output'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                                    st.components.v1.html(f"""
-                                        <script>
-                                        navigator.clipboard.writeText(`{escaped_text}`);
-                                        </script>
-                                    """, height=0)
+                                    _copy_to_clipboard(cv_r['output'])
 
                             # 文章量調整スライダー
                             col_slider_b, col_adjust_b = st.columns([3, 1])
@@ -6258,12 +6201,7 @@ Full-stack Developer...
             with col_copy_e:
                 if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
                     st.toast("✅ クリップボードにコピーしました")
-                    escaped = st.session_state['generated_email'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                    st.components.v1.html(f"""
-                        <script>
-                        navigator.clipboard.writeText(`{escaped}`);
-                        </script>
-                    """, height=0)
+                    _copy_to_clipboard(st.session_state['generated_email'])
             with col_dl_e:
                 st.download_button(
                     "📄 テキストファイルDL",
@@ -6472,12 +6410,7 @@ Full-stack Developer...
                         with col_copy:
                             if st.button("📋 コピー", key=f"copy_batch_{result['index']}", use_container_width=True):
                                 st.toast("✅ クリップボードにコピーしました")
-                                escaped_text = result['output'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
-                                st.components.v1.html(f"""
-                                    <script>
-                                    navigator.clipboard.writeText(`{escaped_text}`);
-                                    </script>
-                                """, height=0)
+                                _copy_to_clipboard(result['output'])
 
                         if show_formatted:
                             st.markdown(result['output'])
