@@ -391,14 +391,16 @@ def show_shared_view(share_id: str):
     # フルページHTMLとして表示
     components.html(styled_html, height=800, scrolling=True)
 
-    # ダウンロードボタン
+    # ダウンロードボタン — ファーストネームをファイル名に使用
+    _shared_first = _extract_first_name(content)
+    _shared_fname = f"resume_{_shared_first}" if _shared_first else f"resume_{share_id[:8]}"
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
         st.download_button(
             "📄 Markdownでダウンロード",
             content,
-            f"resume_{share_id[:8]}.md",
+            f"{_shared_fname}.md",
             "text/markdown"
         )
     with col2:
@@ -406,7 +408,7 @@ def show_shared_view(share_id: str):
         st.download_button(
             "🌐 HTMLでダウンロード",
             html_content,
-            f"resume_{share_id[:8]}.html",
+            f"{_shared_fname}.html",
             "text/html"
         )
 
@@ -2533,6 +2535,20 @@ def extract_name_from_cv(text: str) -> str:
     return ""
 
 
+def _extract_first_name(content: str) -> str:
+    """生成済みレジュメからファーストネームを抽出する"""
+    for line in content.split('\n')[:15]:
+        line = line.strip()
+        # **Name**: John  or  Name: John  パターン
+        for prefix in ['**Name**:', 'Name:']:
+            if prefix in line:
+                name = line.split(prefix, 1)[1].strip()
+                name = name.strip('*').strip()
+                if name:
+                    return name
+    return ""
+
+
 def get_adjust_length_prompt(proposal_text: str, target_chars: int) -> str:
     """CV提案コメントの文章量を調整するプロンプトを生成"""
 
@@ -2801,10 +2817,13 @@ def extract_title_from_content(content: str, content_type: str) -> str:
     lines = content.split('\n')
 
     if content_type == "resume":
-        # レジュメの場合：「氏名：J.S.」や名前を探す
+        # レジュメの場合：まず_extract_first_nameで抽出を試みる
+        first_name = _extract_first_name(content)
+        if first_name:
+            return f"候補者: {first_name}"
+        # フォールバック：「氏名：J.S.」や名前を探す
         for line in lines[:10]:
             if '氏名' in line or 'Name:' in line:
-                # 氏名行から名前部分を抽出
                 name = line.split('：')[-1].split(':')[-1].strip()
                 if name and name != '[非公開]':
                     return f"候補者: {name}"
@@ -3511,28 +3530,33 @@ def main():
                     )
                     st.session_state['resume_result'] = edited_result
 
+                # ファーストネームをタイトル・ファイル名に使用
+                _opt_first = _extract_first_name(st.session_state['resume_result'])
+                _opt_label = f"候補者レジュメ - {_opt_first}" if _opt_first else "候補者レジュメ"
+                _opt_fname = f"resume_{_opt_first}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _opt_first else f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
                 with col_dl1:
                     st.download_button(
                         t("dl_markdown"),
                         data=st.session_state['resume_result'],
-                        file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        file_name=f"{_opt_fname}.md",
                         mime="text/markdown"
                     )
                 with col_dl2:
                     st.download_button(
                         t("dl_text"),
                         data=st.session_state['resume_result'],
-                        file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        file_name=f"{_opt_fname}.txt",
                         mime="text/plain"
                     )
                 with col_dl3:
-                    html_content = generate_html(st.session_state['resume_result'], "候補者レジュメ")
+                    html_content = generate_html(st.session_state['resume_result'], _opt_label)
                     st.download_button(
                         t("dl_html"),
                         data=html_content,
-                        file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        file_name=f"{_opt_fname}.html",
                         mime="text/html",
                         help=t("dl_html_help")
                     )
@@ -3583,13 +3607,18 @@ def main():
                         )
                         st.session_state['resume_en_result'] = edited_result_en2
 
+                    # ファーストネームをタイトル・ファイル名に使用
+                    _en2_first = _extract_first_name(st.session_state['resume_en_result'])
+                    _en2_label = f"Anonymized Resume - {_en2_first}" if _en2_first else "Anonymized Resume"
+                    _en2_fname = f"resume_{_en2_first}_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}" if _en2_first else f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
                     # ダウンロードボタン
                     col_dl1_en2, col_dl2_en2, col_dl3_en2 = st.columns(3)
                     with col_dl1_en2:
                         st.download_button(
                             "📄 Markdown",
                             data=st.session_state['resume_en_result'],
-                            file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                            file_name=f"{_en2_fname}.md",
                             mime="text/markdown",
                             key="en2_md"
                         )
@@ -3597,29 +3626,31 @@ def main():
                         st.download_button(
                             "📝 テキスト",
                             data=st.session_state['resume_en_result'],
-                            file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            file_name=f"{_en2_fname}.txt",
                             mime="text/plain",
                             key="en2_txt"
                         )
                     with col_dl3_en2:
-                        html_content = generate_html(st.session_state['resume_en_result'], "Anonymized Resume")
+                        html_content = generate_html(st.session_state['resume_en_result'], _en2_label)
                         st.download_button(
                             "🌐 HTML",
                             data=html_content,
-                            file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                            file_name=f"{_en2_fname}.html",
                             mime="text/html",
                             key="en2_html",
                             help="ブラウザで開いて印刷→PDF保存"
                         )
 
-                # 共有リンク作成ボタン
+                # 共有リンク作成ボタン — ファーストネームをタイトルに使用
+                _share_first = _extract_first_name(st.session_state.get('resume_result', ''))
+                _share_title = f"候補者レジュメ（匿名化済み）- {_share_first}" if _share_first else "候補者レジュメ（匿名化済み）"
                 if get_supabase_client():
                     st.divider()
                     if st.button("🔗 共有リンク作成", key="share_resume_jp", help="1ヶ月有効の共有リンクを作成"):
                         with st.spinner("共有リンクを作成中..."):
                             share_id = create_share_link(
                                 st.session_state['resume_result'],
-                                "候補者レジュメ（匿名化済み）"
+                                _share_title
                             )
                         if share_id:
                             base_url = _get_app_base_url()
@@ -3782,13 +3813,18 @@ def main():
                     )
                     st.session_state['resume_en_result'] = edited_result_en
 
+                # ファーストネームをタイトル・ファイル名に使用
+                _en_first = _extract_first_name(st.session_state['resume_en_result'])
+                _en_label = f"Anonymized Resume - {_en_first}" if _en_first else "Anonymized Resume"
+                _en_fname = f"resume_{_en_first}_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}" if _en_first else f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
                 with col_dl1:
                     st.download_button(
                         "📄 Markdown",
                         data=st.session_state['resume_en_result'],
-                        file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        file_name=f"{_en_fname}.md",
                         mime="text/markdown",
                         key="en_md"
                     )
@@ -3796,16 +3832,16 @@ def main():
                     st.download_button(
                         t("dl_text"),
                         data=st.session_state['resume_en_result'],
-                        file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        file_name=f"{_en_fname}.txt",
                         mime="text/plain",
                         key="en_txt"
                     )
                 with col_dl3:
-                    html_content = generate_html(st.session_state['resume_en_result'], "Anonymized Resume")
+                    html_content = generate_html(st.session_state['resume_en_result'], _en_label)
                     st.download_button(
                         "🌐 HTML",
                         data=html_content,
-                        file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        file_name=f"{_en_fname}.html",
                         mime="text/html",
                         key="en_html",
                         help=t("dl_html_help")
@@ -3856,13 +3892,18 @@ def main():
                         )
                         st.session_state['resume_result'] = edited_result_jp2
 
+                    # ファーストネームをタイトル・ファイル名に使用
+                    _jp2_first = _extract_first_name(st.session_state['resume_result'])
+                    _jp2_label = f"候補者レジュメ - {_jp2_first}" if _jp2_first else "候補者レジュメ"
+                    _jp2_fname = f"resume_{_jp2_first}_jp_{datetime.now().strftime('%Y%m%d_%H%M')}" if _jp2_first else f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
                     # ダウンロードボタン
                     col_dl1_jp2, col_dl2_jp2, col_dl3_jp2 = st.columns(3)
                     with col_dl1_jp2:
                         st.download_button(
                             "📄 Markdown",
                             data=st.session_state['resume_result'],
-                            file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                            file_name=f"{_jp2_fname}.md",
                             mime="text/markdown",
                             key="jp2_md"
                         )
@@ -3870,12 +3911,12 @@ def main():
                         st.download_button(
                             t("dl_text"),
                             data=st.session_state['resume_result'],
-                            file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            file_name=f"{_jp2_fname}.txt",
                             mime="text/plain",
                             key="jp2_txt"
                         )
                     with col_dl3_jp2:
-                        html_content = generate_html(st.session_state['resume_result'], "候補者レジュメ")
+                        html_content = generate_html(st.session_state['resume_result'], _jp2_label)
                         st.download_button(
                             "🌐 HTML",
                             data=html_content,
@@ -3885,14 +3926,16 @@ def main():
                             help=t("dl_html_help")
                         )
 
-                # 共有リンク作成ボタン
+                # 共有リンク作成ボタン — ファーストネームをタイトルに使用
+                _share_en_first = _extract_first_name(st.session_state.get('resume_en_result', ''))
+                _share_en_title = f"Anonymized Resume - {_share_en_first}" if _share_en_first else "Anonymized Resume"
                 if get_supabase_client():
                     st.divider()
                     if st.button("🔗 共有リンク作成", key="share_resume_en", help="1ヶ月有効の共有リンクを作成"):
                         with st.spinner("共有リンクを作成中..."):
                             share_id = create_share_link(
                                 st.session_state['resume_en_result'],
-                                "Anonymized Resume"
+                                _share_en_title
                             )
                         if share_id:
                             base_url = _get_app_base_url()
@@ -4014,13 +4057,18 @@ def main():
                     )
                     st.session_state['resume_pii_result'] = edited_result_pii
 
+                # ファーストネームをタイトル・ファイル名に使用
+                _pii_first = _extract_first_name(st.session_state['resume_pii_result'])
+                _pii_label = f"Resume - {_pii_first}" if _pii_first else "Candidate Resume"
+                _pii_fname = f"resume_{_pii_first}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _pii_first else f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
                 # ダウンロードボタン
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
                 with col_dl1:
                     st.download_button(
                         "📄 Markdown",
                         data=st.session_state['resume_pii_result'],
-                        file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        file_name=f"{_pii_fname}.md",
                         mime="text/markdown",
                         key="pii_md"
                     )
@@ -4028,16 +4076,16 @@ def main():
                     st.download_button(
                         t("dl_text"),
                         data=st.session_state['resume_pii_result'],
-                        file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        file_name=f"{_pii_fname}.txt",
                         mime="text/plain",
                         key="pii_txt"
                     )
                 with col_dl3:
-                    html_content = generate_html(st.session_state['resume_pii_result'], "Candidate Resume")
+                    html_content = generate_html(st.session_state['resume_pii_result'], _pii_label)
                     st.download_button(
                         "🌐 HTML",
                         data=html_content,
-                        file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        file_name=f"{_pii_fname}.html",
                         mime="text/html",
                         key="pii_html",
                         help=t("dl_html_help")
@@ -5402,6 +5450,11 @@ def main():
                     )
                     st.session_state['anonymous_proposal'] = edited_proposal
 
+                # ファーストネームをタイトル・ファイル名に使用
+                _prop_first = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
+                _prop_label = f"匿名候補者提案資料 - {_prop_first}" if _prop_first else "匿名候補者提案資料"
+                _prop_fname = f"proposal_{_prop_first}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _prop_first else f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
                 # ダウンロードボタン
                 st.divider()
                 col_dl_prop1, col_dl_prop2, col_dl_prop3 = st.columns(3)
@@ -5409,7 +5462,7 @@ def main():
                     st.download_button(
                         "📄 Markdown",
                         data=st.session_state['anonymous_proposal'],
-                        file_name=f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        file_name=f"{_prop_fname}.md",
                         mime="text/markdown",
                         key="proposal_md"
                     )
@@ -5417,32 +5470,34 @@ def main():
                     st.download_button(
                         "📝 テキスト",
                         data=st.session_state['anonymous_proposal'],
-                        file_name=f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        file_name=f"{_prop_fname}.txt",
                         mime="text/plain",
                         key="proposal_txt"
                     )
                 with col_dl_prop3:
                     html_content = generate_html(
                         st.session_state['anonymous_proposal'],
-                        "匿名候補者提案資料"
+                        _prop_label
                     )
                     st.download_button(
                         "🌐 HTML",
                         data=html_content,
-                        file_name=f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        file_name=f"{_prop_fname}.html",
                         mime="text/html",
                         key="proposal_html",
                         help="ブラウザで開いて印刷→PDF保存"
                     )
 
-            # 共有リンク作成ボタン
+            # 共有リンク作成ボタン — 候補者名をタイトルに使用
+            _match_name = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
+            _match_title = f"マッチング分析レポート - {_match_name}" if _match_name else "マッチング分析レポート"
             if get_supabase_client():
                 st.divider()
                 if st.button("🔗 共有リンク作成", key="share_matching", help="1ヶ月有効の共有リンクを作成"):
                     with st.spinner("共有リンクを作成中..."):
                         share_id = create_share_link(
                             st.session_state['matching_result'],
-                            "マッチング分析レポート"
+                            _match_title
                         )
                     if share_id:
                         base_url = _get_app_base_url()
@@ -6417,22 +6472,27 @@ Full-stack Developer...
                         else:
                             st.code(result['output'], language="markdown")
 
+                        # ファーストネームをファイル名に使用
+                        _batch_first = _extract_first_name(result['output'])
+                        _batch_label = f"候補者 #{result['index']} - {_batch_first}" if _batch_first else f"候補者 #{result['index']}"
+                        _batch_fname = f"resume_{_batch_first}_{datetime.now().strftime('%Y%m%d')}" if _batch_first else f"resume_{result['index']}_{datetime.now().strftime('%Y%m%d')}"
+
                         # ダウンロードボタン
                         col_b1, col_b2 = st.columns(2)
                         with col_b1:
                             st.download_button(
                                 "📄 Markdown",
                                 data=result['output'],
-                                file_name=f"resume_{result['index']}_{datetime.now().strftime('%Y%m%d')}.md",
+                                file_name=f"{_batch_fname}.md",
                                 mime="text/markdown",
                                 key=f"batch_md_{result['index']}"
                             )
                         with col_b2:
-                            html_content = generate_html(result['output'], f"候補者 #{result['index']}")
+                            html_content = generate_html(result['output'], _batch_label)
                             st.download_button(
                                 "🌐 HTML",
                                 data=html_content,
-                                file_name=f"resume_{result['index']}_{datetime.now().strftime('%Y%m%d')}.html",
+                                file_name=f"{_batch_fname}.html",
                                 mime="text/html",
                                 key=f"batch_html_{result['index']}"
                             )
