@@ -22,6 +22,7 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 import ipaddress
+from translations import TRANSLATIONS, FEATURE_KEYS
 
 # Supabase設定（オプション）
 try:
@@ -3173,6 +3174,12 @@ def process_batch_resumes(api_key: str, resumes: list[str], anonymize: str) -> l
     return results
 
 
+def t(key: str) -> str:
+    """UI翻訳ヘルパー。session_stateの言語設定に応じた翻訳文字列を返す"""
+    lang = st.session_state.get('ui_lang', 'ja')
+    return TRANSLATIONS.get(lang, TRANSLATIONS['ja']).get(key, key)
+
+
 def main():
     """メインアプリケーション"""
 
@@ -3226,13 +3233,30 @@ def main():
         st.session_state['localstorage_loaded'] = True
 
     # ヘッダー
-    st.markdown("# 🌏 GlobalMatch Assistant")
-    st.markdown("*外国人エンジニア × 日本企業をつなぐ人材紹介業務効率化ツール*")
+    st.markdown(t("app_title"))
+    st.markdown(t("app_subtitle"))
     st.divider()
 
     # サイドバー設定
     with st.sidebar:
-        st.header("⚙️ 設定")
+        st.header(t("settings"))
+
+        # 言語切り替え
+        if 'ui_lang' not in st.session_state:
+            st.session_state['ui_lang'] = 'ja'
+        lang_choice = st.radio(
+            t("lang_label"),
+            options=["ja", "en"],
+            format_func=lambda x: "日本語" if x == "ja" else "English",
+            index=0 if st.session_state.get('ui_lang', 'ja') == 'ja' else 1,
+            key="ui_lang_radio",
+            horizontal=True
+        )
+        if lang_choice != st.session_state.get('ui_lang'):
+            st.session_state['ui_lang'] = lang_choice
+            st.rerun()
+
+        st.divider()
 
         # APIキー取得（secretsまたは入力）
         api_key = ""
@@ -3243,13 +3267,13 @@ def main():
 
         if not api_key:
             api_key = st.text_input(
-                "Groq API Key",
+                t("api_key_label"),
                 type="password",
-                placeholder="gsk_...",
-                help="APIキーは[Groq Console](https://console.groq.com/keys)から無料で取得できます"
+                placeholder=t("api_key_placeholder"),
+                help=t("api_key_help")
             )
         else:
-            st.success("✅ APIキー設定済み（secrets）")
+            st.success(t("api_key_set"))
 
         st.divider()
 
@@ -3258,20 +3282,20 @@ def main():
         jd_count = len(st.session_state.get('jd_history', []))
 
         if resume_count == 0 and jd_count == 0:
-            st.warning("📂 履歴がありません")
-            st.caption("バックアップファイルをお持ちの場合、ここからインポートできます")
+            st.warning(t("no_history"))
+            st.caption(t("import_hint"))
 
             uploaded_backup = st.file_uploader(
-                "バックアップファイル（JSON）",
+                t("backup_file"),
                 type=["json"],
                 key="sidebar_import_uploader",
-                help="過去にエクスポートしたバックアップファイルを選択"
+                help=t("backup_file_help")
             )
 
             if uploaded_backup:
                 try:
                     json_string = uploaded_backup.read().decode('utf-8')
-                    if st.button("📥 復元する", key="sidebar_import_btn", use_container_width=True):
+                    if st.button(t("restore_btn"), key="sidebar_import_btn", use_container_width=True):
                         success, message = import_history_from_json(json_string)
                         if success:
                             st.success(message)
@@ -3279,144 +3303,73 @@ def main():
                         else:
                             st.error(message)
                 except Exception as e:
-                    st.error(f"ファイル読み込みエラー: {str(e)}")
+                    st.error(t("file_read_error").format(error=str(e)))
 
             st.divider()
 
         # 機能選択
-        st.subheader("📋 機能選択")
+        st.subheader(t("feature_select"))
         feature = st.radio(
-            "変換モードを選択",
-            options=[
-                "レジュメ最適化（英→日）",
-                "レジュメ匿名化（英→英）",
-                "レジュメ個人情報削除",
-                "求人票魅力化（日→英）",
-                "求人票翻訳（英→日）",
-                "求人票フォーマット化（日→日）",
-                "求人票フォーマット化（英→英）",
-                "企業紹介文作成（PDF）",
-                "🎯 レジュメ×求人票マッチング分析",
-                "📝 CV提案コメント抽出",
-                "✉️ 求人打診メール作成",
-                "📦 バッチ処理（複数レジュメ）"
-            ],
+            t("feature_select_label"),
+            options=FEATURE_KEYS,
+            format_func=lambda x: t(f"feature.{x}"),
             index=0,
-            help="変換したいドキュメントの種類を選択してください"
+            help=t("feature_select_help")
         )
 
         st.divider()
 
         # 使い方ガイド
-        with st.expander("📖 使い方"):
-            st.markdown("""
-            **レジュメ最適化（英→日）**
-            1. 英語のレジュメをペーストまたはPDFをアップロード
-            2. 匿名化オプションを設定
-            3. 「変換実行」をクリック
-
-            **レジュメ匿名化（英→英）**
-            1. 英語のレジュメをペーストまたはPDFをアップロード
-            2. 匿名化レベルを選択
-            3. 英語のまま匿名化されたレジュメを取得
-
-            **レジュメ個人情報削除**
-            1. レジュメをペーストまたはPDFをアップロード
-            2. 「個人情報削除実行」をクリック
-            3. メール・LinkedIn・電話番号・住所が削除され、氏名がFirst nameのみに変更されたレジュメを取得
-
-            **求人票魅力化（日→英）**
-            1. 日本語の求人票をペースト
-            2. 「変換実行」をクリック
-
-            **求人票翻訳（英→日）**
-            1. 英語の求人票をペースト
-            2. 「変換実行」をクリック
-            3. 日本人エンジニア向けに最適化
-
-            **求人票フォーマット化（日→日）**
-            1. 日本語の求人票をペースト
-            2. 「変換実行」をクリック
-            3. 統一フォーマットの魅力的な日本語JDを取得
-
-            **求人票フォーマット化（英→英）**
-            1. 英語の求人票をペースト
-            2. 「変換実行」をクリック
-            3. 統一フォーマットの魅力的な英語JDを取得
-
-            **企業紹介文作成（PDF）**
-            1. 会社紹介PDFをアップロード
-            2. 「紹介文作成」をクリック
-            3. 求職者向けの簡潔な企業紹介文を取得
-
-            **レジュメ×求人票マッチング分析**
-            1. 最適化済みレジュメと求人票を入力
-            2. テキスト直接入力、または過去の変換結果から選択可能
-            3. 「マッチング分析を実行」をクリック
-            4. スキル比較、一致点・差分の事実ベース分析を取得
-
-            **CV提案コメント抽出**
-            1. 英語のCVをテキスト入力またはPDFアップロード
-            2. 「抽出実行」をクリック
-            3. 匿名提案用の事実ベース5項目（各300文字以内・英語）を取得
-            4. 複数CVの一括処理にも対応（---NEXT---で区切り）
-
-            **求人打診メール作成**
-            1. 候補者の名前と送信者名を入力
-            2. 求人情報（ポジション名、企業名、URL等）を追加
-            3. 「メール生成」をクリックでメール文面を自動作成
-            4. コピーしてそのままメール送信に利用
-
-            *生成結果は右上のコピーボタンで簡単にコピーできます*
-            """)
+        with st.expander(t("usage_guide")):
+            st.markdown(t("usage_guide_content"))
 
     # メインコンテンツ
-    if feature == "レジュメ最適化（英→日）":
-        st.subheader("📄 レジュメ最適化（英語 → 日本語）")
-        st.caption("外国人エンジニアの英語レジュメを、日本企業向けの統一フォーマットに変換します")
+    if feature == "resume_optimize":
+        st.subheader(t("resume_opt_title"))
+        st.caption(t("resume_opt_desc"))
 
         col1, col2 = st.columns([1, 1])
 
         with col1:
             # 入力方法タブ
-            input_tab1, input_tab2, input_tab3 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み", "🔗 LinkedIn"])
+            input_tab1, input_tab2, input_tab3 = st.tabs([t("tab_text_input"), t("tab_pdf"), t("tab_linkedin")])
 
             with input_tab1:
                 # サンプルデータボタン
                 col_label, col_sample = st.columns([3, 1])
                 with col_label:
-                    st.markdown("##### 入力：英語レジュメ")
+                    st.markdown(t("input_resume"))
                 with col_sample:
-                    if st.button("📝 サンプル", key="sample_resume_btn", help="サンプルレジュメを挿入"):
+                    if st.button(t("sample_btn"), key="sample_resume_btn", help=t("sample_help")):
                         st.session_state['resume_text_input'] = SAMPLE_RESUME
 
                 # テキストエリアの値を取得
                 resume_input = st.text_area(
-                    "英語のレジュメをペースト",
+                    t("paste_resume"),
                     height=350,
-                    placeholder="Paste the English resume here...\n\nExample:\nJohn Doe\nSoftware Engineer with 5+ years of experience...",
+                    placeholder=t("paste_resume_placeholder"),
                     label_visibility="collapsed",
                     key="resume_text_input"
                 )
 
             with input_tab2:
-                st.markdown("##### PDFをアップロード")
+                st.markdown(t("upload_pdf"))
                 uploaded_pdf = st.file_uploader(
-                    "PDFファイルを選択",
+                    t("select_pdf"),
                     type=["pdf"],
                     key="resume_pdf",
-                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                    help=t("pdf_help").format(size=MAX_PDF_SIZE_MB)
                 )
 
                 if uploaded_pdf:
-                    with st.spinner("📄 PDFを読み込み中..."):
+                    with st.spinner(t("reading_pdf")):
                         extracted_text, error = extract_text_from_pdf(uploaded_pdf)
                         if error:
                             st.error(f"❌ {error}")
                         else:
-                            st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                            st.success(t("text_extracted").format(count=f"{len(extracted_text):,}"))
                             resume_input = extracted_text
-                            with st.expander("抽出されたテキストを確認"):
+                            with st.expander(t("view_extracted")):
                                 st.text(extracted_text[:2000] + ("..." if len(extracted_text) > 2000 else ""))
                 else:
                     # PDFがない場合はテキスト入力を使用
@@ -3424,61 +3377,56 @@ def main():
                         resume_input = ""
 
             with input_tab3:
-                st.markdown("##### LinkedInプロフィールをコピペ")
-                st.info("💡 LinkedInページを開き、プロフィール全体をコピーして貼り付けてください")
+                st.markdown(t("linkedin_header"))
+                st.info(t("linkedin_hint"))
 
-                with st.expander("📖 コピー方法", expanded=False):
-                    st.markdown("""
-                    1. LinkedInでプロフィールページを開く
-                    2. `Ctrl+A`（Mac: `Cmd+A`）で全選択
-                    3. `Ctrl+C`（Mac: `Cmd+C`）でコピー
-                    4. 下のテキストエリアに貼り付け
-                    """)
+                with st.expander(t("linkedin_how"), expanded=False):
+                    st.markdown(t("linkedin_instructions"))
 
                 linkedin_input = st.text_area(
-                    "LinkedInプロフィールをペースト",
+                    t("paste_linkedin"),
                     height=300,
-                    placeholder="LinkedInプロフィールページのテキストを貼り付けてください...\n\n例:\nJohn Smith\nSenior Software Engineer at Google\nSan Francisco Bay Area\n\nAbout\nExperienced software engineer with 7+ years...",
+                    placeholder=t("linkedin_placeholder"),
                     label_visibility="collapsed",
                     key="linkedin_text_input"
                 )
 
                 if linkedin_input:
                     resume_input = linkedin_input
-                    st.success(f"✅ LinkedInテキスト読み込み完了（{len(linkedin_input):,}文字）")
+                    st.success(t("linkedin_loaded").format(count=f"{len(linkedin_input):,}"))
 
             # 文字数カウンター
             char_count = len(resume_input) if resume_input else 0
             if char_count > MAX_INPUT_CHARS:
-                st.error(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+                st.error(t("char_count_exceeded").format(count=f"{char_count:,}", max=f"{MAX_INPUT_CHARS:,}"))
             elif char_count > 0:
-                st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字")
+                st.caption(t("char_count").format(count=f"{char_count:,}", max=f"{MAX_INPUT_CHARS:,}"))
 
             anonymize = st.radio(
-                "🔒 匿名化レベル",
+                t("anon_label"),
                 options=["full", "light", "none"],
                 format_func=lambda x: {
-                    "full": "完全匿名化（個人情報＋企業名＋プロジェクト）",
-                    "light": "軽度匿名化（個人情報のみ）",
-                    "none": "匿名化なし"
+                    "full": t("anon_full"),
+                    "light": t("anon_light"),
+                    "none": t("anon_none")
                 }[x],
                 index=0,
-                help="完全：企業名・大学名も業界表現に変換 / 軽度：氏名・連絡先のみ匿名化"
+                help=t("anon_help")
             )
 
             process_btn = st.button(
-                "🔄 変換実行",
+                t("transform_btn"),
                 type="primary",
                 use_container_width=True,
                 disabled=not api_key or not resume_input
             )
 
         with col2:
-            st.markdown("##### 出力：日本企業向けフォーマット")
+            st.markdown(t("resume_opt_output"))
 
             if process_btn:
                 if not api_key:
-                    st.error("❌ APIキーを入力してください")
+                    st.error(t("no_api_key"))
                 else:
                     # 入力バリデーション
                     is_valid, error_msg = validate_input(resume_input, "resume")
@@ -3488,7 +3436,7 @@ def main():
                         try:
                             start_time = time.time()
                             prompt = get_resume_optimization_prompt(resume_input, anonymize)
-                            st.caption("🤖 AIがレジュメを解析・構造化しています...")
+                            st.caption(t("resume_opt_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
                             elapsed_time = time.time() - start_time
@@ -3496,23 +3444,23 @@ def main():
                             st.session_state['resume_result'] = result
                             st.session_state['resume_time'] = elapsed_time
                             stream_container.empty()
-                            st.success(f"✅ 変換完了！（{elapsed_time:.1f}秒）")
+                            st.success(t("resume_opt_done").format(time=f"{elapsed_time:.1f}"))
 
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
+                            st.error(t("unexpected_error"))
 
             # 結果表示
             if 'resume_result' in st.session_state:
                 # 表示切替とコピーボタン
                 col_view, col_copy = st.columns([2, 1])
                 with col_view:
-                    show_formatted = st.checkbox("📖 整形表示", value=False, key="resume_formatted",
-                                                  help="Markdownをフォーマットして表示")
+                    show_formatted = st.checkbox(t("formatted_view"), value=False, key="resume_formatted",
+                                                  help=t("formatted_help"))
                 with col_copy:
-                    if st.button("📋 コピー", key="copy_resume", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
+                    if st.button(t("copy_btn"), key="copy_resume", use_container_width=True):
+                        st.toast(t("copied"))
                         # JavaScriptでクリップボードにコピー
                         escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
@@ -3526,7 +3474,7 @@ def main():
                 else:
                     # 編集可能なテキストエリア
                     edited_result = st.text_area(
-                        "出力結果（編集可能）",
+                        t("editable_output"),
                         value=st.session_state['resume_result'],
                         height=400,
                         key="edit_resume_result_jp"
@@ -3537,14 +3485,14 @@ def main():
                 col_dl1, col_dl2, col_dl3 = st.columns(3)
                 with col_dl1:
                     st.download_button(
-                        "📄 Markdown",
+                        t("dl_markdown"),
                         data=st.session_state['resume_result'],
                         file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
                         mime="text/markdown"
                     )
                 with col_dl2:
                     st.download_button(
-                        "📝 テキスト",
+                        t("dl_text"),
                         data=st.session_state['resume_result'],
                         file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                         mime="text/plain"
@@ -3552,46 +3500,46 @@ def main():
                 with col_dl3:
                     html_content = generate_html(st.session_state['resume_result'], "候補者レジュメ")
                     st.download_button(
-                        "🌐 HTML",
+                        t("dl_html"),
                         data=html_content,
                         file_name=f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
-                        help="ブラウザで開いて印刷→PDF保存"
+                        help=t("dl_html_help")
                     )
 
                 # 追加変換ボタン
                 st.divider()
-                st.markdown("##### 🔄 追加変換")
-                if st.button("📝 この結果を英語匿名化（English → English）", key="convert_to_en_anonymize", use_container_width=True, help="生成された日本語レジュメを基に英語匿名化レジュメを生成"):
+                st.markdown(t("additional_convert"))
+                if st.button(t("convert_to_en"), key="convert_to_en_anonymize", use_container_width=True, help=t("convert_to_en_help")):
                     try:
                         # 元の英語レジュメを取得
                         if 'resume_text_input' in st.session_state and st.session_state['resume_text_input']:
                             original_english_resume = st.session_state['resume_text_input']
                             prompt_en = get_english_anonymization_prompt(original_english_resume, "full")
-                            st.caption("🤖 英語匿名化レジュメを生成中...")
+                            st.caption(t("generating_en"))
                             stream_container = st.empty()
                             result_en = stream_to_container(api_key, prompt_en, stream_container)
                             st.session_state['resume_en_result'] = result_en
                             stream_container.empty()
-                            st.success("✅ 英語匿名化レジュメの生成が完了しました")
-                            st.info("💡 下にスクロールして結果を確認してください")
+                            st.success(t("en_done"))
+                            st.info(t("scroll_hint"))
                             st.rerun()
                         else:
-                            st.error("❌ 元の英語レジュメが見つかりません。最初から変換し直してください。")
+                            st.error(t("no_original_resume"))
                     except Exception as e:
-                        st.error("❌ 生成エラーが発生しました。しばらく待ってから再試行してください")
+                        st.error(t("generation_error"))
 
                 # 英語匿名化結果の表示
                 if 'resume_en_result' in st.session_state and st.session_state.get('resume_result'):
                     st.divider()
-                    st.markdown("##### 📄 英語匿名化レジュメ（追加生成）")
+                    st.markdown(t("en_result_header"))
 
                     col_view_en2, col_copy_en2 = st.columns([2, 1])
                     with col_view_en2:
-                        show_formatted_en2 = st.checkbox("📖 整形表示", value=False, key="resume_en2_formatted")
+                        show_formatted_en2 = st.checkbox(t("formatted_view"), value=False, key="resume_en2_formatted")
                     with col_copy_en2:
-                        if st.button("📋 コピー", key="copy_resume_en2", use_container_width=True):
-                            st.toast("✅ クリップボードにコピーしました")
+                        if st.button(t("copy_btn"), key="copy_resume_en2", use_container_width=True):
+                            st.toast(t("copied"))
                             escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                             st.components.v1.html(f"""
                                 <script>
@@ -3661,27 +3609,27 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
-    elif feature == "レジュメ匿名化（英→英）":
-        st.subheader("🔒 レジュメ匿名化（英語 → 英語）")
-        st.caption("英語レジュメを英語のまま匿名化します。海外クライアントへの提出に最適")
+    elif feature == "resume_anonymize":
+        st.subheader(t("resume_anon_title"))
+        st.caption(t("resume_anon_desc"))
 
         col1, col2 = st.columns([1, 1])
 
         with col1:
             # 入力方法タブ
-            input_tab1, input_tab2, input_tab3 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み", "🔗 LinkedIn"])
+            input_tab1, input_tab2, input_tab3 = st.tabs([t("tab_text_input"), t("tab_pdf"), t("tab_linkedin")])
 
             with input_tab1:
                 # サンプルデータボタン
                 col_label, col_sample = st.columns([3, 1])
                 with col_label:
-                    st.markdown("##### 入力：英語レジュメ")
+                    st.markdown(t("input_resume"))
                 with col_sample:
-                    if st.button("📝 サンプル", key="sample_resume_en_btn", help="サンプルレジュメを挿入"):
+                    if st.button(t("sample_btn"), key="sample_resume_en_btn", help=t("sample_help")):
                         st.session_state['resume_en_text'] = SAMPLE_RESUME
 
                 resume_en_input = st.text_area(
-                    "英語のレジュメをペースト",
+                    t("paste_resume"),
                     height=350,
                     placeholder="Paste the English resume here...",
                     label_visibility="collapsed",
@@ -3689,31 +3637,31 @@ def main():
                 )
 
             with input_tab2:
-                st.markdown("##### PDFをアップロード")
+                st.markdown(t("upload_pdf"))
                 uploaded_pdf_en = st.file_uploader(
-                    "PDFファイルを選択",
+                    t("select_pdf"),
                     type=["pdf"],
                     key="resume_en_pdf",
-                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                    help=t("pdf_help").format(size=MAX_PDF_SIZE_MB)
                 )
 
                 if uploaded_pdf_en:
-                    with st.spinner("📄 PDFを読み込み中..."):
+                    with st.spinner(t("reading_pdf")):
                         extracted_text_en, error_en = extract_text_from_pdf(uploaded_pdf_en)
                         if error_en:
                             st.error(f"❌ {error_en}")
                         else:
-                            st.success(f"✅ テキスト抽出完了（{len(extracted_text_en):,}文字）")
+                            st.success(t("text_extracted").format(count=f"{len(extracted_text_en):,}"))
                             resume_en_input = extracted_text_en
-                            with st.expander("抽出されたテキストを確認"):
+                            with st.expander(t("view_extracted")):
                                 st.text(extracted_text_en[:2000] + ("..." if len(extracted_text_en) > 2000 else ""))
                 else:
                     if 'resume_en_input' not in dir():
                         resume_en_input = ""
 
             with input_tab3:
-                st.markdown("##### LinkedInプロフィールをコピペ")
-                st.info("💡 LinkedInページを開き、プロフィール全体をコピーして貼り付けてください")
+                st.markdown(t("linkedin_header"))
+                st.info(t("linkedin_hint"))
 
                 with st.expander("📖 コピー方法", expanded=False):
                     st.markdown("""
@@ -3743,11 +3691,11 @@ def main():
                 st.caption(f"📊 {char_count_en:,} / {MAX_INPUT_CHARS:,} 文字")
 
             anonymize_en = st.radio(
-                "🔒 匿名化レベル",
+                t("anon_label"),
                 options=["full", "light"],
                 format_func=lambda x: {
-                    "full": "完全匿名化（個人情報＋企業名＋プロジェクト）",
-                    "light": "軽度匿名化（個人情報のみ）"
+                    "full": t("anon_full"),
+                    "light": t("anon_light")
                 }[x],
                 index=0,
                 key="anonymize_en",
@@ -3755,7 +3703,7 @@ def main():
             )
 
             process_en_btn = st.button(
-                "🔄 匿名化実行",
+                t("resume_anon_btn"),
                 type="primary",
                 use_container_width=True,
                 disabled=not api_key or not resume_en_input,
@@ -3763,11 +3711,11 @@ def main():
             )
 
         with col2:
-            st.markdown("##### 出力：匿名化された英語レジュメ")
+            st.markdown(t("resume_anon_output"))
 
             if process_en_btn:
                 if not api_key:
-                    st.error("❌ APIキーを入力してください")
+                    st.error(t("no_api_key"))
                 else:
                     is_valid_en, error_msg_en = validate_input(resume_en_input, "resume")
                     if not is_valid_en:
@@ -3776,7 +3724,7 @@ def main():
                         try:
                             start_time = time.time()
                             prompt = get_english_anonymization_prompt(resume_en_input, anonymize_en)
-                            st.caption("🤖 AIがレジュメを匿名化しています...")
+                            st.caption(t("resume_anon_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
                             elapsed_time = time.time() - start_time
@@ -3784,21 +3732,21 @@ def main():
                             st.session_state['resume_en_result'] = result
                             st.session_state['resume_en_time'] = elapsed_time
                             stream_container.empty()
-                            st.success(f"✅ 匿名化完了！（{elapsed_time:.1f}秒）")
+                            st.success(t("resume_anon_done").format(time=f"{elapsed_time:.1f}"))
 
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                                st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
+                                st.error(t("unexpected_error"))
 
             # 結果表示
             if 'resume_en_result' in st.session_state:
                 col_view, col_copy = st.columns([2, 1])
                 with col_view:
-                    show_formatted_en = st.checkbox("📖 整形表示", value=False, key="resume_en_formatted")
+                    show_formatted_en = st.checkbox(t("formatted_view"), value=False, key="resume_en_formatted")
                 with col_copy:
-                    if st.button("📋 コピー", key="copy_resume_en", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
+                    if st.button(t("copy_btn"), key="copy_resume_en", use_container_width=True):
+                        st.toast(t("copied"))
                         escaped_text = st.session_state['resume_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
@@ -3811,7 +3759,7 @@ def main():
                 else:
                     # 編集可能なテキストエリア
                     edited_result_en = st.text_area(
-                        "Output (Editable)",
+                        t("editable_output"),
                         value=st.session_state['resume_en_result'],
                         height=400,
                         key="edit_resume_result_en"
@@ -3830,7 +3778,7 @@ def main():
                     )
                 with col_dl2:
                     st.download_button(
-                        "📝 テキスト",
+                        t("dl_text"),
                         data=st.session_state['resume_en_result'],
                         file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                         mime="text/plain",
@@ -3844,23 +3792,23 @@ def main():
                         file_name=f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
                         key="en_html",
-                        help="ブラウザで開いて印刷→PDF保存"
+                        help=t("dl_html_help")
                     )
 
                 # 追加変換ボタン
                 st.divider()
                 st.markdown("##### 🔄 追加変換")
-                if st.button("🌐 この結果を日本語に翻訳（English → Japanese）", key="convert_to_jp_translate", use_container_width=True, help="英語匿名化レジュメを日本語フォーマットに変換"):
+                if st.button(t("convert_to_jp"), key="convert_to_jp_translate", use_container_width=True, help="英語匿名化レジュメを日本語フォーマットに変換"):
                     try:
                         if 'resume_en_result' in st.session_state and st.session_state['resume_en_result']:
                             english_resume = st.session_state['resume_en_result']
                             prompt_jp = get_resume_optimization_prompt(english_resume, "full")
-                            st.caption("🤖 日本語レジュメを生成中...")
+                            st.caption(t("generating_jp"))
                             stream_container = st.empty()
                             result_jp = stream_to_container(api_key, prompt_jp, stream_container)
                             st.session_state['resume_result'] = result_jp
                             stream_container.empty()
-                            st.success("✅ 日本語レジュメの生成が完了しました")
+                            st.success(t("jp_done"))
                             st.info("💡 下にスクロールして結果を確認してください")
                             st.rerun()
                         else:
@@ -3871,14 +3819,14 @@ def main():
                 # 日本語変換結果の表示（英語匿名化後の追加変換）
                 if 'resume_result' in st.session_state and st.session_state.get('resume_en_result') and not st.session_state.get('resume_text_input'):
                     st.divider()
-                    st.markdown("##### 📄 日本語レジュメ（追加生成）")
+                    st.markdown(t("jp_result_header"))
 
                     col_view_jp2, col_copy_jp2 = st.columns([2, 1])
                     with col_view_jp2:
-                        show_formatted_jp2 = st.checkbox("📖 整形表示", value=False, key="resume_jp2_formatted")
+                        show_formatted_jp2 = st.checkbox(t("formatted_view"), value=False, key="resume_jp2_formatted")
                     with col_copy_jp2:
-                        if st.button("📋 コピー", key="copy_resume_jp2", use_container_width=True):
-                            st.toast("✅ クリップボードにコピーしました")
+                        if st.button(t("copy_btn"), key="copy_resume_jp2", use_container_width=True):
+                            st.toast(t("copied"))
                             escaped_text = st.session_state['resume_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                             st.components.v1.html(f"""
                                 <script>
@@ -3890,7 +3838,7 @@ def main():
                         st.markdown(st.session_state['resume_result'])
                     else:
                         edited_result_jp2 = st.text_area(
-                            "出力結果（編集可能）",
+                            t("editable_output"),
                             value=st.session_state['resume_result'],
                             height=400,
                             key="edit_resume_result_jp2"
@@ -3909,7 +3857,7 @@ def main():
                         )
                     with col_dl2_jp2:
                         st.download_button(
-                            "📝 テキスト",
+                            t("dl_text"),
                             data=st.session_state['resume_result'],
                             file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                             mime="text/plain",
@@ -3923,7 +3871,7 @@ def main():
                             file_name=f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                             mime="text/html",
                             key="jp2_html",
-                            help="ブラウザで開いて印刷→PDF保存"
+                            help=t("dl_html_help")
                         )
 
                 # 共有リンク作成ボタン
@@ -3947,45 +3895,45 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
-    elif feature == "レジュメ個人情報削除":
-        st.subheader("🛡️ レジュメ個人情報削除")
-        st.caption("レジュメからメール・LinkedIn・電話番号・住所を削除し、氏名をFirst nameのみに変更します")
+    elif feature == "resume_pii":
+        st.subheader(t("pii_title"))
+        st.caption(t("pii_desc"))
 
         col1, col2 = st.columns([1, 1])
 
         with col1:
             # 入力方法タブ
-            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+            input_tab1, input_tab2 = st.tabs([t("tab_text_input"), t("tab_pdf")])
 
             with input_tab1:
-                st.markdown("##### 入力：レジュメ")
+                st.markdown(t("pii_input"))
 
                 resume_pii_input = st.text_area(
-                    "レジュメをペースト",
+                    t("pii_paste"),
                     height=350,
-                    placeholder="Paste the resume here...\n\nレジュメのテキストを貼り付けてください...",
+                    placeholder=t("pii_placeholder"),
                     label_visibility="collapsed",
                     key="resume_pii_text"
                 )
 
             with input_tab2:
-                st.markdown("##### PDFをアップロード")
+                st.markdown(t("upload_pdf"))
                 uploaded_pdf_pii = st.file_uploader(
-                    "PDFファイルを選択",
+                    t("select_pdf"),
                     type=["pdf"],
                     key="resume_pii_pdf",
-                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                    help=t("pdf_help").format(size=MAX_PDF_SIZE_MB)
                 )
 
                 if uploaded_pdf_pii:
-                    with st.spinner("📄 PDFを読み込み中..."):
+                    with st.spinner(t("reading_pdf")):
                         extracted_text_pii, error_pii = extract_text_from_pdf(uploaded_pdf_pii)
                         if error_pii:
                             st.error(f"❌ {error_pii}")
                         else:
-                            st.success(f"✅ テキスト抽出完了（{len(extracted_text_pii):,}文字）")
+                            st.success(t("text_extracted").format(count=f"{len(extracted_text_pii):,}"))
                             resume_pii_input = extracted_text_pii
-                            with st.expander("抽出されたテキストを確認"):
+                            with st.expander(t("view_extracted")):
                                 st.text(extracted_text_pii[:2000] + ("..." if len(extracted_text_pii) > 2000 else ""))
                 else:
                     if 'resume_pii_input' not in dir():
@@ -3998,10 +3946,10 @@ def main():
             elif char_count_pii > 0:
                 st.caption(f"📊 {char_count_pii:,} / {MAX_INPUT_CHARS:,} 文字")
 
-            st.info("🛡️ 削除される情報：メールアドレス、LinkedIn、電話番号、住所\n\n📝 氏名はFirst nameのみに変更されます")
+            st.info(t("pii_info"))
 
             process_pii_btn = st.button(
-                "🛡️ 個人情報削除実行",
+                t("pii_btn"),
                 type="primary",
                 use_container_width=True,
                 disabled=not api_key or not resume_pii_input,
@@ -4009,11 +3957,11 @@ def main():
             )
 
         with col2:
-            st.markdown("##### 出力：個人情報削除済みレジュメ")
+            st.markdown(t("pii_output"))
 
             if process_pii_btn:
                 if not api_key:
-                    st.error("❌ APIキーを入力してください")
+                    st.error(t("no_api_key"))
                 else:
                     is_valid_pii, error_msg_pii = validate_input(resume_pii_input, "resume")
                     if not is_valid_pii:
@@ -4022,7 +3970,7 @@ def main():
                         try:
                             start_time = time.time()
                             prompt = get_resume_pii_removal_prompt(resume_pii_input)
-                            st.caption("🤖 AIがレジュメから個人情報を削除しています...")
+                            st.caption(t("pii_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
                             elapsed_time = time.time() - start_time
@@ -4030,21 +3978,21 @@ def main():
                             st.session_state['resume_pii_result'] = result
                             st.session_state['resume_pii_time'] = elapsed_time
                             stream_container.empty()
-                            st.success(f"✅ 個人情報削除完了！（{elapsed_time:.1f}秒）")
+                            st.success(t("pii_done").format(time=f"{elapsed_time:.1f}"))
 
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
+                            st.error(t("unexpected_error"))
 
             # 結果表示
             if 'resume_pii_result' in st.session_state:
                 col_view, col_copy = st.columns([2, 1])
                 with col_view:
-                    show_formatted_pii = st.checkbox("📖 整形表示", value=False, key="resume_pii_formatted")
+                    show_formatted_pii = st.checkbox(t("formatted_view"), value=False, key="resume_pii_formatted")
                 with col_copy:
-                    if st.button("📋 コピー", key="copy_resume_pii", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
+                    if st.button(t("copy_btn"), key="copy_resume_pii", use_container_width=True):
+                        st.toast(t("copied"))
                         escaped_text = st.session_state['resume_pii_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
@@ -4056,7 +4004,7 @@ def main():
                     st.markdown(st.session_state['resume_pii_result'])
                 else:
                     edited_result_pii = st.text_area(
-                        "出力結果（編集可能）",
+                        t("editable_output"),
                         value=st.session_state['resume_pii_result'],
                         height=400,
                         key="edit_resume_result_pii"
@@ -4075,7 +4023,7 @@ def main():
                     )
                 with col_dl2:
                     st.download_button(
-                        "📝 テキスト",
+                        t("dl_text"),
                         data=st.session_state['resume_pii_result'],
                         file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                         mime="text/plain",
@@ -4089,12 +4037,12 @@ def main():
                         file_name=f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
                         key="pii_html",
-                        help="ブラウザで開いて印刷→PDF保存"
+                        help=t("dl_html_help")
                     )
 
-    elif feature == "求人票魅力化（日→英）":
-        st.subheader("📋 求人票魅力化（日本語 → 英語）")
-        st.caption("日本企業の求人票を、外国人エンジニアに魅力的な英語JDに変換します")
+    elif feature == "jd_jp_en":
+        st.subheader(t("jd_jp_en_title"))
+        st.caption(t("jd_jp_en_desc"))
 
         col1, col2 = st.columns([1, 1])
 
@@ -4104,11 +4052,11 @@ def main():
             with col_label:
                 st.markdown("##### 入力：日本語求人票")
             with col_sample:
-                if st.button("📝 サンプル", key="sample_jd_btn", help="サンプル求人票を挿入"):
+                if st.button(t("sample_btn"), key="sample_jd_btn", help=t("sample_jd_help")):
                     st.session_state['jd_text_input'] = SAMPLE_JD
 
             jd_input = st.text_area(
-                "日本語の求人票をペースト",
+                t("jd_paste"),
                 height=400,
                 placeholder="求人票をここに貼り付けてください...\n\n例：\n【募集職種】バックエンドエンジニア\n【業務内容】自社サービスの開発...",
                 label_visibility="collapsed",
@@ -4133,7 +4081,7 @@ def main():
             )
 
         with col2:
-            st.markdown("##### 出力：外国人エンジニア向け英語JD")
+            st.markdown(t("jd_jp_en_output"))
 
             if process_btn:
                 if not api_key:
@@ -4147,7 +4095,7 @@ def main():
                         try:
                             start_time = time.time()
                             prompt = get_jd_transformation_prompt(jd_input)
-                            st.caption("🤖 AIが求人票を解析・魅力化しています...")
+                            st.caption(t("jd_jp_en_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
                             elapsed_time = time.time() - start_time
@@ -4167,11 +4115,11 @@ def main():
                 # 表示切替とコピーボタン
                 col_view, col_copy = st.columns([2, 1])
                 with col_view:
-                    show_formatted = st.checkbox("📖 整形表示", value=False, key="jd_formatted",
+                    show_formatted = st.checkbox(t("formatted_view"), value=False, key="jd_formatted",
                                                   help="Markdownをフォーマットして表示")
                 with col_copy:
-                    if st.button("📋 コピー", key="copy_jd", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
+                    if st.button(t("copy_btn"), key="copy_jd", use_container_width=True):
+                        st.toast(t("copied"))
                         escaped_text = st.session_state['jd_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
@@ -4184,7 +4132,7 @@ def main():
                 else:
                     # 編集可能なテキストエリア
                     edited_jd_result = st.text_area(
-                        "Output (Editable)",
+                        t("editable_output"),
                         value=st.session_state['jd_result'],
                         height=400,
                         key="edit_jd_result"
@@ -4203,7 +4151,7 @@ def main():
                     )
                 with col_dl2:
                     st.download_button(
-                        "📝 テキスト",
+                        t("dl_text"),
                         data=st.session_state['jd_result'],
                         file_name=f"job_description_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                         mime="text/plain",
@@ -4217,7 +4165,7 @@ def main():
                         file_name=f"job_description_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
                         key="jd_html",
-                        help="ブラウザで開いて印刷→PDF保存"
+                        help=t("dl_html_help")
                     )
 
                 # 共有リンク作成ボタン
@@ -4241,9 +4189,9 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
-    elif feature == "求人票翻訳（英→日）":
-        st.subheader("📋 求人票翻訳（英語 → 日本語）")
-        st.caption("海外企業・外資系の英語求人票を、日本人エンジニア向けに最適化された日本語JDに変換します")
+    elif feature == "jd_en_jp":
+        st.subheader(t("jd_en_jp_title"))
+        st.caption(t("jd_en_jp_desc"))
 
         col1, col2 = st.columns([1, 1])
 
@@ -4310,7 +4258,7 @@ def main():
             )
 
         with col2:
-            st.markdown("##### 出力：日本人エンジニア向け求人票")
+            st.markdown(t("jd_en_jp_output"))
 
             if process_btn:
                 if not api_key:
@@ -4344,11 +4292,11 @@ def main():
                 # 表示切替とコピーボタン
                 col_view, col_copy = st.columns([2, 1])
                 with col_view:
-                    show_formatted = st.checkbox("📖 整形表示", value=False, key="jd_en_formatted",
+                    show_formatted = st.checkbox(t("formatted_view"), value=False, key="jd_en_formatted",
                                                   help="Markdownをフォーマットして表示")
                 with col_copy:
-                    if st.button("📋 コピー", key="copy_jd_en", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
+                    if st.button(t("copy_btn"), key="copy_jd_en", use_container_width=True):
+                        st.toast(t("copied"))
                         escaped_text = st.session_state['jd_en_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
@@ -4361,7 +4309,7 @@ def main():
                 else:
                     # 編集可能なテキストエリア
                     edited_jd_en_result = st.text_area(
-                        "出力結果（編集可能）",
+                        t("editable_output"),
                         value=st.session_state['jd_en_result'],
                         height=400,
                         key="edit_jd_en_result"
@@ -4380,7 +4328,7 @@ def main():
                     )
                 with col_dl2:
                     st.download_button(
-                        "📝 テキスト",
+                        t("dl_text"),
                         data=st.session_state['jd_en_result'],
                         file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                         mime="text/plain",
@@ -4394,7 +4342,7 @@ def main():
                         file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
                         key="jd_en_html",
-                        help="ブラウザで開いて印刷→PDF保存"
+                        help=t("dl_html_help")
                     )
 
                 # 共有リンク作成ボタン
@@ -4418,9 +4366,9 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
-    elif feature == "求人票フォーマット化（日→日）":
-        st.subheader("📋 求人票フォーマット化（日本語 → 日本語）")
-        st.caption("日本語の求人票を、統一された見やすいフォーマットの魅力的な日本語JDに変換します")
+    elif feature == "jd_jp_jp":
+        st.subheader(t("jd_jp_jp_title"))
+        st.caption(t("jd_jp_jp_desc"))
 
         col1, col2 = st.columns([1, 1])
 
@@ -4487,7 +4435,7 @@ def main():
             )
 
         with col2:
-            st.markdown("##### 出力：統一フォーマットの日本語JD")
+            st.markdown(t("jd_jp_jp_output"))
 
             if process_btn:
                 if not api_key:
@@ -4501,7 +4449,7 @@ def main():
                         try:
                             start_time = time.time()
                             prompt = get_jd_jp_to_jp_prompt(jd_jp_jp_input)
-                            st.caption("🤖 AIが求人票を解析・整形しています...")
+                            st.caption(t("jd_jp_jp_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
                             elapsed_time = time.time() - start_time
@@ -4521,11 +4469,11 @@ def main():
                 # 表示切替とコピーボタン
                 col_view, col_copy = st.columns([2, 1])
                 with col_view:
-                    show_formatted = st.checkbox("📖 整形表示", value=False, key="jd_jp_jp_formatted",
+                    show_formatted = st.checkbox(t("formatted_view"), value=False, key="jd_jp_jp_formatted",
                                                   help="Markdownをフォーマットして表示")
                 with col_copy:
-                    if st.button("📋 コピー", key="copy_jd_jp_jp", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
+                    if st.button(t("copy_btn"), key="copy_jd_jp_jp", use_container_width=True):
+                        st.toast(t("copied"))
                         escaped_text = st.session_state['jd_jp_jp_result'].replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('<', '\\x3c')
                         st.components.v1.html(f"""
                             <script>
@@ -4538,7 +4486,7 @@ def main():
                 else:
                     # 編集可能なテキストエリア
                     edited_jd_jp_jp_result = st.text_area(
-                        "出力結果（編集可能）",
+                        t("editable_output"),
                         value=st.session_state['jd_jp_jp_result'],
                         height=400,
                         key="edit_jd_jp_jp_result"
@@ -4557,7 +4505,7 @@ def main():
                     )
                 with col_dl2:
                     st.download_button(
-                        "📝 テキスト",
+                        t("dl_text"),
                         data=st.session_state['jd_jp_jp_result'],
                         file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
                         mime="text/plain",
@@ -4571,7 +4519,7 @@ def main():
                         file_name=f"job_description_jp_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
                         mime="text/html",
                         key="jd_jp_jp_html",
-                        help="ブラウザで開いて印刷→PDF保存"
+                        help=t("dl_html_help")
                     )
 
                 # 共有リンク作成ボタン
@@ -4595,9 +4543,9 @@ def main():
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
 
-    elif feature == "求人票フォーマット化（英→英）":
-        st.subheader("📋 求人票フォーマット化（English → English）")
-        st.caption("Transform English job descriptions into an attractive, well-structured format for international engineers")
+    elif feature == "jd_en_en":
+        st.subheader(t("jd_en_en_title"))
+        st.caption(t("jd_en_en_desc"))
 
         col1, col2 = st.columns([1, 1])
 
@@ -4772,9 +4720,9 @@ def main():
                         else:
                             st.error("❌ Failed to create share link")
 
-    elif feature == "企業紹介文作成（PDF）":
-        st.subheader("🏢 企業紹介文作成（PDF読み取り）")
-        st.caption("会社紹介資料（PDF）から求職者向けの簡潔な企業紹介文を自動生成します")
+    elif feature == "company_intro":
+        st.subheader(t("company_title"))
+        st.caption(t("company_desc"))
 
         col1, col2 = st.columns([1, 1])
 
@@ -4785,7 +4733,7 @@ def main():
             company_input = ""
 
             with input_tab1:
-                st.markdown("##### 会社紹介PDFをアップロード")
+                st.markdown(t("company_pdf_header"))
                 uploaded_company_pdf = st.file_uploader(
                     "PDFファイルを選択",
                     type=["pdf"],
@@ -4805,9 +4753,9 @@ def main():
                                 st.text(extracted_text[:3000] + ("..." if len(extracted_text) > 3000 else ""))
 
             with input_tab2:
-                st.markdown("##### 会社紹介テキストをペースト")
+                st.markdown(t("company_text_header"))
                 company_text_input = st.text_area(
-                    "会社紹介テキストをペースト",
+                    t("company_paste"),
                     height=350,
                     placeholder="会社紹介資料のテキストを貼り付けてください...\n\n例：\n会社名：株式会社〇〇\n設立：2015年\n事業内容：...",
                     label_visibility="collapsed",
@@ -4823,10 +4771,10 @@ def main():
             elif char_count > 0:
                 st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字")
 
-            st.info("💡 会社概要、事業内容、強みなどが含まれたPDFが理想的です")
+            st.info(t("company_hint"))
 
             process_btn = st.button(
-                "🔄 紹介文作成",
+                t("company_btn"),
                 type="primary",
                 use_container_width=True,
                 disabled=not api_key or not company_input,
@@ -4834,7 +4782,7 @@ def main():
             )
 
         with col2:
-            st.markdown("##### 出力：求職者向け企業紹介文")
+            st.markdown(t("company_output"))
 
             if process_btn:
                 if not api_key:
@@ -4848,7 +4796,7 @@ def main():
                         try:
                             start_time = time.time()
                             prompt = get_company_intro_prompt(company_input)
-                            st.caption("🤖 AIが会社紹介資料を解析しています...")
+                            st.caption(t("company_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
                             elapsed_time = time.time() - start_time
@@ -4921,28 +4869,28 @@ def main():
                         help="ブラウザで開いて印刷→PDF保存"
                     )
 
-    elif feature == "🎯 レジュメ×求人票マッチング分析":
-        st.subheader("🎯 レジュメ×求人票マッチング分析")
-        st.caption("最適化済みレジュメと求人票を入力し、AIがマッチング度を多角的に分析します")
+    elif feature == "matching":
+        st.subheader(t("matching_title"))
+        st.caption(t("matching_desc"))
 
         # 2カラムレイアウト（入力エリア）
         col_input1, col_input2 = st.columns([1, 1])
 
         # 入力エリア1: レジュメ
         with col_input1:
-            st.markdown("##### 📄 入力1: レジュメ")
+            st.markdown(t("matching_resume_header"))
 
             # 入力方法選択
             resume_source = st.radio(
-                "レジュメの入力方法",
-                options=["テキスト/PDF入力", "過去の最適化結果から選択", "📂 履歴から選択"],
+                t("matching_resume_method"),
+                options=[t("input_text_pdf"), t("input_from_results"), t("input_from_history")],
                 key="matching_resume_source",
                 horizontal=True
             )
 
             matching_resume_input = ""
 
-            if resume_source == "テキスト/PDF入力":
+            if resume_source == t("input_text_pdf"):
                 # タブで切り替え
                 input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
@@ -4983,7 +4931,7 @@ def main():
                                 matching_resume_input = extracted_text
                                 with st.expander("抽出されたテキストを確認"):
                                     st.text(extracted_text[:3000] + ("..." if len(extracted_text) > 3000 else ""))
-            elif resume_source == "過去の最適化結果から選択":
+            elif resume_source == t("input_from_results"):
                 # 過去の結果から選択
                 if 'resume_result' in st.session_state:
                     if st.checkbox("直前のレジュメ最適化結果を使用", key="use_last_resume"):
@@ -5043,19 +4991,19 @@ def main():
 
         # 入力エリア2: 求人票
         with col_input2:
-            st.markdown("##### 📋 入力2: 求人票")
+            st.markdown(t("matching_jd_header"))
 
             # 入力方法選択
             jd_source = st.radio(
-                "求人票の入力方法",
-                options=["テキスト/PDF入力", "過去の変換結果から選択", "📂 履歴から選択"],
+                t("matching_jd_method"),
+                options=[t("input_text_pdf"), t("input_from_results"), t("input_from_history")],
                 key="matching_jd_source",
                 horizontal=True
             )
 
             matching_jd_input = ""
 
-            if jd_source == "テキスト/PDF入力":
+            if jd_source == t("input_text_pdf"):
                 # タブで切り替え
                 input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
@@ -5096,7 +5044,7 @@ def main():
                                 matching_jd_input = extracted_text
                                 with st.expander("抽出されたテキストを確認"):
                                     st.text(extracted_text[:3000] + ("..." if len(extracted_text) > 3000 else ""))
-            elif jd_source == "過去の変換結果から選択":
+            elif jd_source == t("input_from_results"):
                 # 過去の結果から選択（複数の可能性）
                 available_jds = []
                 if 'jd_result' in st.session_state:
@@ -5168,7 +5116,7 @@ def main():
         with col_center[1]:
             st.info("💡 両方の入力が完了したら、下のボタンで分析を開始します")
             process_btn = st.button(
-                "🎯 マッチング分析を実行",
+                t("matching_btn"),
                 type="primary",
                 use_container_width=True,
                 disabled=not api_key or not matching_resume_input or not matching_jd_input,
@@ -5231,13 +5179,13 @@ def main():
 
         # 結果表示エリア
         st.divider()
-        st.markdown("### 📊 分析結果")
+        st.markdown(t("matching_result"))
 
         if process_btn:
             if not api_key:
                 st.error("❌ APIキーを入力してください")
             elif not matching_resume_input or not matching_jd_input:
-                st.warning("⚠️ レジュメと求人票の両方を入力してください")
+                st.warning(t("matching_both_required"))
             else:
                 # 入力バリデーション
                 is_valid_resume, error_msg_resume = validate_input(matching_resume_input, "matching")
@@ -5251,7 +5199,7 @@ def main():
                     try:
                         start_time = time.time()
                         prompt = get_matching_analysis_prompt(matching_resume_input, matching_jd_input)
-                        st.caption("🤖 AIがレジュメと求人票を詳細分析しています...")
+                        st.caption(t("matching_ai"))
                         stream_container = st.empty()
                         result = stream_to_container(api_key, prompt, stream_container)
                         elapsed_time = time.time() - start_time
@@ -5399,15 +5347,15 @@ def main():
 
             # 匿名提案資料生成機能
             st.divider()
-            st.markdown("#### 📄 候補者提案資料生成")
-            st.caption("マッチング分析から企業向けの簡潔な候補者提案資料を生成します")
+            st.markdown(t("proposal_header"))
+            st.caption(t("proposal_desc"))
 
             proposal_anon_level = st.radio(
                 "🔒 匿名化レベル",
                 options=["full", "light"],
                 format_func=lambda x: {
-                    "full": "完全匿名化（企業名・大学名も伏せる）",
-                    "light": "軽度匿名化（企業名・大学名は表示）"
+                    "full": t("anon_full_en"),
+                    "light": t("anon_light_en")
                 }[x],
                 horizontal=True,
                 key="proposal_anon_level",
@@ -5417,7 +5365,7 @@ def main():
             col_proposal1, col_proposal2 = st.columns(2)
 
             with col_proposal1:
-                if st.button("📝 日本語版を生成", key="generate_proposal_ja", use_container_width=True, help="提案資料（日本語）を生成"):
+                if st.button(t("proposal_ja_btn"), key="generate_proposal_ja", use_container_width=True, help=t("proposal_ja_help")):
                     if 'matching_resume_input' not in st.session_state or 'matching_jd_input' not in st.session_state:
                         st.error("❌ レジュメと求人票の入力情報が見つかりません。先にマッチング分析を実行してください。")
                     else:
@@ -5552,20 +5500,20 @@ def main():
                     else:
                         st.error("❌ 共有リンクの作成に失敗しました")
 
-    elif feature == "📝 CV提案コメント抽出":
-        st.subheader("📝 CV提案コメント抽出")
-        st.caption("CVから提案用の5項目コメント（英語・各300文字以内）を抽出します。複数CVの一括処理にも対応。")
+    elif feature == "cv_extract":
+        st.subheader(t("cv_title"))
+        st.caption(t("cv_desc"))
 
         # 匿名化レベル選択
         col_mode, col_anon = st.columns(2)
         with col_mode:
             # 入力モード選択
             cv_extract_mode = st.radio(
-                "入力モード",
+                t("cv_mode_label"),
                 options=["single", "batch"],
                 format_func=lambda x: {
-                    "single": "単体CV入力",
-                    "batch": "複数CV一括処理"
+                    "single": t("cv_mode_single"),
+                    "batch": t("cv_mode_batch")
                 }[x],
                 horizontal=True,
                 key="cv_extract_mode"
@@ -5590,9 +5538,9 @@ def main():
                 input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
 
                 with input_tab1:
-                    st.markdown("##### 入力：英語CV")
+                    st.markdown(t("cv_input"))
                     cv_extract_input = st.text_area(
-                        "英語のCVをペースト",
+                        t("cv_paste"),
                         height=350,
                         placeholder="Paste the English CV/Resume here...",
                         label_visibility="collapsed",
@@ -5630,7 +5578,7 @@ def main():
                     st.caption(f"📊 {cv_char_count:,} / {MAX_INPUT_CHARS:,} 文字")
 
                 cv_extract_btn = st.button(
-                    "🔄 抽出実行",
+                    t("cv_extract_btn"),
                     type="primary",
                     use_container_width=True,
                     disabled=not api_key or not cv_extract_input,
@@ -5638,7 +5586,7 @@ def main():
                 )
 
             with col2:
-                st.markdown("##### 出力：提案コメント（英語・各300文字以内）")
+                st.markdown(t("cv_output"))
 
                 if cv_extract_btn:
                     if not api_key:
@@ -5651,7 +5599,7 @@ def main():
                             try:
                                 start_time = time.time()
                                 prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level)
-                                st.caption("🤖 AIがCVからコメントを抽出しています...")
+                                st.caption(t("cv_ai"))
                                 stream_container = st.empty()
                                 result = stream_to_container(api_key, prompt, stream_container)
                                 elapsed_time = time.time() - start_time
@@ -5942,9 +5890,9 @@ Full-stack Developer...
                         key="batch_cv_extract_download"
                     )
 
-    elif feature == "✉️ 求人打診メール作成":
-        st.subheader("✉️ 求人打診メール作成")
-        st.caption("面談後に候補者へ送る求人打診メールを簡単に作成できます")
+    elif feature == "email":
+        st.subheader(t("email_title"))
+        st.caption(t("email_desc"))
 
         # saved_jobs / saved_job_sets 初期化
         if 'saved_jobs' not in st.session_state:
@@ -5956,13 +5904,13 @@ Full-stack Developer...
         col_name, col_sender = st.columns(2)
         with col_name:
             candidate_name = st.text_input(
-                "候補者の名前（First Name）",
+                t("email_candidate_name"),
                 placeholder="e.g. Taro",
                 key="email_candidate_name"
             )
         with col_sender:
             sender_name = st.selectbox(
-                "送信者名",
+                t("email_sender"),
                 options=["Shu", "Ilya", "Hiroshi"],
                 key="email_sender_name"
             )
@@ -5974,7 +5922,7 @@ Full-stack Developer...
         saved_sets_list = st.session_state.get('saved_job_sets', [])
 
         if saved_sets_list or saved_jobs_list:
-            st.markdown("##### 📂 保存済みデータから読み込み")
+            st.markdown(t("email_saved_data"))
             load_tab_set, load_tab_individual = st.tabs(["📦 セットから読み込み", "📄 個別求人から選択"])
 
             with load_tab_set:
@@ -6252,7 +6200,7 @@ Full-stack Developer...
 
         # --- メール生成 ---
         generate_btn = st.button(
-            "📧 メール生成",
+            t("email_generate_btn"),
             type="primary",
             use_container_width=True,
             disabled=not candidate_name,
@@ -6304,7 +6252,7 @@ Full-stack Developer...
         # --- 結果表示 ---
         if 'generated_email' in st.session_state:
             st.divider()
-            st.markdown("##### 生成されたメール")
+            st.markdown(t("email_output"))
 
             col_copy_e, col_dl_e = st.columns(2)
             with col_copy_e:
@@ -6391,9 +6339,9 @@ Full-stack Developer...
                 else:
                     st.caption("保存済みの個別求人はありません")
 
-    elif feature == "📦 バッチ処理（複数レジュメ）":
-        st.subheader("📦 バッチ処理（複数レジュメ一括変換）")
-        st.caption("複数の英語レジュメを一括で日本語に変換します。区切り文字で分割してください。")
+    elif feature == "batch":
+        st.subheader(t("batch_title"))
+        st.caption(t("batch_desc"))
 
         # 区切り文字の説明
         st.info("💡 **区切り方法**: `---NEXT---` を各レジュメの間に入れてください")
@@ -6439,7 +6387,7 @@ Full-stack Developer...
                 st.metric("検出されたレジュメ数", 0)
 
         batch_btn = st.button(
-            "🚀 一括変換実行",
+            t("batch_btn"),
             type="primary",
             use_container_width=True,
             disabled=not api_key or not batch_input
@@ -6576,7 +6524,7 @@ Full-stack Developer...
 
     # フッター
     st.divider()
-    st.caption("🌏 GlobalMatch Assistant")
+    st.caption(t("footer"))
 
 
 if __name__ == "__main__":
