@@ -5389,6 +5389,8 @@ def main():
                             st.caption("🤖 候補者提案資料（日本語）を生成中...")
                             stream_container = st.empty()
                             proposal = stream_to_container(api_key, prompt, stream_container)
+                            st.session_state['anonymous_proposal_ja'] = proposal
+                            # 後方互換: anonymous_proposalも更新
                             st.session_state['anonymous_proposal'] = proposal
                             stream_container.empty()
                             st.success("✅ 候補者提案資料（日本語）の生成が完了しました")
@@ -5412,6 +5414,8 @@ def main():
                             st.caption("🤖 Generating candidate proposal (English)...")
                             stream_container = st.empty()
                             proposal = stream_to_container(api_key, prompt, stream_container)
+                            st.session_state['anonymous_proposal_en'] = proposal
+                            # 後方互換: anonymous_proposalも更新
                             st.session_state['anonymous_proposal'] = proposal
                             stream_container.empty()
                             st.success("✅ Candidate proposal (English) generated successfully")
@@ -5420,73 +5424,122 @@ def main():
                             st.error("❌ Generation error. Please try again later")
 
             # 匿名提案資料の表示
-            if 'anonymous_proposal' in st.session_state:
+            _has_ja = 'anonymous_proposal_ja' in st.session_state
+            _has_en = 'anonymous_proposal_en' in st.session_state
+            # 後方互換: 旧anonymous_proposalのみ存在する場合
+            _has_legacy = 'anonymous_proposal' in st.session_state and not _has_ja and not _has_en
+
+            if _has_ja or _has_en or _has_legacy:
                 st.divider()
-                st.markdown("#### 📋 生成された候補者提案資料")
 
-                # 表示切替とコピーボタン
-                col_view_prop, col_copy_prop = st.columns([2, 1])
-                with col_view_prop:
-                    show_formatted_prop = st.checkbox(
-                        "📖 整形表示",
-                        value=True,
-                        key="proposal_formatted",
-                        help="Markdownをフォーマットして表示"
-                    )
-                with col_copy_prop:
-                    if st.button("📋 コピー", key="copy_proposal", use_container_width=True):
-                        st.toast("✅ クリップボードにコピーしました")
-                        _copy_to_clipboard(st.session_state['anonymous_proposal'])
+                # 両言語ある場合はタブで切り替え
+                if _has_ja and _has_en:
+                    tab_ja, tab_en = st.tabs(["🇯🇵 日本語版", "🇬🇧 English Version"])
 
-                if show_formatted_prop:
-                    st.markdown(st.session_state['anonymous_proposal'])
+                    with tab_ja:
+                        st.markdown("#### 📋 生成された候補者提案資料（日本語）")
+                        col_view_ja, col_copy_ja = st.columns([2, 1])
+                        with col_view_ja:
+                            show_fmt_ja = st.checkbox("📖 整形表示", value=True, key="proposal_ja_formatted", help="Markdownをフォーマットして表示")
+                        with col_copy_ja:
+                            if st.button("📋 コピー", key="copy_proposal_ja", use_container_width=True):
+                                st.toast("✅ クリップボードにコピーしました")
+                                _copy_to_clipboard(st.session_state['anonymous_proposal_ja'])
+
+                        if show_fmt_ja:
+                            st.markdown(st.session_state['anonymous_proposal_ja'])
+                        else:
+                            edited_ja = st.text_area("出力結果（編集可能）", value=st.session_state['anonymous_proposal_ja'], height=600, key="edit_proposal_ja")
+                            st.session_state['anonymous_proposal_ja'] = edited_ja
+
+                        _prop_first_ja = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
+                        _prop_label_ja = f"匿名候補者提案資料 - {_prop_first_ja}" if _prop_first_ja else "匿名候補者提案資料"
+                        _prop_fname_ja = f"proposal_{_prop_first_ja}_ja_{datetime.now().strftime('%Y%m%d_%H%M')}" if _prop_first_ja else f"proposal_ja_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+                        col_dl1_ja, col_dl2_ja, col_dl3_ja = st.columns(3)
+                        with col_dl1_ja:
+                            st.download_button("📄 Markdown", data=st.session_state['anonymous_proposal_ja'], file_name=f"{_prop_fname_ja}.md", mime="text/markdown", key="proposal_ja_md")
+                        with col_dl2_ja:
+                            st.download_button("📝 テキスト", data=st.session_state['anonymous_proposal_ja'], file_name=f"{_prop_fname_ja}.txt", mime="text/plain", key="proposal_ja_txt")
+                        with col_dl3_ja:
+                            html_ja = generate_html(st.session_state['anonymous_proposal_ja'], _prop_label_ja)
+                            st.download_button("🌐 HTML", data=html_ja, file_name=f"{_prop_fname_ja}.html", mime="text/html", key="proposal_ja_html", help="ブラウザで開いて印刷→PDF保存")
+
+                    with tab_en:
+                        st.markdown("#### 📋 Generated Candidate Proposal (English)")
+                        col_view_en, col_copy_en = st.columns([2, 1])
+                        with col_view_en:
+                            show_fmt_en = st.checkbox("📖 Formatted View", value=True, key="proposal_en_formatted", help="Display formatted Markdown")
+                        with col_copy_en:
+                            if st.button("📋 Copy", key="copy_proposal_en", use_container_width=True):
+                                st.toast("✅ Copied to clipboard")
+                                _copy_to_clipboard(st.session_state['anonymous_proposal_en'])
+
+                        if show_fmt_en:
+                            st.markdown(st.session_state['anonymous_proposal_en'])
+                        else:
+                            edited_en = st.text_area("Output (Editable)", value=st.session_state['anonymous_proposal_en'], height=600, key="edit_proposal_en")
+                            st.session_state['anonymous_proposal_en'] = edited_en
+
+                        _prop_first_en = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
+                        _prop_label_en = f"Candidate Proposal - {_prop_first_en}" if _prop_first_en else "Candidate Proposal"
+                        _prop_fname_en = f"proposal_{_prop_first_en}_en_{datetime.now().strftime('%Y%m%d_%H%M')}" if _prop_first_en else f"proposal_en_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+                        col_dl1_en, col_dl2_en, col_dl3_en = st.columns(3)
+                        with col_dl1_en:
+                            st.download_button("📄 Markdown", data=st.session_state['anonymous_proposal_en'], file_name=f"{_prop_fname_en}.md", mime="text/markdown", key="proposal_en_md")
+                        with col_dl2_en:
+                            st.download_button("📝 Text", data=st.session_state['anonymous_proposal_en'], file_name=f"{_prop_fname_en}.txt", mime="text/plain", key="proposal_en_txt")
+                        with col_dl3_en:
+                            html_en = generate_html(st.session_state['anonymous_proposal_en'], _prop_label_en)
+                            st.download_button("🌐 HTML", data=html_en, file_name=f"{_prop_fname_en}.html", mime="text/html", key="proposal_en_html", help="Open in browser and Print → Save as PDF")
+
                 else:
-                    # 編集可能なテキストエリア
-                    edited_proposal = st.text_area(
-                        "出力結果（編集可能）",
-                        value=st.session_state['anonymous_proposal'],
-                        height=600,
-                        key="edit_proposal"
-                    )
-                    st.session_state['anonymous_proposal'] = edited_proposal
+                    # 片方のみ、または旧形式
+                    _current_key = 'anonymous_proposal_ja' if _has_ja else ('anonymous_proposal_en' if _has_en else 'anonymous_proposal')
+                    _is_en = _current_key == 'anonymous_proposal_en'
+                    _header = "#### 📋 Generated Candidate Proposal (English)" if _is_en else "#### 📋 生成された候補者提案資料"
 
-                # ファーストネームをタイトル・ファイル名に使用
-                _prop_first = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
-                _prop_label = f"匿名候補者提案資料 - {_prop_first}" if _prop_first else "匿名候補者提案資料"
-                _prop_fname = f"proposal_{_prop_first}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _prop_first else f"anonymous_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                    st.markdown(_header)
 
-                # ダウンロードボタン
-                st.divider()
-                col_dl_prop1, col_dl_prop2, col_dl_prop3 = st.columns(3)
-                with col_dl_prop1:
-                    st.download_button(
-                        "📄 Markdown",
-                        data=st.session_state['anonymous_proposal'],
-                        file_name=f"{_prop_fname}.md",
-                        mime="text/markdown",
-                        key="proposal_md"
-                    )
-                with col_dl_prop2:
-                    st.download_button(
-                        "📝 テキスト",
-                        data=st.session_state['anonymous_proposal'],
-                        file_name=f"{_prop_fname}.txt",
-                        mime="text/plain",
-                        key="proposal_txt"
-                    )
-                with col_dl_prop3:
-                    html_content = generate_html(
-                        st.session_state['anonymous_proposal'],
-                        _prop_label
-                    )
-                    st.download_button(
-                        "🌐 HTML",
-                        data=html_content,
-                        file_name=f"{_prop_fname}.html",
-                        mime="text/html",
-                        key="proposal_html",
-                        help="ブラウザで開いて印刷→PDF保存"
-                    )
+                    col_view_prop, col_copy_prop = st.columns([2, 1])
+                    with col_view_prop:
+                        show_formatted_prop = st.checkbox(
+                            "📖 Formatted View" if _is_en else "📖 整形表示",
+                            value=True,
+                            key="proposal_formatted",
+                            help="Display formatted Markdown" if _is_en else "Markdownをフォーマットして表示"
+                        )
+                    with col_copy_prop:
+                        if st.button("📋 Copy" if _is_en else "📋 コピー", key="copy_proposal", use_container_width=True):
+                            st.toast("✅ Copied to clipboard" if _is_en else "✅ クリップボードにコピーしました")
+                            _copy_to_clipboard(st.session_state[_current_key])
+
+                    if show_formatted_prop:
+                        st.markdown(st.session_state[_current_key])
+                    else:
+                        edited_proposal = st.text_area(
+                            "Output (Editable)" if _is_en else "出力結果（編集可能）",
+                            value=st.session_state[_current_key],
+                            height=600,
+                            key="edit_proposal"
+                        )
+                        st.session_state[_current_key] = edited_proposal
+
+                    _prop_first = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
+                    _lang_suffix = "en" if _is_en else "ja"
+                    _prop_label = (f"Candidate Proposal - {_prop_first}" if _prop_first else "Candidate Proposal") if _is_en else (f"匿名候補者提案資料 - {_prop_first}" if _prop_first else "匿名候補者提案資料")
+                    _prop_fname = f"proposal_{_prop_first}_{_lang_suffix}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _prop_first else f"proposal_{_lang_suffix}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+                    st.divider()
+                    col_dl_prop1, col_dl_prop2, col_dl_prop3 = st.columns(3)
+                    with col_dl_prop1:
+                        st.download_button("📄 Markdown", data=st.session_state[_current_key], file_name=f"{_prop_fname}.md", mime="text/markdown", key="proposal_md")
+                    with col_dl_prop2:
+                        st.download_button("📝 Text" if _is_en else "📝 テキスト", data=st.session_state[_current_key], file_name=f"{_prop_fname}.txt", mime="text/plain", key="proposal_txt")
+                    with col_dl_prop3:
+                        html_content = generate_html(st.session_state[_current_key], _prop_label)
+                        st.download_button("🌐 HTML", data=html_content, file_name=f"{_prop_fname}.html", mime="text/html", key="proposal_html", help="Open in browser and Print → Save as PDF" if _is_en else "ブラウザで開いて印刷→PDF保存")
 
             # 共有リンク作成ボタン — 候補者名をタイトルに使用
             _match_name = extract_name_from_cv(st.session_state.get('matching_resume_input', ''))
