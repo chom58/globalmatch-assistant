@@ -37,6 +37,7 @@ MIN_INPUT_CHARS = 100    # 最小入力文字数
 MAX_RETRIES = 3          # API最大リトライ回数
 MAX_PDF_SIZE_MB = 10     # 最大PDFサイズ（MB）
 RATE_LIMIT_CALLS = 30    # セッションあたりのAPI呼び出し上限（1時間）
+RATE_LIMIT_SHARES = 10   # セッションあたりの共有リンク作成上限（1時間）
 RATE_LIMIT_WINDOW = 3600 # レート制限ウィンドウ（秒）
 SESSION_TIMEOUT_MINUTES = 120  # セッションタイムアウト（分）
 DEFAULT_APP_URL = "https://globalmatch-assistant-zk6s2lwgkqp6xf6xuc9uvi.streamlit.app"
@@ -403,7 +404,7 @@ def get_supabase_client():
 
 
 def create_share_link(content: str, title: str = "Anonymized Resume") -> str | None:
-    """共有リンクを作成
+    """共有リンクを作成（レート制限付き）
 
     Args:
         content: 共有するコンテンツ（Markdown形式）
@@ -412,6 +413,19 @@ def create_share_link(content: str, title: str = "Anonymized Resume") -> str | N
     Returns:
         share_id: 共有ID（32文字）、失敗時はNone
     """
+    # 共有リンク作成のレート制限チェック
+    now = time.time()
+    if 'share_timestamps' not in st.session_state:
+        st.session_state['share_timestamps'] = []
+    st.session_state['share_timestamps'] = [
+        ts for ts in st.session_state['share_timestamps']
+        if now - ts < RATE_LIMIT_WINDOW
+    ]
+    if len(st.session_state['share_timestamps']) >= RATE_LIMIT_SHARES:
+        st.warning("⏳ 共有リンクの作成数が上限に達しました。しばらく待ってから再試行してください")
+        return None
+    st.session_state['share_timestamps'].append(now)
+
     client = get_supabase_client()
     if not client:
         return None
@@ -3337,6 +3351,10 @@ def main():
     # URLパラメータで共有IDがあれば共有ビューを表示
     share_id = st.query_params.get("share")
     if share_id:
+        # share_idのフォーマット検証（URL-safe base64, 20-40文字）
+        if not re.match(r'^[A-Za-z0-9_-]{20,40}$', share_id):
+            st.error("無効な共有リンクです")
+            return
         show_shared_view(share_id)
         return  # 通常のUIは表示しない
 
