@@ -1170,8 +1170,8 @@ st.markdown("""
 
     /* メインボタン */
     .stButton > button {
-        background: #1e3a5f;
-        color: white;
+        background: #1e3a5f !important;
+        color: white !important;
         border: none;
         border-radius: 6px;
         padding: 0.6rem 1.5rem;
@@ -1182,11 +1182,20 @@ st.markdown("""
     }
 
     .stButton > button:hover {
-        background: #2d4a6f;
+        background: #2d4a6f !important;
+        color: white !important;
     }
 
     .stButton > button:disabled {
-        background: #9ca3af;
+        background: #9ca3af !important;
+        color: white !important;
+    }
+
+    /* secondaryボタンも白文字を確保 */
+    .stButton > button[kind="secondary"],
+    .stButton > button[data-testid="stBaseButton-secondary"] {
+        background: #1e3a5f !important;
+        color: white !important;
     }
 
     /* ダウンロードボタン */
