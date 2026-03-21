@@ -309,6 +309,80 @@ def _extract_job_from_source(api_key: str, source_name: str, text: str) -> dict:
         return {"name": source_name, "success": False, "error": str(e)}
 
 
+def _build_email_text(candidate_name: str, sender_name: str, jobs: list[dict], email_lang: str = "en") -> str:
+    """求人打診メール文面を組み立てる（英語/日本語対応）
+
+    Args:
+        candidate_name: 候補者の名前
+        sender_name: 送信者の名前
+        jobs: 求人情報のリスト（title, company, website, overview, key_focus, jd_note, fit_comment）
+        email_lang: "en" or "ja"
+    """
+    lines = []
+
+    if email_lang == "ja":
+        lines.append(f"{candidate_name} 様\n")
+        lines.append("本日はお話しできて大変うれしく思います。\n")
+        lines.append("お話しした通り、以下の求人情報をお送りいたします。")
+        lines.append("ご興味のあるポジションがございましたらお知らせください。企業への推薦手続きを進めさせていただきます。\n")
+    else:
+        lines.append(f"Hi {candidate_name}\n")
+        lines.append("It was a pleasure speaking with you today.\n")
+        lines.append("As discussed, please find the details of the opportunities below.")
+        lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
+
+    for idx, job in enumerate(jobs, 1):
+        header_parts = []
+        if job.get("title"):
+            header_parts.append(job["title"])
+        if job.get("company"):
+            header_parts.append(job["company"])
+        if header_parts:
+            lines.append(f"{idx}. {' | '.join(header_parts)}\n")
+        else:
+            lines.append(f"{idx}. (TBD)\n")
+
+        if email_lang == "ja":
+            if job.get("website"):
+                lines.append(f"ウェブサイト: {job['website']}\n")
+            if job.get("overview"):
+                lines.append(f"概要: {job['overview']}\n")
+            if job.get("key_focus"):
+                lines.append(f"注力ポイント: {job['key_focus']}\n")
+            if job.get("jd_note"):
+                lines.append(f"JD備考: {job['jd_note']}\n")
+            if job.get("fit_comment"):
+                lines.append(f"{job['fit_comment']}\n")
+        else:
+            if job.get("website"):
+                lines.append(f"Website: {job['website']}\n")
+            if job.get("overview"):
+                lines.append(f"Overview: {job['overview']}\n")
+            if job.get("key_focus"):
+                lines.append(f"Key Focus: {job['key_focus']}\n")
+            if job.get("jd_note"):
+                lines.append(f"JD: {job['jd_note']}\n")
+            if job.get("fit_comment"):
+                lines.append(f"{job['fit_comment']}\n")
+
+        lines.append("")
+
+    if email_lang == "ja":
+        lines.append("また、弊社の「誠実さへのコミットメント」に関する簡単なメモを添付しております。端的に申し上げますと、お客様の信頼を大切にし、明確な「ゴーサイン」をいただくまで、いかなる企業にもプロフィールを提出することはございません。このアプローチにより、候補者様の推薦は戦略的に行われ、重複応募による混乱を避けることができます。")
+        lines.append("詳細: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
+        lines.append("これらの求人についてのご意見をお待ちしております。")
+        lines.append("よろしくお願いいたします。")
+        lines.append(sender_name)
+    else:
+        lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
+        lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
+        lines.append("We look forward to hearing your thoughts on these opportunities.")
+        lines.append("Best regards,")
+        lines.append(sender_name)
+
+    return "\n".join(lines)
+
+
 # ========================================
 # Supabase URL共有機能
 # ========================================
@@ -5920,7 +5994,7 @@ Full-stack Developer...
             st.session_state['saved_job_sets'] = []
 
         # --- 基本情報 ---
-        col_name, col_sender = st.columns(2)
+        col_name, col_sender, col_email_lang = st.columns(3)
         with col_name:
             candidate_name = st.text_input(
                 t("email_candidate_name"),
@@ -5932,6 +6006,13 @@ Full-stack Developer...
                 t("email_sender"),
                 options=["Shu", "Ilya", "Hiroshi"],
                 key="email_sender_name"
+            )
+        with col_email_lang:
+            email_lang = st.selectbox(
+                t("email_lang_label"),
+                options=["en", "ja"],
+                format_func=lambda x: t("email_lang_en") if x == "en" else t("email_lang_ja"),
+                key="email_output_lang"
             )
 
         st.divider()
@@ -6117,43 +6198,7 @@ Full-stack Developer...
                         st.rerun()
 
                 if batch_gen_btn and candidate_name:
-                    lines = []
-                    lines.append(f"Hi {candidate_name}\n")
-                    lines.append("It was a pleasure speaking with you today.\n")
-                    lines.append("As discussed, please find the details of the opportunities below.")
-                    lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
-
-                    for idx, job in enumerate(edited_batch_jobs, 1):
-                        header_parts = []
-                        if job["title"]:
-                            header_parts.append(job["title"])
-                        if job["company"]:
-                            header_parts.append(job["company"])
-                        if header_parts:
-                            lines.append(f"{idx}. {' | '.join(header_parts)}\n")
-                        else:
-                            lines.append(f"{idx}. (TBD)\n")
-
-                        if job["website"]:
-                            lines.append(f"Website: {job['website']}\n")
-                        if job["overview"]:
-                            lines.append(f"Overview: {job['overview']}\n")
-                        if job["key_focus"]:
-                            lines.append(f"Key Focus: {job['key_focus']}\n")
-                        if job["jd_note"]:
-                            lines.append(f"JD: {job['jd_note']}\n")
-                        if job["fit_comment"]:
-                            lines.append(f"{job['fit_comment']}\n")
-
-                        lines.append("")
-
-                    lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
-                    lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
-                    lines.append("We look forward to hearing your thoughts on these opportunities.")
-                    lines.append("Best regards,")
-                    lines.append(sender_name)
-
-                    email_text = "\n".join(lines)
+                    email_text = _build_email_text(candidate_name, sender_name, edited_batch_jobs, email_lang)
                     st.session_state['generated_email_batch'] = email_text
 
                 # --- バッチ結果表示 ---
@@ -6474,45 +6519,7 @@ Full-stack Developer...
             )
 
             if generate_btn and candidate_name:
-                # メール文面を組み立て
-                lines = []
-                lines.append(f"Hi {candidate_name}\n")
-                lines.append("It was a pleasure speaking with you today.\n")
-                lines.append("As discussed, please find the details of the opportunities below.")
-                lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
-
-                for idx, job in enumerate(jobs, 1):
-                    # ヘッダー行: タイトルと企業名の組み合わせ
-                    header_parts = []
-                    if job["title"]:
-                        header_parts.append(job["title"])
-                    if job["company"]:
-                        header_parts.append(job["company"])
-                    if header_parts:
-                        lines.append(f"{idx}. {' | '.join(header_parts)}\n")
-                    else:
-                        lines.append(f"{idx}. (TBD)\n")
-
-                    if job["website"]:
-                        lines.append(f"Website: {job['website']}\n")
-                    if job["overview"]:
-                        lines.append(f"Overview: {job['overview']}\n")
-                    if job["key_focus"]:
-                        lines.append(f"Key Focus: {job['key_focus']}\n")
-                    if job["jd_note"]:
-                        lines.append(f"JD: {job['jd_note']}\n")
-                    if job["fit_comment"]:
-                        lines.append(f"{job['fit_comment']}\n")
-
-                    lines.append("")  # 求人間の空行
-
-                lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
-                lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
-                lines.append("We look forward to hearing your thoughts on these opportunities.")
-                lines.append("Best regards,")
-                lines.append(sender_name)
-
-                email_text = "\n".join(lines)
+                email_text = _build_email_text(candidate_name, sender_name, jobs, email_lang)
                 st.session_state['generated_email'] = email_text
 
             # --- 結果表示 ---
