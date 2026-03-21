@@ -276,13 +276,14 @@ Output ONLY a valid JSON object with these exact keys (no markdown, no explanati
   "title": "The job position/role name (in English, e.g. 'Senior Backend Engineer')",
   "company": "The company name",
   "website": "The company or job posting URL if mentioned in the text, otherwise empty",
-  "overview": "A concise 1-3 sentence summary of the company/role in English, suitable for an outreach email (max 300 chars)",
+  "overview": "A concise 1-3 sentence summary of the company/role in English from a third-person perspective (use 'They' not 'We'), suitable for an outreach email sent by a recruiting agent (max 300 chars)",
   "key_focus": "What the company is specifically looking for — key skills, experience, or focus areas in 1 sentence (in English, max 200 chars)"
 }}
 
 Important:
 - All values must be in English
-- Keep overview concise and appealing — this goes directly into an email to candidates
+- Keep overview concise and appealing — this goes directly into an email to candidates sent by a recruiting agent
+- Always use third-person perspective in overview (e.g. 'They are looking for...' NOT 'We are looking for...')
 - For key_focus, highlight what makes this role unique or what specific expertise is sought
 - Do not fabricate information not present in the source text
 - Output valid JSON only — no extra text before or after"""
