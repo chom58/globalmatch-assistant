@@ -181,12 +181,53 @@ def _is_safe_url(url: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _convert_google_drive_url(url: str) -> str | None:
+    """Google DriveのURLを直接ダウンロードURLに変換
+
+    対応形式:
+        - https://drive.google.com/file/d/{FILE_ID}/view...
+        - https://drive.google.com/open?id={FILE_ID}
+        - https://docs.google.com/document/d/{FILE_ID}/...
+        - https://docs.google.com/spreadsheets/d/{FILE_ID}/...
+
+    Returns:
+        変換後のURL、Google DriveのURLでない場合はNone
+    """
+    # /file/d/{ID}/ パターン
+    match = re.match(r'https?://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', url)
+    if match:
+        return f"https://drive.google.com/uc?export=download&id={match.group(1)}"
+
+    # /open?id={ID} パターン
+    match = re.match(r'https?://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)', url)
+    if match:
+        return f"https://drive.google.com/uc?export=download&id={match.group(1)}"
+
+    # Google Docs → PDF export
+    match = re.match(r'https?://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)', url)
+    if match:
+        return f"https://docs.google.com/document/d/{match.group(1)}/export?format=pdf"
+
+    # Google Sheets → PDF export
+    match = re.match(r'https?://docs\.google\.com/spreadsheets/d/([a-zA-Z0-9_-]+)', url)
+    if match:
+        return f"https://docs.google.com/spreadsheets/d/{match.group(1)}/export?format=pdf"
+
+    return None
+
+
 def extract_text_from_url(url: str) -> tuple[str, str]:
-    """URLからWebページのテキストを抽出
+    """URLからWebページのテキストを抽出（Google Drive対応）
 
     Returns:
         tuple: (extracted_text, error_message)
     """
+    # Google DriveのURLを直接ダウンロードURLに変換
+    drive_url = _convert_google_drive_url(url)
+    is_google_drive = drive_url is not None
+    if is_google_drive:
+        url = drive_url
+
     # SSRF対策: URL安全性チェック
     is_safe, safety_msg = _is_safe_url(url)
     if not is_safe:
@@ -196,19 +237,34 @@ def extract_text_from_url(url: str) -> tuple[str, str]:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=False)
+        if is_google_drive:
+            # Google Driveはリダイレクトを自動追跡（googleusercontent.comへ転送される）
+            resp = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+        else:
+            resp = requests.get(url, headers=headers, timeout=15, allow_redirects=False)
 
-        # リダイレクト先もSSRF検証（最大5回まで追跡）
-        redirect_count = 0
-        while resp.is_redirect and redirect_count < 5:
-            redirect_url = resp.headers.get("Location", "")
-            is_safe_redirect, redirect_msg = _is_safe_url(redirect_url)
-            if not is_safe_redirect:
-                return "", f"リダイレクト先が安全ではありません: {redirect_msg}"
-            resp = requests.get(redirect_url, headers=headers, timeout=15, allow_redirects=False)
-            redirect_count += 1
+            # リダイレクト先もSSRF検証（最大5回まで追跡）
+            redirect_count = 0
+            while resp.is_redirect and redirect_count < 5:
+                redirect_url = resp.headers.get("Location", "")
+                is_safe_redirect, redirect_msg = _is_safe_url(redirect_url)
+                if not is_safe_redirect:
+                    return "", f"リダイレクト先が安全ではありません: {redirect_msg}"
+                resp = requests.get(redirect_url, headers=headers, timeout=15, allow_redirects=False)
+                redirect_count += 1
 
         resp.raise_for_status()
+
+        # Google Drive: 大きいファイルのウイルススキャン確認ページ対応
+        if is_google_drive and "text/html" in resp.headers.get("Content-Type", ""):
+            # 確認ページからダウンロードトークンを取得して再リクエスト
+            confirm_match = re.search(r'confirm=([0-9A-Za-z_-]+)', resp.text)
+            if confirm_match:
+                confirm_url = f"{url}&confirm={confirm_match.group(1)}"
+                resp = requests.get(confirm_url, headers=headers, timeout=30, allow_redirects=True)
+                resp.raise_for_status()
+            elif "accounts.google.com" in resp.text or "ServiceLogin" in resp.text:
+                return "", "このGoogle Driveファイルにはアクセス権がありません。共有設定を「リンクを知っている全員」に変更してください"
 
         content_type = resp.headers.get("Content-Type", "")
 
