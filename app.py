@@ -288,6 +288,27 @@ Important:
 - Output valid JSON only — no extra text before or after"""
 
 
+def _extract_job_from_source(api_key: str, source_name: str, text: str) -> dict:
+    """求人テキストからJSON情報を抽出する（バッチ用ヘルパー）
+
+    Returns:
+        dict with keys: name, success, data (or error)
+    """
+    try:
+        prompt = get_job_extraction_prompt(text)
+        result = call_groq_api(api_key, prompt)
+        result = result.strip()
+        if result.startswith("```"):
+            result = re.sub(r'^```(?:json)?\s*', '', result)
+            result = re.sub(r'\s*```$', '', result)
+        job_data = json.loads(result)
+        return {"name": source_name, "success": True, "data": job_data}
+    except json.JSONDecodeError:
+        return {"name": source_name, "success": False, "error": "JSON parse error"}
+    except Exception as e:
+        return {"name": source_name, "success": False, "error": str(e)}
+
+
 # ========================================
 # Supabase URL共有機能
 # ========================================
@@ -5915,59 +5936,280 @@ Full-stack Developer...
 
         st.divider()
 
-        # --- 保存済みデータから読み込み ---
-        saved_jobs_list = st.session_state.get('saved_jobs', [])
-        saved_sets_list = st.session_state.get('saved_job_sets', [])
+        # --- モード切替タブ ---
+        email_manual_tab, email_batch_tab = st.tabs([t("email_tab_manual"), t("email_tab_batch")])
 
-        if saved_sets_list or saved_jobs_list:
-            st.markdown(t("email_saved_data"))
-            load_tab_set, load_tab_individual = st.tabs(["📦 セットから読み込み", "📄 個別求人から選択"])
+        # ============================================================
+        # 一括PDFモード
+        # ============================================================
+        with email_batch_tab:
+            st.caption(t("email_batch_desc"))
 
-            with load_tab_set:
-                if saved_sets_list:
-                    set_options = [f"{s['name']}（{len(s['jobs'])}件）" for s in saved_sets_list]
-                    selected_set_idx = st.selectbox(
-                        "求人セットを選択",
-                        options=range(len(set_options)),
-                        format_func=lambda x: set_options[x],
-                        key="selected_job_set"
-                    )
+            # PDF一括アップロード
+            batch_pdfs = st.file_uploader(
+                t("email_batch_upload"),
+                type=["pdf"],
+                accept_multiple_files=True,
+                key="email_batch_pdfs",
+                help=t("email_batch_upload_help"),
+            )
 
-                    # 選択中のセット内容をプレビュー
-                    selected_set = saved_sets_list[selected_set_idx]
-                    preview_lines = [f"- {j.get('company', '')} | {j.get('title', '')}" for j in selected_set['jobs']]
-                    st.caption("\n".join(preview_lines))
+            # URL一括入力
+            batch_urls_text = st.text_area(
+                t("email_batch_url_label"),
+                placeholder=t("email_batch_url_placeholder"),
+                height=100,
+                key="email_batch_urls",
+            )
 
-                    if st.button("📥 このセットを読み込み", key="load_set_btn", use_container_width=True):
-                        set_jobs = selected_set['jobs']
-                        st.session_state['email_job_count'] = len(set_jobs)
-                        for idx, sj in enumerate(set_jobs):
-                            st.session_state[f'job_title_{idx}'] = sj.get('title', '')
-                            st.session_state[f'company_name_{idx}'] = sj.get('company', '')
-                            st.session_state[f'job_website_{idx}'] = sj.get('website', '')
-                            st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
-                            st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
-                            st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
-                            st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
+            # 入力件数カウント
+            batch_url_list = [u.strip() for u in batch_urls_text.split("\n") if u.strip()] if batch_urls_text else []
+            total_sources = len(batch_pdfs or []) + len(batch_url_list)
+
+            if total_sources > 10:
+                st.error(t("email_batch_max_error"))
+
+            # 抽出ボタン
+            batch_extract_btn = st.button(
+                t("email_batch_extract_btn"),
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or total_sources == 0 or total_sources > 10,
+                key="email_batch_extract_btn",
+            )
+
+            if batch_extract_btn and api_key:
+                sources = []
+                # PDFからテキスト抽出
+                for pdf_file in (batch_pdfs or []):
+                    text, err = extract_text_from_pdf(pdf_file)
+                    if err:
+                        st.warning(t("email_batch_extract_error").format(name=pdf_file.name) + f" - {err}")
+                    elif text:
+                        sources.append((pdf_file.name, text))
+
+                # URLからテキスト抽出
+                for url in batch_url_list:
+                    text, err = extract_text_from_url(url)
+                    if err:
+                        st.warning(t("email_batch_extract_error").format(name=url) + f" - {err}")
+                    elif text:
+                        sources.append((url, text))
+
+                if sources:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    start_time = time.time()
+                    results = []
+
+                    with ThreadPoolExecutor(max_workers=min(3, len(sources))) as executor:
+                        futures = {
+                            executor.submit(_extract_job_from_source, api_key, name, text): idx
+                            for idx, (name, text) in enumerate(sources)
+                        }
+                        done_count = 0
+                        for future in as_completed(futures):
+                            done_count += 1
+                            status_text.text(t("email_batch_extracting").format(done=done_count, total=len(sources)))
+                            progress_bar.progress(done_count / len(sources))
+                            results.append(future.result())
+
+                    elapsed = round(time.time() - start_time, 1)
+                    progress_bar.empty()
+                    status_text.empty()
+
+                    # 成功した結果をセッションに保存
+                    extracted_jobs = []
+                    error_names = []
+                    for r in results:
+                        if r["success"]:
+                            extracted_jobs.append(r["data"])
+                        else:
+                            error_names.append(r["name"])
+
+                    if error_names:
+                        for en in error_names:
+                            st.warning(t("email_batch_extract_error").format(name=en))
+
+                    if extracted_jobs:
+                        st.session_state['batch_extracted_jobs'] = extracted_jobs
+                        st.toast(t("email_batch_extract_done").format(count=len(extracted_jobs), time=elapsed))
                         st.rerun()
                 else:
-                    st.info("保存済みセットはありません。下の求人フォームを入力後「💾 セットとして保存」で作成できます。")
+                    st.warning(t("email_batch_no_input"))
 
-            with load_tab_individual:
-                if saved_jobs_list:
-                    saved_options = [f"{sj['company']} - {sj['title']}" for sj in saved_jobs_list]
-                    selected_saved = st.multiselect(
-                        "メールに含める求人を選択",
-                        options=range(len(saved_options)),
-                        format_func=lambda x: saved_options[x],
-                        key="selected_saved_jobs"
+            # --- 抽出結果の表示・編集 ---
+            if st.session_state.get('batch_extracted_jobs'):
+                batch_jobs = st.session_state['batch_extracted_jobs']
+                st.markdown(t("email_batch_results").format(count=len(batch_jobs)))
+                st.caption(t("email_batch_edit_hint"))
+
+                edited_batch_jobs = []
+                for idx, bj in enumerate(batch_jobs):
+                    with st.expander(
+                        f"#{idx + 1} {bj.get('company', '?')} | {bj.get('title', '?')}",
+                        expanded=True,
+                    ):
+                        bcol1, bcol2 = st.columns(2)
+                        with bcol1:
+                            b_title = st.text_input(
+                                t("email_position"),
+                                value=bj.get("title", ""),
+                                key=f"batch_job_title_{idx}",
+                            )
+                        with bcol2:
+                            b_company = st.text_input(
+                                t("email_company"),
+                                value=bj.get("company", ""),
+                                key=f"batch_job_company_{idx}",
+                            )
+                        b_website = st.text_input(
+                            "Website URL",
+                            value=bj.get("website", ""),
+                            key=f"batch_job_website_{idx}",
+                        )
+                        b_overview = st.text_area(
+                            t("email_overview"),
+                            value=bj.get("overview", ""),
+                            height=80,
+                            key=f"batch_job_overview_{idx}",
+                        )
+                        b_keyfocus = st.text_input(
+                            t("email_keyfocus"),
+                            value=bj.get("key_focus", ""),
+                            key=f"batch_job_keyfocus_{idx}",
+                        )
+                        b_jdnote = st.text_input(
+                            t("email_jdnote"),
+                            value="",
+                            key=f"batch_job_jdnote_{idx}",
+                        )
+                        b_fit = st.text_area(
+                            t("email_recommendation"),
+                            value="",
+                            height=68,
+                            key=f"batch_job_fit_{idx}",
+                        )
+
+                        edited_batch_jobs.append({
+                            "title": b_title,
+                            "company": b_company,
+                            "website": b_website,
+                            "overview": b_overview,
+                            "key_focus": b_keyfocus,
+                            "jd_note": b_jdnote,
+                            "fit_comment": b_fit,
+                        })
+
+                # 一括メール生成ボタン
+                col_gen_b, col_clear_b = st.columns([3, 1])
+                with col_gen_b:
+                    batch_gen_btn = st.button(
+                        t("email_batch_generate_btn").format(count=len(batch_jobs)),
+                        type="primary",
+                        use_container_width=True,
+                        disabled=not candidate_name,
+                        key="batch_generate_email_btn",
                     )
+                with col_clear_b:
+                    if st.button(t("email_batch_clear"), use_container_width=True, key="batch_clear_btn"):
+                        del st.session_state['batch_extracted_jobs']
+                        st.rerun()
 
-                    if selected_saved:
-                        if st.button("📥 選択した求人を読み込み", key="load_saved_jobs_btn", use_container_width=True):
-                            st.session_state['email_job_count'] = len(selected_saved)
-                            for idx, sj_idx in enumerate(selected_saved):
-                                sj = saved_jobs_list[sj_idx]
+                if batch_gen_btn and candidate_name:
+                    lines = []
+                    lines.append(f"Hi {candidate_name}\n")
+                    lines.append("It was a pleasure speaking with you today.\n")
+                    lines.append("As discussed, please find the details of the opportunities below.")
+                    lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
+
+                    for idx, job in enumerate(edited_batch_jobs, 1):
+                        header_parts = []
+                        if job["title"]:
+                            header_parts.append(job["title"])
+                        if job["company"]:
+                            header_parts.append(job["company"])
+                        if header_parts:
+                            lines.append(f"{idx}. {' | '.join(header_parts)}\n")
+                        else:
+                            lines.append(f"{idx}. (TBD)\n")
+
+                        if job["website"]:
+                            lines.append(f"Website: {job['website']}\n")
+                        if job["overview"]:
+                            lines.append(f"Overview: {job['overview']}\n")
+                        if job["key_focus"]:
+                            lines.append(f"Key Focus: {job['key_focus']}\n")
+                        if job["jd_note"]:
+                            lines.append(f"JD: {job['jd_note']}\n")
+                        if job["fit_comment"]:
+                            lines.append(f"{job['fit_comment']}\n")
+
+                        lines.append("")
+
+                    lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
+                    lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
+                    lines.append("We look forward to hearing your thoughts on these opportunities.")
+                    lines.append("Best regards,")
+                    lines.append(sender_name)
+
+                    email_text = "\n".join(lines)
+                    st.session_state['generated_email_batch'] = email_text
+
+                # --- バッチ結果表示 ---
+                if 'generated_email_batch' in st.session_state:
+                    st.divider()
+                    st.markdown(t("email_output"))
+
+                    col_copy_b, col_dl_b = st.columns(2)
+                    with col_copy_b:
+                        if st.button("📋 コピー", key="copy_batch_email_btn", use_container_width=True):
+                            st.toast("✅ クリップボードにコピーしました")
+                            _copy_to_clipboard(st.session_state['generated_email_batch'])
+                    with col_dl_b:
+                        st.download_button(
+                            t("email_dl_text"),
+                            data=st.session_state['generated_email_batch'],
+                            file_name=f"job_email_batch_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                            key="dl_batch_email_btn",
+                        )
+
+                    st.code(st.session_state['generated_email_batch'], language=None)
+
+        # ============================================================
+        # 手動入力モード（既存機能）
+        # ============================================================
+        with email_manual_tab:
+
+            # --- 保存済みデータから読み込み ---
+            saved_jobs_list = st.session_state.get('saved_jobs', [])
+            saved_sets_list = st.session_state.get('saved_job_sets', [])
+
+            if saved_sets_list or saved_jobs_list:
+                st.markdown(t("email_saved_data"))
+                load_tab_set, load_tab_individual = st.tabs(["📦 セットから読み込み", "📄 個別求人から選択"])
+
+                with load_tab_set:
+                    if saved_sets_list:
+                        set_options = [f"{s['name']}（{len(s['jobs'])}件）" for s in saved_sets_list]
+                        selected_set_idx = st.selectbox(
+                            "求人セットを選択",
+                            options=range(len(set_options)),
+                            format_func=lambda x: set_options[x],
+                            key="selected_job_set"
+                        )
+
+                        # 選択中のセット内容をプレビュー
+                        selected_set = saved_sets_list[selected_set_idx]
+                        preview_lines = [f"- {j.get('company', '')} | {j.get('title', '')}" for j in selected_set['jobs']]
+                        st.caption("\n".join(preview_lines))
+
+                        if st.button("📥 このセットを読み込み", key="load_set_btn", use_container_width=True):
+                            set_jobs = selected_set['jobs']
+                            st.session_state['email_job_count'] = len(set_jobs)
+                            for idx, sj in enumerate(set_jobs):
                                 st.session_state[f'job_title_{idx}'] = sj.get('title', '')
                                 st.session_state[f'company_name_{idx}'] = sj.get('company', '')
                                 st.session_state[f'job_website_{idx}'] = sj.get('website', '')
@@ -5976,361 +6218,387 @@ Full-stack Developer...
                                 st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
                                 st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
                             st.rerun()
-                else:
-                    st.info("保存済みの個別求人はありません。各求人エントリ内の「💾 この求人を保存」で追加できます。")
+                    else:
+                        st.info("保存済みセットはありません。下の求人フォームを入力後「💾 セットとして保存」で作成できます。")
+
+                with load_tab_individual:
+                    if saved_jobs_list:
+                        saved_options = [f"{sj['company']} - {sj['title']}" for sj in saved_jobs_list]
+                        selected_saved = st.multiselect(
+                            "メールに含める求人を選択",
+                            options=range(len(saved_options)),
+                            format_func=lambda x: saved_options[x],
+                            key="selected_saved_jobs"
+                        )
+
+                        if selected_saved:
+                            if st.button("📥 選択した求人を読み込み", key="load_saved_jobs_btn", use_container_width=True):
+                                st.session_state['email_job_count'] = len(selected_saved)
+                                for idx, sj_idx in enumerate(selected_saved):
+                                    sj = saved_jobs_list[sj_idx]
+                                    st.session_state[f'job_title_{idx}'] = sj.get('title', '')
+                                    st.session_state[f'company_name_{idx}'] = sj.get('company', '')
+                                    st.session_state[f'job_website_{idx}'] = sj.get('website', '')
+                                    st.session_state[f'job_overview_{idx}'] = sj.get('overview', '')
+                                    st.session_state[f'job_keyfocus_{idx}'] = sj.get('key_focus', '')
+                                    st.session_state[f'job_jdnote_{idx}'] = sj.get('jd_note', '')
+                                    st.session_state[f'job_fit_{idx}'] = sj.get('fit_comment', '')
+                                st.rerun()
+                    else:
+                        st.info("保存済みの個別求人はありません。各求人エントリ内の「💾 この求人を保存」で追加できます。")
+
+                st.divider()
+
+            # --- 求人エントリ管理 ---
+            st.markdown("##### 求人情報")
+
+            # 求人数を管理
+            if 'email_job_count' not in st.session_state:
+                st.session_state['email_job_count'] = 1
+
+            col_add, col_remove = st.columns(2)
+            with col_add:
+                if st.button("＋ 求人を追加", key="add_job_btn", use_container_width=True):
+                    if st.session_state['email_job_count'] < 10:
+                        st.session_state['email_job_count'] += 1
+                        st.rerun()
+            with col_remove:
+                if st.button("－ 最後の求人を削除", key="remove_job_btn", use_container_width=True,
+                             disabled=st.session_state['email_job_count'] <= 1):
+                    st.session_state['email_job_count'] -= 1
+                    st.rerun()
+
+            st.caption(f"現在の求人数: {st.session_state['email_job_count']}件（最大10件）")
+
+            jobs = []
+            for i in range(st.session_state['email_job_count']):
+                with st.expander(f"求人 #{i + 1}", expanded=True):
+                    # --- 自動読み取り（PDF / URL） ---
+                    st.markdown("📎 **求人を自動読み取り**（PDFまたはURLを入力）")
+                    auto_col1, auto_col2 = st.columns(2)
+                    with auto_col1:
+                        uploaded_jd_pdf = st.file_uploader(
+                            "求人PDF",
+                            type=["pdf"],
+                            key=f"job_pdf_{i}",
+                            label_visibility="collapsed"
+                        )
+                    with auto_col2:
+                        jd_url = st.text_input(
+                            "求人URL",
+                            placeholder="https://... 求人ページのURLを貼り付け",
+                            key=f"job_url_{i}",
+                            label_visibility="collapsed"
+                        )
+
+                    extract_btn = st.button(
+                        "🔍 読み取り → 自動入力",
+                        key=f"extract_job_{i}",
+                        use_container_width=True,
+                        disabled=not api_key or (not uploaded_jd_pdf and not jd_url)
+                    )
+
+                    if extract_btn and api_key:
+                        extracted_text = ""
+                        error_msg = ""
+
+                        if uploaded_jd_pdf:
+                            extracted_text, error_msg = extract_text_from_pdf(uploaded_jd_pdf)
+                        elif jd_url:
+                            extracted_text, error_msg = extract_text_from_url(jd_url)
+
+                        if error_msg:
+                            st.error(error_msg)
+                        elif extracted_text:
+                            with st.spinner("求人情報を解析中..."):
+                                try:
+                                    prompt = get_job_extraction_prompt(extracted_text)
+                                    result = call_groq_api(api_key, prompt)
+                                    # JSON部分を抽出
+                                    result = result.strip()
+                                    if result.startswith("```"):
+                                        result = re.sub(r'^```(?:json)?\s*', '', result)
+                                        result = re.sub(r'\s*```$', '', result)
+                                    job_data = json.loads(result)
+
+                                    # フィールドに反映
+                                    if job_data.get("title"):
+                                        st.session_state[f'job_title_{i}'] = job_data["title"]
+                                    if job_data.get("company"):
+                                        st.session_state[f'company_name_{i}'] = job_data["company"]
+                                    if job_data.get("website"):
+                                        st.session_state[f'job_website_{i}'] = job_data["website"]
+                                    elif jd_url:
+                                        # URLから読み取った場合、そのURLをwebsiteに設定
+                                        st.session_state[f'job_website_{i}'] = jd_url
+                                    if job_data.get("overview"):
+                                        st.session_state[f'job_overview_{i}'] = job_data["overview"]
+                                    if job_data.get("key_focus"):
+                                        st.session_state[f'job_keyfocus_{i}'] = job_data["key_focus"]
+
+                                    st.toast(f"✅ 求人 #{i + 1} の情報を自動入力しました")
+                                    st.rerun()
+                                except json.JSONDecodeError:
+                                    st.error("解析結果のパースに失敗しました。再度お試しください。")
+                                except ValueError as e:
+                                    st.error(str(e))
+
+                    if not api_key and (uploaded_jd_pdf or jd_url):
+                        st.caption("⚠️ 自動読み取りにはサイドバーでAPIキーの設定が必要です")
+
+                    st.markdown("---")
+
+                    # --- 手動入力フィールド ---
+                    jcol1, jcol2 = st.columns(2)
+                    with jcol1:
+                        job_title = st.text_input(
+                            "ポジション名",
+                            placeholder="e.g. Robot Deployment / Research Engineer",
+                            key=f"job_title_{i}"
+                        )
+                    with jcol2:
+                        company_name = st.text_input(
+                            "企業名",
+                            placeholder="e.g. RLWRLD",
+                            key=f"company_name_{i}"
+                        )
+                    website = st.text_input(
+                        "Website URL",
+                        placeholder="e.g. https://www.example.com/",
+                        key=f"job_website_{i}"
+                    )
+                    overview = st.text_area(
+                        "概要 / Overview（任意）",
+                        placeholder="e.g. A national-scale project aiming to build one of the world's largest VLA models.",
+                        height=80,
+                        key=f"job_overview_{i}"
+                    )
+                    key_focus = st.text_input(
+                        "Key Focus（任意）",
+                        placeholder='e.g. They are specifically looking for expertise in "real-world implementation."',
+                        key=f"job_keyfocus_{i}"
+                    )
+                    jd_note = st.text_input(
+                        "JD備考（任意）",
+                        placeholder="e.g. Please refer to the attached file.",
+                        key=f"job_jdnote_{i}"
+                    )
+                    fit_comment = st.text_area(
+                        "おすすめコメント（任意）",
+                        placeholder="e.g. Given your expertise in AI and computer vision, I believe this would be an excellent match.",
+                        height=68,
+                        key=f"job_fit_{i}"
+                    )
+
+                    # 💾 この求人を保存ボタン
+                    if job_title or company_name:
+                        if st.button("💾 この求人を保存", key=f"save_job_{i}", use_container_width=True):
+                            new_job = {
+                                'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
+                                'title': job_title,
+                                'company': company_name,
+                                'website': website,
+                                'overview': overview,
+                                'key_focus': key_focus,
+                                'jd_note': jd_note,
+                                'fit_comment': fit_comment,
+                                'saved_at': datetime.now().isoformat()
+                            }
+                            # 同じ企業+ポジション名の重複チェック
+                            existing = [
+                                sj for sj in st.session_state['saved_jobs']
+                                if sj['title'] == job_title and sj['company'] == company_name
+                            ]
+                            if existing:
+                                # 既存エントリを更新
+                                for sj in st.session_state['saved_jobs']:
+                                    if sj['title'] == job_title and sj['company'] == company_name:
+                                        sj.update(new_job)
+                                        break
+                                st.toast(f"✅ 「{company_name} - {job_title}」を更新しました")
+                            else:
+                                st.session_state['saved_jobs'].append(new_job)
+                                st.toast(f"✅ 「{company_name} - {job_title}」を保存しました")
+                            sync_saved_jobs_to_localstorage()
+
+                    jobs.append({
+                        "title": job_title,
+                        "company": company_name,
+                        "website": website,
+                        "overview": overview,
+                        "key_focus": key_focus,
+                        "jd_note": jd_note,
+                        "fit_comment": fit_comment,
+                    })
 
             st.divider()
 
-        # --- 求人エントリ管理 ---
-        st.markdown("##### 求人情報")
-
-        # 求人数を管理
-        if 'email_job_count' not in st.session_state:
-            st.session_state['email_job_count'] = 1
-
-        col_add, col_remove = st.columns(2)
-        with col_add:
-            if st.button("＋ 求人を追加", key="add_job_btn", use_container_width=True):
-                if st.session_state['email_job_count'] < 10:
-                    st.session_state['email_job_count'] += 1
-                    st.rerun()
-        with col_remove:
-            if st.button("－ 最後の求人を削除", key="remove_job_btn", use_container_width=True,
-                         disabled=st.session_state['email_job_count'] <= 1):
-                st.session_state['email_job_count'] -= 1
-                st.rerun()
-
-        st.caption(f"現在の求人数: {st.session_state['email_job_count']}件（最大10件）")
-
-        jobs = []
-        for i in range(st.session_state['email_job_count']):
-            with st.expander(f"求人 #{i + 1}", expanded=True):
-                # --- 自動読み取り（PDF / URL） ---
-                st.markdown("📎 **求人を自動読み取り**（PDFまたはURLを入力）")
-                auto_col1, auto_col2 = st.columns(2)
-                with auto_col1:
-                    uploaded_jd_pdf = st.file_uploader(
-                        "求人PDF",
-                        type=["pdf"],
-                        key=f"job_pdf_{i}",
-                        label_visibility="collapsed"
+            # --- セットとして保存 ---
+            has_any_job = any(j["title"] or j["company"] for j in jobs)
+            if has_any_job:
+                with st.expander("💾 現在の求人をセットとして保存"):
+                    set_name = st.text_input(
+                        "セット名",
+                        placeholder="e.g. Robotics系3社セット",
+                        key="save_set_name"
                     )
-                with auto_col2:
-                    jd_url = st.text_input(
-                        "求人URL",
-                        placeholder="https://... 求人ページのURLを貼り付け",
-                        key=f"job_url_{i}",
-                        label_visibility="collapsed"
-                    )
-
-                extract_btn = st.button(
-                    "🔍 読み取り → 自動入力",
-                    key=f"extract_job_{i}",
-                    use_container_width=True,
-                    disabled=not api_key or (not uploaded_jd_pdf and not jd_url)
-                )
-
-                if extract_btn and api_key:
-                    extracted_text = ""
-                    error_msg = ""
-
-                    if uploaded_jd_pdf:
-                        extracted_text, error_msg = extract_text_from_pdf(uploaded_jd_pdf)
-                    elif jd_url:
-                        extracted_text, error_msg = extract_text_from_url(jd_url)
-
-                    if error_msg:
-                        st.error(error_msg)
-                    elif extracted_text:
-                        with st.spinner("求人情報を解析中..."):
-                            try:
-                                prompt = get_job_extraction_prompt(extracted_text)
-                                result = call_groq_api(api_key, prompt)
-                                # JSON部分を抽出
-                                result = result.strip()
-                                if result.startswith("```"):
-                                    result = re.sub(r'^```(?:json)?\s*', '', result)
-                                    result = re.sub(r'\s*```$', '', result)
-                                job_data = json.loads(result)
-
-                                # フィールドに反映
-                                if job_data.get("title"):
-                                    st.session_state[f'job_title_{i}'] = job_data["title"]
-                                if job_data.get("company"):
-                                    st.session_state[f'company_name_{i}'] = job_data["company"]
-                                if job_data.get("website"):
-                                    st.session_state[f'job_website_{i}'] = job_data["website"]
-                                elif jd_url:
-                                    # URLから読み取った場合、そのURLをwebsiteに設定
-                                    st.session_state[f'job_website_{i}'] = jd_url
-                                if job_data.get("overview"):
-                                    st.session_state[f'job_overview_{i}'] = job_data["overview"]
-                                if job_data.get("key_focus"):
-                                    st.session_state[f'job_keyfocus_{i}'] = job_data["key_focus"]
-
-                                st.toast(f"✅ 求人 #{i + 1} の情報を自動入力しました")
-                                st.rerun()
-                            except json.JSONDecodeError:
-                                st.error("解析結果のパースに失敗しました。再度お試しください。")
-                            except ValueError as e:
-                                st.error(str(e))
-
-                if not api_key and (uploaded_jd_pdf or jd_url):
-                    st.caption("⚠️ 自動読み取りにはサイドバーでAPIキーの設定が必要です")
-
-                st.markdown("---")
-
-                # --- 手動入力フィールド ---
-                jcol1, jcol2 = st.columns(2)
-                with jcol1:
-                    job_title = st.text_input(
-                        "ポジション名",
-                        placeholder="e.g. Robot Deployment / Research Engineer",
-                        key=f"job_title_{i}"
-                    )
-                with jcol2:
-                    company_name = st.text_input(
-                        "企業名",
-                        placeholder="e.g. RLWRLD",
-                        key=f"company_name_{i}"
-                    )
-                website = st.text_input(
-                    "Website URL",
-                    placeholder="e.g. https://www.example.com/",
-                    key=f"job_website_{i}"
-                )
-                overview = st.text_area(
-                    "概要 / Overview（任意）",
-                    placeholder="e.g. A national-scale project aiming to build one of the world's largest VLA models.",
-                    height=80,
-                    key=f"job_overview_{i}"
-                )
-                key_focus = st.text_input(
-                    "Key Focus（任意）",
-                    placeholder='e.g. They are specifically looking for expertise in "real-world implementation."',
-                    key=f"job_keyfocus_{i}"
-                )
-                jd_note = st.text_input(
-                    "JD備考（任意）",
-                    placeholder="e.g. Please refer to the attached file.",
-                    key=f"job_jdnote_{i}"
-                )
-                fit_comment = st.text_area(
-                    "おすすめコメント（任意）",
-                    placeholder="e.g. Given your expertise in AI and computer vision, I believe this would be an excellent match.",
-                    height=68,
-                    key=f"job_fit_{i}"
-                )
-
-                # 💾 この求人を保存ボタン
-                if job_title or company_name:
-                    if st.button("💾 この求人を保存", key=f"save_job_{i}", use_container_width=True):
-                        new_job = {
+                    if st.button("💾 セットを保存", key="save_set_btn", use_container_width=True, disabled=not set_name):
+                        # 入力されている求人のみ保存
+                        valid_jobs = [j for j in jobs if j["title"] or j["company"]]
+                        new_set = {
                             'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
-                            'title': job_title,
-                            'company': company_name,
-                            'website': website,
-                            'overview': overview,
-                            'key_focus': key_focus,
-                            'jd_note': jd_note,
-                            'fit_comment': fit_comment,
+                            'name': set_name,
+                            'jobs': valid_jobs,
                             'saved_at': datetime.now().isoformat()
                         }
-                        # 同じ企業+ポジション名の重複チェック
-                        existing = [
-                            sj for sj in st.session_state['saved_jobs']
-                            if sj['title'] == job_title and sj['company'] == company_name
-                        ]
-                        if existing:
-                            # 既存エントリを更新
-                            for sj in st.session_state['saved_jobs']:
-                                if sj['title'] == job_title and sj['company'] == company_name:
-                                    sj.update(new_job)
-                                    break
-                            st.toast(f"✅ 「{company_name} - {job_title}」を更新しました")
+                        # 同名セットの重複チェック
+                        existing_idx = next(
+                            (i for i, s in enumerate(st.session_state['saved_job_sets']) if s['name'] == set_name),
+                            None
+                        )
+                        if existing_idx is not None:
+                            st.session_state['saved_job_sets'][existing_idx] = new_set
+                            st.toast(f"✅ セット「{set_name}」を更新しました（{len(valid_jobs)}件）")
                         else:
-                            st.session_state['saved_jobs'].append(new_job)
-                            st.toast(f"✅ 「{company_name} - {job_title}」を保存しました")
-                        sync_saved_jobs_to_localstorage()
-
-                jobs.append({
-                    "title": job_title,
-                    "company": company_name,
-                    "website": website,
-                    "overview": overview,
-                    "key_focus": key_focus,
-                    "jd_note": jd_note,
-                    "fit_comment": fit_comment,
-                })
-
-        st.divider()
-
-        # --- セットとして保存 ---
-        has_any_job = any(j["title"] or j["company"] for j in jobs)
-        if has_any_job:
-            with st.expander("💾 現在の求人をセットとして保存"):
-                set_name = st.text_input(
-                    "セット名",
-                    placeholder="e.g. Robotics系3社セット",
-                    key="save_set_name"
-                )
-                if st.button("💾 セットを保存", key="save_set_btn", use_container_width=True, disabled=not set_name):
-                    # 入力されている求人のみ保存
-                    valid_jobs = [j for j in jobs if j["title"] or j["company"]]
-                    new_set = {
-                        'id': datetime.now().strftime('%Y%m%d%H%M%S%f'),
-                        'name': set_name,
-                        'jobs': valid_jobs,
-                        'saved_at': datetime.now().isoformat()
-                    }
-                    # 同名セットの重複チェック
-                    existing_idx = next(
-                        (i for i, s in enumerate(st.session_state['saved_job_sets']) if s['name'] == set_name),
-                        None
-                    )
-                    if existing_idx is not None:
-                        st.session_state['saved_job_sets'][existing_idx] = new_set
-                        st.toast(f"✅ セット「{set_name}」を更新しました（{len(valid_jobs)}件）")
-                    else:
-                        st.session_state['saved_job_sets'].append(new_set)
-                        st.toast(f"✅ セット「{set_name}」を保存しました（{len(valid_jobs)}件）")
-                    sync_saved_job_sets_to_localstorage()
-
-        # --- メール生成 ---
-        generate_btn = st.button(
-            t("email_generate_btn"),
-            type="primary",
-            use_container_width=True,
-            disabled=not candidate_name,
-            key="generate_email_btn"
-        )
-
-        if generate_btn and candidate_name:
-            # メール文面を組み立て
-            lines = []
-            lines.append(f"Hi {candidate_name}\n")
-            lines.append("It was a pleasure speaking with you today.\n")
-            lines.append("As discussed, please find the details of the opportunities below.")
-            lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
-
-            for idx, job in enumerate(jobs, 1):
-                # ヘッダー行: タイトルと企業名の組み合わせ
-                header_parts = []
-                if job["title"]:
-                    header_parts.append(job["title"])
-                if job["company"]:
-                    header_parts.append(job["company"])
-                if header_parts:
-                    lines.append(f"{idx}. {' | '.join(header_parts)}\n")
-                else:
-                    lines.append(f"{idx}. (TBD)\n")
-
-                if job["website"]:
-                    lines.append(f"Website: {job['website']}\n")
-                if job["overview"]:
-                    lines.append(f"Overview: {job['overview']}\n")
-                if job["key_focus"]:
-                    lines.append(f"Key Focus: {job['key_focus']}\n")
-                if job["jd_note"]:
-                    lines.append(f"JD: {job['jd_note']}\n")
-                if job["fit_comment"]:
-                    lines.append(f"{job['fit_comment']}\n")
-
-                lines.append("")  # 求人間の空行
-
-            lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
-            lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
-            lines.append("We look forward to hearing your thoughts on these opportunities.")
-            lines.append("Best regards,")
-            lines.append(sender_name)
-
-            email_text = "\n".join(lines)
-            st.session_state['generated_email'] = email_text
-
-        # --- 結果表示 ---
-        if 'generated_email' in st.session_state:
-            st.divider()
-            st.markdown(t("email_output"))
-
-            col_copy_e, col_dl_e = st.columns(2)
-            with col_copy_e:
-                if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
-                    st.toast("✅ クリップボードにコピーしました")
-                    _copy_to_clipboard(st.session_state['generated_email'])
-            with col_dl_e:
-                st.download_button(
-                    "📄 テキストファイルDL",
-                    data=st.session_state['generated_email'],
-                    file_name=f"job_email_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    key="dl_email_btn"
-                )
-
-            st.code(st.session_state['generated_email'], language=None)
-
-        # --- 保存済みデータの管理 ---
-        has_saved_sets = bool(st.session_state.get('saved_job_sets'))
-        has_saved_jobs = bool(st.session_state.get('saved_jobs'))
-
-        if has_saved_sets or has_saved_jobs:
-            st.divider()
-            manage_tab_sets, manage_tab_jobs = st.tabs(["📦 セット管理", "📄 個別求人管理"])
-
-            with manage_tab_sets:
-                if has_saved_sets:
-                    for ss_idx, ss in enumerate(st.session_state['saved_job_sets']):
-                        saved_date = ""
-                        if ss.get('saved_at'):
-                            try:
-                                dt = datetime.fromisoformat(ss['saved_at'])
-                                saved_date = dt.strftime('%Y/%m/%d')
-                            except Exception:
-                                pass
-                        col_info, col_del = st.columns([4, 1])
-                        with col_info:
-                            job_names = ", ".join([j.get('company', '?') for j in ss.get('jobs', [])])
-                            st.markdown(f"**{ss.get('name', '')}**（{len(ss.get('jobs', []))}件）  \n"
-                                        f"{job_names}　📅 {saved_date}")
-                        with col_del:
-                            if st.button("🗑️", key=f"del_saved_set_{ss_idx}", help="このセットを削除"):
-                                st.session_state['saved_job_sets'].pop(ss_idx)
-                                sync_saved_job_sets_to_localstorage()
-                                st.rerun()
-
-                    if st.button("🗑️ すべてのセットを削除", key="clear_all_saved_sets"):
-                        st.session_state['saved_job_sets'] = []
+                            st.session_state['saved_job_sets'].append(new_set)
+                            st.toast(f"✅ セット「{set_name}」を保存しました（{len(valid_jobs)}件）")
                         sync_saved_job_sets_to_localstorage()
-                        st.rerun()
-                else:
-                    st.caption("保存済みセットはありません")
 
-            with manage_tab_jobs:
-                if has_saved_jobs:
-                    for sj_idx, sj in enumerate(st.session_state['saved_jobs']):
-                        saved_date = ""
-                        if sj.get('saved_at'):
-                            try:
-                                dt = datetime.fromisoformat(sj['saved_at'])
-                                saved_date = dt.strftime('%Y/%m/%d')
-                            except Exception:
-                                pass
-                        col_info, col_del = st.columns([4, 1])
-                        with col_info:
-                            st.markdown(f"**{sj.get('company', '')} - {sj.get('title', '')}**  \n"
-                                        f"🔗 {sj.get('website', '-')}　📅 {saved_date}")
-                        with col_del:
-                            if st.button("🗑️", key=f"del_saved_job_{sj_idx}", help="この求人を削除"):
-                                st.session_state['saved_jobs'].pop(sj_idx)
-                                sync_saved_jobs_to_localstorage()
-                                st.rerun()
+            # --- メール生成 ---
+            generate_btn = st.button(
+                t("email_generate_btn"),
+                type="primary",
+                use_container_width=True,
+                disabled=not candidate_name,
+                key="generate_email_btn"
+            )
 
-                    if st.button("🗑️ すべての個別求人を削除", key="clear_all_saved_jobs"):
-                        st.session_state['saved_jobs'] = []
-                        sync_saved_jobs_to_localstorage()
-                        st.rerun()
-                else:
-                    st.caption("保存済みの個別求人はありません")
+            if generate_btn and candidate_name:
+                # メール文面を組み立て
+                lines = []
+                lines.append(f"Hi {candidate_name}\n")
+                lines.append("It was a pleasure speaking with you today.\n")
+                lines.append("As discussed, please find the details of the opportunities below.")
+                lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
+
+                for idx, job in enumerate(jobs, 1):
+                    # ヘッダー行: タイトルと企業名の組み合わせ
+                    header_parts = []
+                    if job["title"]:
+                        header_parts.append(job["title"])
+                    if job["company"]:
+                        header_parts.append(job["company"])
+                    if header_parts:
+                        lines.append(f"{idx}. {' | '.join(header_parts)}\n")
+                    else:
+                        lines.append(f"{idx}. (TBD)\n")
+
+                    if job["website"]:
+                        lines.append(f"Website: {job['website']}\n")
+                    if job["overview"]:
+                        lines.append(f"Overview: {job['overview']}\n")
+                    if job["key_focus"]:
+                        lines.append(f"Key Focus: {job['key_focus']}\n")
+                    if job["jd_note"]:
+                        lines.append(f"JD: {job['jd_note']}\n")
+                    if job["fit_comment"]:
+                        lines.append(f"{job['fit_comment']}\n")
+
+                    lines.append("")  # 求人間の空行
+
+                lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
+                lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
+                lines.append("We look forward to hearing your thoughts on these opportunities.")
+                lines.append("Best regards,")
+                lines.append(sender_name)
+
+                email_text = "\n".join(lines)
+                st.session_state['generated_email'] = email_text
+
+            # --- 結果表示 ---
+            if 'generated_email' in st.session_state:
+                st.divider()
+                st.markdown(t("email_output"))
+
+                col_copy_e, col_dl_e = st.columns(2)
+                with col_copy_e:
+                    if st.button("📋 コピー", key="copy_email_btn", use_container_width=True):
+                        st.toast("✅ クリップボードにコピーしました")
+                        _copy_to_clipboard(st.session_state['generated_email'])
+                with col_dl_e:
+                    st.download_button(
+                        "📄 テキストファイルDL",
+                        data=st.session_state['generated_email'],
+                        file_name=f"job_email_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key="dl_email_btn"
+                    )
+
+                st.code(st.session_state['generated_email'], language=None)
+
+            # --- 保存済みデータの管理 ---
+            has_saved_sets = bool(st.session_state.get('saved_job_sets'))
+            has_saved_jobs = bool(st.session_state.get('saved_jobs'))
+
+            if has_saved_sets or has_saved_jobs:
+                st.divider()
+                manage_tab_sets, manage_tab_jobs = st.tabs(["📦 セット管理", "📄 個別求人管理"])
+
+                with manage_tab_sets:
+                    if has_saved_sets:
+                        for ss_idx, ss in enumerate(st.session_state['saved_job_sets']):
+                            saved_date = ""
+                            if ss.get('saved_at'):
+                                try:
+                                    dt = datetime.fromisoformat(ss['saved_at'])
+                                    saved_date = dt.strftime('%Y/%m/%d')
+                                except Exception:
+                                    pass
+                            col_info, col_del = st.columns([4, 1])
+                            with col_info:
+                                job_names = ", ".join([j.get('company', '?') for j in ss.get('jobs', [])])
+                                st.markdown(f"**{ss.get('name', '')}**（{len(ss.get('jobs', []))}件）  \n"
+                                            f"{job_names}　📅 {saved_date}")
+                            with col_del:
+                                if st.button("🗑️", key=f"del_saved_set_{ss_idx}", help="このセットを削除"):
+                                    st.session_state['saved_job_sets'].pop(ss_idx)
+                                    sync_saved_job_sets_to_localstorage()
+                                    st.rerun()
+
+                        if st.button("🗑️ すべてのセットを削除", key="clear_all_saved_sets"):
+                            st.session_state['saved_job_sets'] = []
+                            sync_saved_job_sets_to_localstorage()
+                            st.rerun()
+                    else:
+                        st.caption("保存済みセットはありません")
+
+                with manage_tab_jobs:
+                    if has_saved_jobs:
+                        for sj_idx, sj in enumerate(st.session_state['saved_jobs']):
+                            saved_date = ""
+                            if sj.get('saved_at'):
+                                try:
+                                    dt = datetime.fromisoformat(sj['saved_at'])
+                                    saved_date = dt.strftime('%Y/%m/%d')
+                                except Exception:
+                                    pass
+                            col_info, col_del = st.columns([4, 1])
+                            with col_info:
+                                st.markdown(f"**{sj.get('company', '')} - {sj.get('title', '')}**  \n"
+                                            f"🔗 {sj.get('website', '-')}　📅 {saved_date}")
+                            with col_del:
+                                if st.button("🗑️", key=f"del_saved_job_{sj_idx}", help="この求人を削除"):
+                                    st.session_state['saved_jobs'].pop(sj_idx)
+                                    sync_saved_jobs_to_localstorage()
+                                    st.rerun()
+
+                        if st.button("🗑️ すべての個別求人を削除", key="clear_all_saved_jobs"):
+                            st.session_state['saved_jobs'] = []
+                            sync_saved_jobs_to_localstorage()
+                            st.rerun()
+                    else:
+                        st.caption("保存済みの個別求人はありません")
 
     elif feature == "batch":
         st.subheader(t("batch_title"))
