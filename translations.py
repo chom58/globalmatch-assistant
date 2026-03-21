@@ -27,18 +27,28 @@ TRANSLATIONS = {
         "feature_select_help": "変換したいドキュメントの種類を選択してください",
 
         # ===== Feature Names =====
-        "feature.resume_optimize": "レジュメ最適化（英→日）",
-        "feature.resume_anonymize": "レジュメ匿名化（英→英）",
-        "feature.resume_pii": "レジュメ個人情報削除",
-        "feature.jd_jp_en": "求人票魅力化（日→英）",
-        "feature.jd_en_jp": "求人票翻訳（英→日）",
-        "feature.jd_jp_jp": "求人票フォーマット化（日→日）",
-        "feature.jd_en_en": "求人票フォーマット化（英→英）",
-        "feature.company_intro": "企業紹介文作成（PDF）",
+        "feature.resume_optimize": "📄 レジュメ最適化（英→日）",
+        "feature.resume_anonymize": "🔒 レジュメ匿名化（英→英）",
+        "feature.resume_pii": "🛡️ レジュメ個人情報削除",
+        "feature.jd_jp_en": "🌐 求人票魅力化（日→英）",
+        "feature.jd_en_jp": "🇯🇵 求人票翻訳（英→日）",
+        "feature.jd_jp_jp": "📋 求人票フォーマット化（日→日）",
+        "feature.jd_en_en": "📋 求人票フォーマット化（英→英）",
+        "feature.company_intro": "🏢 企業紹介文作成（PDF）",
         "feature.matching": "🎯 レジュメ×求人票マッチング分析",
         "feature.cv_extract": "📝 CV提案コメント抽出",
         "feature.email": "✉️ 求人打診メール作成",
         "feature.batch": "📦 バッチ処理（複数レジュメ）",
+
+        # ===== Feature Category Labels =====
+        "feature_cat_resume": "📄 レジュメ",
+        "feature_cat_jd": "📋 求人票",
+        "feature_cat_analysis": "🔍 分析・ツール",
+
+        # ===== Onboarding =====
+        "onboarding_title": "👋 はじめての方へ",
+        "onboarding_body": "「📝 サンプル」ボタンでサンプルデータを読み込んで、すぐに機能を試せます。左側のサイドバーから使いたい機能を選択してください。",
+        "onboarding_dismiss": "閉じる",
 
         # ===== Usage Guide =====
         "usage_guide": "📖 使い方",
@@ -134,8 +144,12 @@ TRANSLATIONS = {
         "char_count_exceeded": "📊 {count} / {max} 文字（超過）",
         "char_count": "📊 {count} / {max} 文字",
         "transform_btn": "🔄 変換実行",
+        "btn_hint_no_api": "💡 サイドバーでAPIキーを設定してください",
+        "btn_hint_no_input": "💡 テキストを入力またはPDFをアップロードしてください",
+        "btn_hint_no_both": "💡 両方の入力を完了してください",
         "no_api_key": "❌ APIキーを入力してください",
         "unexpected_error": "❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください",
+        "output_placeholder": "⬅️ 左側で入力して「変換実行」をクリックすると、ここに結果が表示されます",
         "formatted_view": "📖 整形表示",
         "formatted_help": "Markdownをフォーマットして表示",
         "copy_btn": "📋 コピー",
@@ -456,18 +470,28 @@ TRANSLATIONS = {
         "feature_select_help": "Select the type of document you want to transform",
 
         # ===== Feature Names =====
-        "feature.resume_optimize": "Resume Optimization (EN→JP)",
-        "feature.resume_anonymize": "Resume Anonymization (EN→EN)",
-        "feature.resume_pii": "Resume PII Removal",
-        "feature.jd_jp_en": "JD Enhancement (JP→EN)",
-        "feature.jd_en_jp": "JD Translation (EN→JP)",
-        "feature.jd_jp_jp": "JD Formatting (JP→JP)",
-        "feature.jd_en_en": "JD Formatting (EN→EN)",
-        "feature.company_intro": "Company Intro (PDF)",
+        "feature.resume_optimize": "📄 Resume Optimization (EN→JP)",
+        "feature.resume_anonymize": "🔒 Resume Anonymization (EN→EN)",
+        "feature.resume_pii": "🛡️ Resume PII Removal",
+        "feature.jd_jp_en": "🌐 JD Enhancement (JP→EN)",
+        "feature.jd_en_jp": "🇯🇵 JD Translation (EN→JP)",
+        "feature.jd_jp_jp": "📋 JD Formatting (JP→JP)",
+        "feature.jd_en_en": "📋 JD Formatting (EN→EN)",
+        "feature.company_intro": "🏢 Company Intro (PDF)",
         "feature.matching": "🎯 Resume × JD Matching Analysis",
         "feature.cv_extract": "📝 CV Proposal Comment Extraction",
         "feature.email": "✉️ Job Offer Email",
         "feature.batch": "📦 Batch Processing (Multiple Resumes)",
+
+        # ===== Feature Category Labels =====
+        "feature_cat_resume": "📄 Resume",
+        "feature_cat_jd": "📋 Job Descriptions",
+        "feature_cat_analysis": "🔍 Analysis & Tools",
+
+        # ===== Onboarding =====
+        "onboarding_title": "👋 Welcome!",
+        "onboarding_body": "Click the '📝 Sample' button to load sample data and try out the features right away. Select a feature from the sidebar on the left.",
+        "onboarding_dismiss": "Dismiss",
 
         # ===== Usage Guide =====
         "usage_guide": "📖 How to Use",
@@ -563,8 +587,12 @@ TRANSLATIONS = {
         "char_count_exceeded": "📊 {count} / {max} characters (exceeded)",
         "char_count": "📊 {count} / {max} characters",
         "transform_btn": "🔄 Transform",
+        "btn_hint_no_api": "💡 Set your API key in the sidebar",
+        "btn_hint_no_input": "💡 Enter text or upload a PDF",
+        "btn_hint_no_both": "💡 Complete both inputs to proceed",
         "no_api_key": "❌ Please enter an API key",
         "unexpected_error": "❌ An unexpected error occurred. Please try again later.",
+        "output_placeholder": "⬅️ Enter input on the left and click 'Transform' to see results here",
         "formatted_view": "📖 Formatted View",
         "formatted_help": "Display with Markdown formatting",
         "copy_btn": "📋 Copy",
@@ -859,7 +887,7 @@ TRANSLATIONS = {
         "batch_dl_all": "📦 Download All (Markdown)",
 
         # ===== Footer =====
-        "footer": "🌏 GlobalMatch Assistant",
+        "footer": "🌏 GlobalMatch Assistant v2.0 | Powered by Groq (Llama 3.3 70B)",
     },
 }
 
