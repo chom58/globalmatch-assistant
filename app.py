@@ -386,8 +386,12 @@ def _build_email_text(candidate_name: str, sender_name: str, jobs: list[dict], e
     else:
         lines.append(f"Hi {candidate_name}\n")
         lines.append("It was a pleasure speaking with you today.\n")
-        lines.append("As discussed, please find the details of the opportunities below.")
-        lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
+        if len(jobs) == 1:
+            lines.append("As discussed, please find the details of the opportunity below.")
+            lines.append("If this aligns with your interests, please let me know, and I will proceed with your recommendation to the company.\n")
+        else:
+            lines.append("As discussed, please find the details of the opportunities below.")
+            lines.append("If any of these align with your interests, please let me know, and I will proceed with your recommendation to the companies.\n")
 
     for idx, job in enumerate(jobs, 1):
         header_parts = []
@@ -428,13 +432,19 @@ def _build_email_text(candidate_name: str, sender_name: str, jobs: list[dict], e
     if email_lang == "ja":
         lines.append("また、弊社の「誠実さへのコミットメント」に関する簡単なメモを添付しております。端的に申し上げますと、お客様の信頼を大切にし、明確な「ゴーサイン」をいただくまで、いかなる企業にもプロフィールを提出することはございません。このアプローチにより、候補者様の推薦は戦略的に行われ、重複応募による混乱を避けることができます。")
         lines.append("詳細: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
-        lines.append("これらの求人についてのご意見をお待ちしております。")
+        if len(jobs) == 1:
+            lines.append("こちらの求人についてのご意見をお待ちしております。")
+        else:
+            lines.append("これらの求人についてのご意見をお待ちしております。")
         lines.append("よろしくお願いいたします。")
         lines.append(sender_name)
     else:
         lines.append("We have also attached a short memo regarding our firm's Commitment to Integrity. Simply put, we value your trust and will never submit your profile to any company without your explicit \"green light\". This approach ensures your candidacy is handled strategically and avoids any duplicate submissions that could complicate your search.")
         lines.append("Details: https://drive.google.com/file/d/11HQ42s-zJ_mGFf1D75rHb2mE3hjV21Ib/view?usp=drivesdk\n")
-        lines.append("We look forward to hearing your thoughts on these opportunities.")
+        if len(jobs) == 1:
+            lines.append("We look forward to hearing your thoughts on this opportunity.")
+        else:
+            lines.append("We look forward to hearing your thoughts on these opportunities.")
         lines.append("Best regards,")
         lines.append(sender_name)
 
