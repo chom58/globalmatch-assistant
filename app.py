@@ -568,7 +568,7 @@ def show_shared_view(share_id: str):
     components.html(styled_html, height=800, scrolling=True)
 
     # ダウンロードボタン — ファーストネームをファイル名に使用
-    _shared_first = _extract_first_name(content)
+    _shared_first = extract_first_name(content)
     _shared_fname = f"resume_{_shared_first}" if _shared_first else f"resume_{share_id[:8]}"
     st.divider()
     col1, col2 = st.columns(2)
@@ -1649,8 +1649,8 @@ def extract_title_from_content(content: str, content_type: str) -> str:
     lines = content.split('\n')
 
     if content_type == "resume":
-        # レジュメの場合：まず_extract_first_nameで抽出を試みる
-        first_name = _extract_first_name(content)
+        # レジュメの場合：まずextract_first_nameで抽出を試みる
+        first_name = extract_first_name(content)
         if first_name:
             return f"候補者: {first_name}"
         # フォールバック：「氏名：J.S.」や名前を探す
@@ -2411,7 +2411,7 @@ def main():
                     st.session_state['resume_result'] = edited_result
 
                 # ファーストネームをタイトル・ファイル名に使用
-                _opt_first = _extract_first_name(st.session_state['resume_result'])
+                _opt_first = extract_first_name(st.session_state['resume_result'])
                 _opt_label = f"候補者レジュメ - {_opt_first}" if _opt_first else "候補者レジュメ"
                 _opt_fname = f"resume_{_opt_first}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _opt_first else f"resume_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
@@ -2488,7 +2488,7 @@ def main():
                         st.session_state['resume_en_result'] = edited_result_en2
 
                     # ファーストネームをタイトル・ファイル名に使用
-                    _en2_first = _extract_first_name(st.session_state['resume_en_result'])
+                    _en2_first = extract_first_name(st.session_state['resume_en_result'])
                     _en2_label = f"Anonymized Resume - {_en2_first}" if _en2_first else "Anonymized Resume"
                     _en2_fname = f"resume_{_en2_first}_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}" if _en2_first else f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
@@ -2522,7 +2522,7 @@ def main():
                         )
 
                 # 共有リンク作成ボタン — ファーストネームをタイトルに使用
-                _share_first = _extract_first_name(st.session_state.get('resume_result', ''))
+                _share_first = extract_first_name(st.session_state.get('resume_result', ''))
                 _share_title = f"候補者レジュメ（匿名化済み）- {_share_first}" if _share_first else "候補者レジュメ（匿名化済み）"
                 if get_supabase_client():
                     st.divider()
@@ -2698,7 +2698,7 @@ def main():
                     st.session_state['resume_en_result'] = edited_result_en
 
                 # ファーストネームをタイトル・ファイル名に使用
-                _en_first = _extract_first_name(st.session_state['resume_en_result'])
+                _en_first = extract_first_name(st.session_state['resume_en_result'])
                 _en_label = f"Anonymized Resume - {_en_first}" if _en_first else "Anonymized Resume"
                 _en_fname = f"resume_{_en_first}_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}" if _en_first else f"resume_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
@@ -2777,7 +2777,7 @@ def main():
                         st.session_state['resume_result'] = edited_result_jp2
 
                     # ファーストネームをタイトル・ファイル名に使用
-                    _jp2_first = _extract_first_name(st.session_state['resume_result'])
+                    _jp2_first = extract_first_name(st.session_state['resume_result'])
                     _jp2_label = f"候補者レジュメ - {_jp2_first}" if _jp2_first else "候補者レジュメ"
                     _jp2_fname = f"resume_{_jp2_first}_jp_{datetime.now().strftime('%Y%m%d_%H%M')}" if _jp2_first else f"resume_jp_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
@@ -2811,7 +2811,7 @@ def main():
                         )
 
                 # 共有リンク作成ボタン — ファーストネームをタイトルに使用
-                _share_en_first = _extract_first_name(st.session_state.get('resume_en_result', ''))
+                _share_en_first = extract_first_name(st.session_state.get('resume_en_result', ''))
                 _share_en_title = f"Anonymized Resume - {_share_en_first}" if _share_en_first else "Anonymized Resume"
                 if get_supabase_client():
                     st.divider()
@@ -2946,7 +2946,7 @@ def main():
                     st.session_state['resume_pii_result'] = edited_result_pii
 
                 # ファーストネームをタイトル・ファイル名に使用
-                _pii_first = _extract_first_name(st.session_state['resume_pii_result'])
+                _pii_first = extract_first_name(st.session_state['resume_pii_result'])
                 _pii_label = f"Resume - {_pii_first}" if _pii_first else "Candidate Resume"
                 _pii_fname = f"resume_{_pii_first}_{datetime.now().strftime('%Y%m%d_%H%M')}" if _pii_first else f"resume_pii_removed_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
@@ -5565,7 +5565,7 @@ Full-stack Developer...
                             st.code(result['output'], language="markdown")
 
                         # ファーストネームをファイル名に使用
-                        _batch_first = _extract_first_name(result['output'])
+                        _batch_first = extract_first_name(result['output'])
                         _batch_label = f"候補者 #{result['index']} - {_batch_first}" if _batch_first else f"候補者 #{result['index']}"
                         _batch_fname = f"resume_{_batch_first}_{datetime.now().strftime('%Y%m%d')}" if _batch_first else f"resume_{result['index']}_{datetime.now().strftime('%Y%m%d')}"
 

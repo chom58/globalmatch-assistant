@@ -1308,7 +1308,7 @@ def extract_name_from_cv(text: str) -> str:
     return ""
 
 
-def _extract_first_name(content: str) -> str:
+def extract_first_name(content: str) -> str:
     """生成済みレジュメからファーストネームを抽出する"""
     for line in content.split('\n')[:15]:
         line = line.strip()
