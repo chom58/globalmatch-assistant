@@ -2204,7 +2204,7 @@ def main():
         # カテゴリ定義
         _feature_categories = {
             "resume": ["resume_optimize", "resume_anonymize", "resume_pii"],
-            "jd": ["jd_jp_en", "jd_en_jp", "jd_jp_jp", "jd_en_en", "company_intro"],
+            "jd": ["jd_jp_en", "jd_en_jp", "jd_jp_jp", "jd_en_en", "jd_anonymize", "company_intro"],
             "analysis": ["matching", "cv_extract", "email", "batch"],
         }
 
@@ -3632,6 +3632,201 @@ def main():
                             st.info("💡 Copy the URL above to share with clients")
                         else:
                             st.error("❌ Failed to create share link")
+
+    # ===== JD Anonymization =====
+    elif feature == "jd_anonymize":
+        st.subheader(t("jd_anon_title"))
+        st.caption(t("jd_anon_desc"))
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            # 入力方法タブ
+            input_tab1, input_tab2 = st.tabs(["📝 テキスト入力", "📄 PDF読み込み"])
+
+            jd_anon_input = ""
+
+            with input_tab1:
+                # サンプルデータボタン
+                col_label, col_sample_jp, col_sample_en = st.columns([2, 1, 1])
+                with col_label:
+                    st.markdown(t("jd_anon_input"))
+                with col_sample_jp:
+                    if st.button("📝 JP Sample", key="sample_jd_anon_jp_btn", help="日本語サンプル求人票を挿入", type="tertiary"):
+                        st.session_state['jd_anon_text_input'] = SAMPLE_JD
+                with col_sample_en:
+                    if st.button("📝 EN Sample", key="sample_jd_anon_en_btn", help="Insert English sample JD", type="tertiary"):
+                        st.session_state['jd_anon_text_input'] = SAMPLE_JD_EN
+
+                jd_anon_text = st.text_area(
+                    "求人票をペースト / Paste job description",
+                    height=300,
+                    placeholder="求人票をここに貼り付けてください（日本語・英語どちらでもOK）...\nPaste a job description here (Japanese or English)...",
+                    label_visibility="collapsed",
+                    key="jd_anon_text_input"
+                )
+                if jd_anon_text:
+                    jd_anon_input = jd_anon_text
+
+            with input_tab2:
+                st.markdown("##### 求人票PDFをアップロード / Upload JD PDF")
+                uploaded_jd_anon_pdf = st.file_uploader(
+                    "PDFファイルを選択",
+                    type=["pdf"],
+                    key="jd_anon_pdf",
+                    help=f"最大{MAX_PDF_SIZE_MB}MB、20ページまで"
+                )
+
+                if uploaded_jd_anon_pdf:
+                    with st.spinner("📄 PDFを読み込み中..."):
+                        extracted_text, error = extract_text_from_pdf(uploaded_jd_anon_pdf)
+                        if error:
+                            st.error(f"❌ {error}")
+                        else:
+                            st.success(f"✅ テキスト抽出完了（{len(extracted_text):,}文字）")
+                            jd_anon_input = extracted_text
+                            with st.expander("抽出されたテキストを確認"):
+                                st.text(extracted_text[:2000] + ("..." if len(extracted_text) > 2000 else ""))
+
+            # 文字数カウンター
+            char_count = len(jd_anon_input) if jd_anon_input else 0
+            if char_count > MAX_INPUT_CHARS:
+                st.error(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字（超過）")
+            elif char_count > 0:
+                st.caption(f"📊 {char_count:,} / {MAX_INPUT_CHARS:,} 文字")
+
+            # 出力言語選択
+            st.markdown("---")
+            jd_anon_output_lang = st.radio(
+                t("jd_anon_output_lang_label"),
+                options=["ja", "en"],
+                format_func=lambda x: t(f"jd_anon_output_lang_{x}"),
+                index=0,
+                key="jd_anon_output_lang",
+                horizontal=True,
+            )
+
+            # 匿名化レベル選択
+            anonymize_jd_level = st.radio(
+                t("jd_anon_level_label"),
+                options=["full", "light", "none"],
+                format_func=lambda x: t(f"jd_anon_level_{x}"),
+                index=0,
+                key="anonymize_jd_level",
+            )
+
+            st.info(t("jd_anon_info"))
+
+            _show_btn_hint(api_key, bool(jd_anon_input))
+            process_btn = st.button(
+                t("jd_anon_btn"),
+                type="primary",
+                use_container_width=True,
+                disabled=not api_key or not jd_anon_input,
+                key="jd_anon_btn"
+            )
+
+        with col2:
+            st.markdown(t("jd_anon_output"))
+
+            if not process_btn and 'jd_anon_result' not in st.session_state:
+                st.info(t("output_placeholder"))
+
+            if process_btn:
+                if not api_key:
+                    st.error("❌ APIキーを入力してください")
+                else:
+                    # 入力バリデーション
+                    is_valid, error_msg = validate_input(jd_anon_input, "jd")
+                    if not is_valid:
+                        st.warning(f"⚠️ {error_msg}")
+                    else:
+                        try:
+                            start_time = time.time()
+                            prompt = get_jd_anonymize_prompt(jd_anon_input, anonymize_jd_level, jd_anon_output_lang)
+                            st.caption(t("jd_anon_ai"))
+                            stream_container = st.empty()
+                            result = stream_to_container(api_key, prompt, stream_container)
+                            elapsed_time = time.time() - start_time
+
+                            st.session_state['jd_anon_result'] = result
+                            st.session_state['jd_anon_time'] = elapsed_time
+                            stream_container.empty()
+                            st.success(f"✅ 完了！（{elapsed_time:.1f}秒）")
+
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
+
+            # 結果表示
+            if 'jd_anon_result' in st.session_state:
+                # 表示切替とコピーボタン
+                col_view, col_copy = st.columns([2, 1])
+                with col_view:
+                    show_formatted = st.checkbox(t("formatted_view"), value=False, key="jd_anon_formatted",
+                                                  help="Markdownをフォーマットして表示")
+                with col_copy:
+                    if st.button(t("copy_btn"), key="copy_jd_anon", use_container_width=True):
+                        st.toast(t("copied"))
+                        _copy_to_clipboard(st.session_state['jd_anon_result'])
+
+                if show_formatted:
+                    st.markdown(st.session_state['jd_anon_result'])
+                else:
+                    # 編集可能なテキストエリア
+                    edited_jd_anon_result = st.text_area(
+                        t("editable_output"),
+                        value=st.session_state['jd_anon_result'],
+                        height=400,
+                        key="edit_jd_anon_result"
+                    )
+                    st.session_state['jd_anon_result'] = edited_jd_anon_result
+
+                # ダウンロードボタン
+                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                with col_dl1:
+                    st.download_button(
+                        "📄 Markdown",
+                        data=st.session_state['jd_anon_result'],
+                        file_name=f"jd_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                        mime="text/markdown",
+                        key="jd_anon_md"
+                    )
+                with col_dl2:
+                    st.download_button(
+                        t("dl_text"),
+                        data=st.session_state['jd_anon_result'],
+                        file_name=f"jd_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                        mime="text/plain",
+                        key="jd_anon_txt"
+                    )
+                with col_dl3:
+                    html_content = generate_html(st.session_state['jd_anon_result'], "求人票（匿名化）")
+                    st.download_button(
+                        "🌐 HTML",
+                        data=html_content,
+                        file_name=f"jd_anonymized_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                        mime="text/html",
+                        key="jd_anon_html",
+                        help=t("dl_html_help")
+                    )
+
+                # 共有リンク作成ボタン
+                if get_supabase_client():
+                    st.divider()
+                    if st.button("🔗 共有リンク作成", key="share_jd_anon", help="1ヶ月有効の共有リンクを作成"):
+                        with st.spinner("共有リンクを作成中..."):
+                            share_id = create_share_link(
+                                st.session_state['jd_anon_result'],
+                                "求人票（匿名化）"
+                            )
+                        if share_id:
+                            base_url = _get_app_base_url()
+                            share_url = f"{base_url}/?share={share_id}"
+                            st.success("✅ 共有リンクを作成しました（1ヶ月有効）")
+                            st.code(share_url)
+                            st.info("💡 上のURLをコピーしてクライアントに共有してください")
 
     elif feature == "company_intro":
         st.subheader(t("company_title"))

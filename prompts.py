@@ -817,6 +817,254 @@ For unclear items, use "To be discussed" or "Contact for details".
 """
 
 
+def get_jd_anonymize_prompt(jd_text: str, anonymize: str, output_lang: str) -> str:
+    """求人票匿名化用のプロンプトを生成（入力言語自動検出、出力言語選択可能）"""
+
+    if anonymize == "full":
+        anonymize_instruction_ja = """
+【完全匿名化処理 - 必須】
+以下の情報を必ず匿名化してください：
+
+■ 企業情報 → 業界・規模で表現
+- 企業名（正式名称・通称・略称すべて） → 業界+規模に変換（例：「Google」→「米国大手テック企業」「楽天」→「国内大手IT企業」「メルカリ」→「国内フリマアプリ大手」）
+- スタートアップ → 「〇〇領域スタートアップ」
+- 外資系 → 「外資系〇〇企業」
+- 子会社・グループ会社名 → 「大手〇〇企業グループ」
+- 企業URL・コーポレートサイト → 削除
+
+■ プロダクト・プロジェクト情報 → 汎用化
+- 具体的なプロダクト名 → 「大規模ECプラットフォーム」「FinTechアプリ」など汎用表現に
+- 社内プロジェクト名・コードネーム → 削除
+- クライアント名 → 「大手〇〇業クライアント」
+
+■ 所在地 → 地域レベルのみ
+- 具体的なオフィス住所 → 都道府県・都市名まで（例：「東京都渋谷区〇〇ビル」→「東京都」）
+- 海外の場合 → 都市名まで（例：「San Francisco, CA」）
+
+■ 連絡先 → すべて削除
+- メールアドレス → 削除
+- 電話番号 → 削除
+- 担当者名 → 削除
+- 採用ページURL → 削除
+"""
+        anonymize_instruction_en = """
+【FULL ANONYMIZATION - REQUIRED】
+You MUST anonymize the following information:
+
+■ Company Information → Use Industry/Size Description
+- Company name (all variations: official, brand, abbreviations) → Convert to industry + size (e.g., "Google" → "Major US Tech Company", "Rakuten" → "Leading Japanese E-commerce Company")
+- Startups → "[Industry] Startup"
+- Foreign companies → "Foreign [Industry] Company"
+- Subsidiaries → "Major [Industry] Group Company"
+- Company URL/website → Remove
+
+■ Product/Project Information → Generalize
+- Specific product names → "Large-scale E-commerce Platform", "FinTech App", etc.
+- Internal project names/code names → Remove
+- Client names → "Major [Industry] Client"
+
+■ Location → Region Level Only
+- Specific office address → City/prefecture only (e.g., "Shibuya, Tokyo" → "Tokyo")
+- Overseas → City only (e.g., "San Francisco, CA")
+
+■ Contact Information → Remove All
+- Email addresses → Remove
+- Phone numbers → Remove
+- Contact person names → Remove
+- Career page URLs → Remove
+"""
+    elif anonymize == "light":
+        anonymize_instruction_ja = """
+【軽度匿名化処理 - 必須】
+以下の連絡先情報のみ匿名化してください（企業名・プロダクト名は残す）：
+
+- メールアドレス → 削除
+- 電話番号 → 削除
+- 担当者の個人名 → 削除
+- 採用ページURL → 削除
+
+※ 企業名、プロダクト名、オフィス所在地はそのまま残してください。
+"""
+        anonymize_instruction_en = """
+【LIGHT ANONYMIZATION - REQUIRED】
+Only remove contact information (keep company and product names):
+
+- Email addresses → Remove
+- Phone numbers → Remove
+- Personal contact names → Remove
+- Career page URLs → Remove
+
+※ Keep company names, product names, and office locations as-is.
+"""
+    else:
+        anonymize_instruction_ja = "【匿名化処理】不要です。すべての情報をそのまま残してください。"
+        anonymize_instruction_en = "【NO ANONYMIZATION】Keep all information as-is."
+
+    if output_lang == "ja":
+        anonymize_instruction = anonymize_instruction_ja
+
+        if anonymize == "full":
+            company_heading = "[業界・規模の表現] - [職種名]"
+        else:
+            company_heading = "[会社名] - [職種名]"
+
+        return f"""あなたは人材紹介のエキスパートコンサルタントです。
+求人票（日本語・英語どちらでも可）を読み取り、匿名化処理を施した上で、統一された見やすいフォーマットの日本語求人票に変換してください。
+
+入力が英語の場合は日本語に翻訳して出力してください。
+
+{anonymize_instruction}
+
+【出力フォーマット】
+以下の構造で出力してください：
+
+---
+
+# {company_heading}
+
+## 概要
+| 項目 | 内容 |
+|------|------|
+| **勤務形態** | （フルリモート/ハイブリッド/出社） |
+| **勤務地** | |
+| **雇用形態** | （正社員/契約社員など） |
+| **想定年収** | |
+| **英語力** | （必須/あれば尚可/不要） |
+
+## 会社について
+（会社の事業内容、規模、特徴を2-3文で。匿名化時は企業特定につながる情報を含めないこと）
+
+## 仕事内容
+（具体的な業務内容を箇条書きで）
+・
+・
+
+## 必須スキル・経験
+・
+・
+
+## 歓迎スキル・経験
+・
+・
+
+## 技術スタック
+| カテゴリ | 技術 |
+|---------|------|
+| 言語 | |
+| フレームワーク | |
+| インフラ | |
+| ツール | |
+
+## 福利厚生・働き方
+・
+・
+
+## 選考プロセス
+（記載があれば）
+
+## 応募方法
+**※このセクションは以下の固定文言を必ず使用してください（元の求人票の連絡先は無視）：**
+
+この求人に興味がある方は、Value Createが直接企業へ推薦いたします。
+以下のチームメンバーまでお気軽にご連絡ください：
+・**Ilya（イリヤ）**
+・**Hiroshi（ヒロシ）**
+・**Shu（シュウ）**
+面談調整から選考サポートまで、一貫してお手伝いいたします！
+
+---
+
+【元の求人票】
+{jd_text}
+
+上記を解析し、匿名化処理を施した日本語求人票に変換してください。
+不明な項目は「要確認」または「詳細はお問い合わせください」としてください。
+**重要**: 「応募方法」セクションは、元の求人票に記載されている連絡先やメールアドレスを無視し、上記フォーマットの固定文言（Value Createチームへの連絡）を必ず使用してください。
+**重要**: リスト項目の行頭記号は中黒（・）を使用してください。アスタリスク（*）は使用しないでください。
+**重要**: 見出しに絵文字は使用しないでください。シンプルなテキストのみで出力してください。
+**重要**: 匿名化レベルに従い、企業名や連絡先の匿名化を厳守してください。本文中に企業名が出現する箇所もすべて匿名化してください。
+"""
+    else:
+        anonymize_instruction = anonymize_instruction_en
+
+        if anonymize == "full":
+            company_heading = "[Industry/Size Description]"
+        else:
+            company_heading = "[Company Name]"
+
+        return f"""You are an expert recruiter specializing in international engineer recruitment.
+Read the provided job description (in Japanese or English) and transform it into an anonymized, well-structured English JD that appeals to international engineers.
+
+If the input is in Japanese, translate it to English for the output.
+
+{anonymize_instruction}
+
+【Output Format】
+Please output in the following structure:
+
+---
+
+# [Position Title] at {company_heading}
+
+## Quick Facts
+| | |
+|---|---|
+| **Visa Sponsorship** | Available (supported for qualified candidates) |
+| **Remote Work** | (Full Remote/Hybrid/On-site - specify policy) |
+| **Language Requirements** | (English OK/Japanese N2+/Bilingual environment) |
+| **Salary Range** | (If available, include in USD) |
+| **Location** | |
+
+## Why Join Us?
+(2-3 compelling sentences about the company/team. When anonymized, do not include information that could identify the specific company)
+
+## What You'll Do
+(Key responsibilities in bullet points - focus on impact, not just tasks)
+・
+・
+
+## What We're Looking For
+**Must-have:**
+・
+・
+
+**Nice-to-have:**
+・
+・
+
+## Benefits & Perks
+(Highlight benefits that appeal to international candidates)
+・
+・
+
+## About the Company
+(Brief company introduction. When anonymized, describe only industry, scale, and culture without identifying the company)
+
+## How to Apply
+**※Please use this fixed template (ignore any contact information in the original JD):**
+
+Interested in this position? Value Create will recommend you directly to the company's hiring team.
+Please reach out to one of our team members to express your interest:
+・**Ilya**
+・**Hiroshi**
+・**Shu**
+We'll take care of the introduction and guide you through the process!
+
+---
+
+【Original Job Description】
+{jd_text}
+
+Please analyze the above JD and transform it into an anonymized English job description for international engineers.
+For unclear items, use "To be discussed" or "Contact for details".
+**IMPORTANT**: For Visa Sponsorship, even if not mentioned in the original JD, state "Available (supported for qualified candidates)". All positions handled by Value Create offer visa support.
+**IMPORTANT**: For the "How to Apply" section, ignore any contact information or email addresses in the original JD and use the fixed template above (contact Value Create team).
+**IMPORTANT**: Use middle dots (・) for list items and capitalize the first letter of each item. Do not use asterisks (*).
+**IMPORTANT**: Do not use emojis in headings. Output simple text only.
+**IMPORTANT**: Strictly follow the anonymization level. Anonymize company names and contact info throughout the entire text, including mentions in the body.
+"""
+
+
 def get_company_intro_prompt(company_text: str) -> str:
     """会社紹介資料から企業紹介文を生成するプロンプト"""
 
