@@ -2234,7 +2234,11 @@ def main():
     <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2a5f8f 100%);
                 padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <span style="font-size: 2rem; line-height: 1;">🌏</span>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
             <div>
                 <h1 style="color: white; margin: 0; font-size: 1.5rem; border: none;
                            padding: 0; line-height: 1.3; letter-spacing: 0.01em;">
