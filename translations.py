@@ -34,6 +34,7 @@ TRANSLATIONS = {
         "feature.jd_en_jp": "🇯🇵 求人票翻訳（英→日）",
         "feature.jd_jp_jp": "📋 求人票フォーマット化（日→日）",
         "feature.jd_en_en": "📋 求人票フォーマット化（英→英）",
+        "feature.jd_anonymize": "🔒 求人匿名化",
         "feature.company_intro": "🏢 企業紹介文作成（PDF）",
         "feature.matching": "🎯 レジュメ×求人票マッチング分析",
         "feature.cv_extract": "📝 CV提案コメント抽出",
@@ -248,6 +249,22 @@ TRANSLATIONS = {
         # ===== Feature 7: JD Formatting (EN→EN) =====
         "jd_en_en_title": "📋 求人票フォーマット化（English → English）",
         "jd_en_en_desc": "英語の求人票を、外国人エンジニア向けの統一フォーマットに変換します",
+
+        # ===== Feature: JD Anonymization =====
+        "jd_anon_title": "🔒 求人匿名化",
+        "jd_anon_desc": "求人票の企業名・連絡先を匿名化し、候補者への提示用に変換します。入力は日本語・英語どちらでもOK",
+        "jd_anon_output": "##### 出力：匿名化された求人票",
+        "jd_anon_ai": "🤖 AIが求人票を匿名化しています...",
+        "jd_anon_btn": "🔒 匿名化実行",
+        "jd_anon_input": "##### 入力：求人票（日本語 or 英語）",
+        "jd_anon_info": "💡 企業名・連絡先を匿名化し、候補者への提示用に整形します",
+        "jd_anon_output_lang_label": "出力言語",
+        "jd_anon_output_lang_ja": "日本語で出力",
+        "jd_anon_output_lang_en": "English で出力",
+        "jd_anon_level_label": "匿名化レベル",
+        "jd_anon_level_full": "🔒 フル（企業名・住所・連絡先すべて匿名化）",
+        "jd_anon_level_light": "🔓 ライト（連絡先のみ削除、企業名は残す）",
+        "jd_anon_level_none": "📋 なし（匿名化なし、フォーマット整形のみ）",
 
         # ===== Feature 8: Company Intro =====
         "company_title": "🏢 企業紹介文作成（PDF読み取り）",
@@ -477,6 +494,7 @@ TRANSLATIONS = {
         "feature.jd_en_jp": "🇯🇵 JD Translation (EN→JP)",
         "feature.jd_jp_jp": "📋 JD Formatting (JP→JP)",
         "feature.jd_en_en": "📋 JD Formatting (EN→EN)",
+        "feature.jd_anonymize": "🔒 JD Anonymization",
         "feature.company_intro": "🏢 Company Intro (PDF)",
         "feature.matching": "🎯 Resume × JD Matching Analysis",
         "feature.cv_extract": "📝 CV Proposal Comment Extraction",
@@ -692,6 +710,22 @@ TRANSLATIONS = {
         "jd_en_en_title": "📋 JD Formatting (English → English)",
         "jd_en_en_desc": "Transform English job descriptions into an attractive, well-structured format for international engineers",
 
+        # ===== Feature: JD Anonymization =====
+        "jd_anon_title": "🔒 JD Anonymization",
+        "jd_anon_desc": "Anonymize company names and contact info in job descriptions for candidate presentation. Accepts both Japanese and English input",
+        "jd_anon_output": "##### Output: Anonymized Job Description",
+        "jd_anon_ai": "🤖 AI is anonymizing the job description...",
+        "jd_anon_btn": "🔒 Anonymize",
+        "jd_anon_input": "##### Input: Job Description (Japanese or English)",
+        "jd_anon_info": "💡 Anonymizes company names and contact info, formatting the JD for candidate presentation",
+        "jd_anon_output_lang_label": "Output Language",
+        "jd_anon_output_lang_ja": "Output in Japanese",
+        "jd_anon_output_lang_en": "Output in English",
+        "jd_anon_level_label": "Anonymization Level",
+        "jd_anon_level_full": "🔒 Full (anonymize company, address, and all contacts)",
+        "jd_anon_level_light": "🔓 Light (remove contacts only, keep company name)",
+        "jd_anon_level_none": "📋 None (no anonymization, format only)",
+
         # ===== Feature 8: Company Intro =====
         "company_title": "🏢 Company Intro Generator (PDF)",
         "company_desc": "Auto-generate a concise company introduction for candidates from a company PDF",
@@ -900,6 +934,7 @@ FEATURE_KEYS = [
     "jd_en_jp",
     "jd_jp_jp",
     "jd_en_en",
+    "jd_anonymize",
     "company_intro",
     "matching",
     "cv_extract",
