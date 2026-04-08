@@ -1110,15 +1110,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# カスタムCSS - プロフェッショナルデザイン
+# カスタムCSS - Notion ハイブリッドデザイン
 st.markdown("""
 <style>
-    /* フォント */
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+    /* フォント - Noto Serif JP（見出し）+ Noto Sans JP（本文） */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Serif+JP:wght@500;700&display=swap');
 
-    /* 全体設定 */
+    /* 全体設定 - 暖色ベース */
     .stApp {
-        background-color: #f5f7fa;
+        background-color: #f6f5f4;
     }
 
     .main .block-container {
@@ -1126,17 +1126,19 @@ st.markdown("""
         padding: 2rem 2.5rem !important;
         max-width: 1200px;
         border-radius: 12px;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        box-shadow: rgba(0,0,0,0.04) 0px 4px 18px,
+                    rgba(0,0,0,0.027) 0px 2px 8px,
+                    rgba(0,0,0,0.02) 0px 0.8px 3px;
     }
 
     /* サイドバー */
     [data-testid="stSidebar"] {
         background: #ffffff;
-        border-right: 1px solid #e5e7eb;
+        border-right: 1px solid rgba(0,0,0,0.08);
     }
 
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
-        color: #374151;
+        color: rgba(0,0,0,0.8);
     }
 
     /* サイドバー - カテゴリナビゲーション */
@@ -1167,21 +1169,21 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* ヘッダー */
+    /* ヘッダー - 明朝体 */
     h1 {
         color: #1e3a5f;
-        font-family: 'Noto Sans JP', sans-serif;
+        font-family: 'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
         font-weight: 700;
         font-size: 1.8rem;
-        border-bottom: 3px solid #1e3a5f;
+        border-bottom: 2px solid rgba(0,0,0,0.1);
         padding-bottom: 0.5rem;
         margin-bottom: 1rem;
     }
 
     h2 {
         color: #1e3a5f;
-        font-family: 'Noto Sans JP', sans-serif;
-        font-weight: 600;
+        font-family: 'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+        font-weight: 700;
         font-size: 1.2rem;
         margin-top: 1.5rem;
         border-left: 4px solid #1e3a5f;
@@ -1189,7 +1191,7 @@ st.markdown("""
     }
 
     h3 {
-        color: #374151;
+        color: rgba(0,0,0,0.85);
         font-family: 'Noto Sans JP', sans-serif;
         font-weight: 600;
         font-size: 1rem;
@@ -1199,38 +1201,38 @@ st.markdown("""
     .stTextArea textarea {
         font-family: 'Noto Sans JP', sans-serif;
         font-size: 14px;
-        line-height: 1.6;
-        border: 1px solid #d1d5db;
+        line-height: 1.7;
+        border: 1px solid rgba(0,0,0,0.1);
         border-radius: 8px;
-        background: #fafbfc;
+        background: #fafaf9;
     }
 
     .stTextArea textarea:focus {
         border-color: #1e3a5f;
-        box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.1);
+        box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.08);
     }
 
     /* メインボタン */
     .stButton > button {
-        background: #f0f2f5 !important;
-        color: #1e3a5f !important;
-        border: 1px solid #d0d5dd !important;
+        background: rgba(0,0,0,0.04) !important;
+        color: rgba(0,0,0,0.85) !important;
+        border: 1px solid rgba(0,0,0,0.1) !important;
         border-radius: 6px;
         padding: 0.6rem 1.5rem;
-        font-weight: 600;
+        font-weight: 500;
         font-family: 'Noto Sans JP', sans-serif;
         font-size: 14px;
-        transition: background 0.2s ease;
+        transition: all 0.15s ease;
     }
 
     .stButton > button:hover {
-        background: #e2e5ea !important;
-        color: #1e3a5f !important;
+        background: rgba(0,0,0,0.08) !important;
+        color: rgba(0,0,0,0.9) !important;
     }
 
     .stButton > button:disabled {
-        background: #e5e7eb !important;
-        color: #9ca3af !important;
+        background: rgba(0,0,0,0.03) !important;
+        color: rgba(0,0,0,0.3) !important;
     }
 
     /* メインエリア - CTAボタン（primary） */
@@ -1260,12 +1262,12 @@ st.markdown("""
         transform: translateY(-1px);
     }
 
-    /* secondaryボタンも同様 */
+    /* secondaryボタン */
     .stButton > button[kind="secondary"],
     .stButton > button[data-testid="stBaseButton-secondary"] {
-        background: #f0f2f5 !important;
-        color: #1e3a5f !important;
-        border: 1px solid #d0d5dd !important;
+        background: rgba(0,0,0,0.04) !important;
+        color: rgba(0,0,0,0.85) !important;
+        border: 1px solid rgba(0,0,0,0.1) !important;
     }
 
     /* ダウンロードボタン */
@@ -1287,7 +1289,7 @@ st.markdown("""
     /* コード表示エリア */
     .stCodeBlock {
         border-radius: 8px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid rgba(0,0,0,0.1);
     }
 
     .stCodeBlock code {
@@ -1297,47 +1299,47 @@ st.markdown("""
 
     /* 成功メッセージ */
     .stSuccess {
-        background: #ecfdf5;
+        background: #f0faf4;
         color: #065f46;
-        border: 1px solid #a7f3d0;
-        border-radius: 6px;
+        border: 1px solid rgba(42, 157, 153, 0.25);
+        border-radius: 8px;
     }
 
     /* 情報メッセージ */
     .stInfo {
-        background: #eff6ff;
+        background: #f2f9ff;
         color: #1e40af;
-        border: 1px solid #bfdbfe;
-        border-radius: 6px;
+        border: 1px solid rgba(0, 117, 222, 0.2);
+        border-radius: 8px;
     }
 
     /* 警告メッセージ */
     .stWarning {
-        background: #fffbeb;
+        background: #fffcf0;
         color: #92400e;
-        border: 1px solid #fde68a;
-        border-radius: 6px;
+        border: 1px solid rgba(221, 91, 0, 0.2);
+        border-radius: 8px;
     }
 
     /* エラーメッセージ */
     .stError {
-        background: #fef2f2;
+        background: #fef5f5;
         color: #991b1b;
-        border: 1px solid #fecaca;
-        border-radius: 6px;
+        border: 1px solid rgba(220, 38, 38, 0.2);
+        border-radius: 8px;
     }
 
     /* ラジオボタン */
     .stRadio > div {
-        background: #fafbfc;
-        border: 1px solid #e5e7eb;
+        background: #fafaf9;
+        border: 1px solid rgba(0,0,0,0.1);
         border-radius: 8px;
         padding: 0.75rem 1rem;
     }
 
     .stRadio label {
         font-size: 14px;
-        color: #374151;
+        color: rgba(0,0,0,0.85);
     }
 
     /* メトリクス */
@@ -1348,7 +1350,7 @@ st.markdown("""
     }
 
     [data-testid="stMetricLabel"] {
-        color: #6b7280;
+        color: rgba(0,0,0,0.5);
     }
 
     /* プログレスバー */
@@ -1357,32 +1359,32 @@ st.markdown("""
         border-radius: 4px;
     }
 
-    /* 区切り線 */
+    /* 区切り線 - ウィスパーボーダー */
     hr {
         border: none;
-        border-top: 1px solid #e5e7eb;
+        border-top: 1px solid rgba(0,0,0,0.08);
         margin: 1.5rem 0;
     }
 
     /* タブ */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0;
-        border-bottom: 2px solid #e5e7eb;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
     }
 
     .stTabs [data-baseweb="tab"] {
         font-family: 'Noto Sans JP', sans-serif;
         font-size: 14px;
         font-weight: 500;
-        color: #6b7280;
+        color: rgba(0,0,0,0.45);
         padding: 0.75rem 1.25rem;
         border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
+        margin-bottom: -1px;
         transition: color 0.15s ease;
     }
 
     .stTabs [data-baseweb="tab"]:hover {
-        color: #1e3a5f;
+        color: rgba(0,0,0,0.8);
     }
 
     .stTabs [aria-selected="true"] {
@@ -1393,29 +1395,29 @@ st.markdown("""
 
     /* エクスパンダー */
     .streamlit-expanderHeader {
-        background: #fafbfc;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
+        background: #fafaf9;
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
         font-weight: 500;
         font-size: 14px;
     }
 
     /* キャプション */
     .stCaption {
-        color: #6b7280;
+        color: rgba(0,0,0,0.45);
         font-size: 13px;
     }
 
     /* テキスト入力 */
     .stTextInput input {
-        border: 1px solid #d1d5db;
+        border: 1px solid rgba(0,0,0,0.1);
         border-radius: 6px;
         font-size: 14px;
     }
 
     .stTextInput input:focus {
         border-color: #1e3a5f;
-        box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.1);
+        box-shadow: 0 0 0 2px rgba(30, 58, 95, 0.08);
     }
 
     /* セレクトボックス */
@@ -1426,8 +1428,8 @@ st.markdown("""
     /* 全体のテキスト */
     .stMarkdown {
         font-family: 'Noto Sans JP', sans-serif;
-        color: #374151;
-        line-height: 1.6;
+        color: rgba(0,0,0,0.85);
+        line-height: 1.7;
     }
 
     /* カラム */
