@@ -1156,6 +1156,11 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
+    [data-testid="stSidebar"] .stButton > button[kind="primary"] *,
+    [data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"] * {
+        color: #ffffff !important;
+    }
+
     [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
     [data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"]:hover {
         background: #2a4f7f !important;
@@ -1240,6 +1245,11 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);
         border-radius: 8px !important;
         letter-spacing: 0.02em;
+    }
+
+    .main .stButton > button[kind="primary"] *,
+    .main .stButton > button[data-testid="stBaseButton-primary"] * {
+        color: #ffffff !important;
     }
 
     .main .stButton > button[kind="primary"]:hover,
