@@ -1448,6 +1448,14 @@ def validate_input(text: str, input_type: str) -> tuple[bool, str]:
         keywords = ["job", "position", "role", "responsibilities", "requirements", "salary", "benefits", "experience", "engineer", "developer"]
         if not any(kw in text.lower() for kw in keywords):
             return False, "求人票として認識できません。英語の求人票を入力してください"
+    elif input_type == "jd_any":
+        # 日本語または英語の求人票を受け付ける
+        jp_keywords = ["募集", "業務", "必須", "歓迎", "待遇", "給与", "仕事", "職種", "応募"]
+        en_keywords = ["job", "position", "role", "responsibilities", "requirements", "salary", "benefits", "experience", "engineer", "developer"]
+        has_jp = any(kw in text for kw in jp_keywords)
+        has_en = any(kw in text.lower() for kw in en_keywords)
+        if not has_jp and not has_en:
+            return False, "求人票として認識できません。日本語または英語の求人票を入力してください"
     elif input_type == "company":
         # 会社紹介は最低限のテキストがあれば通す
         pass
@@ -3747,7 +3755,7 @@ def main():
                     st.error("❌ APIキーを入力してください")
                 else:
                     # 入力バリデーション
-                    is_valid, error_msg = validate_input(jd_anon_input, "jd")
+                    is_valid, error_msg = validate_input(jd_anon_input, "jd_any")
                     if not is_valid:
                         st.warning(f"⚠️ {error_msg}")
                     else:
