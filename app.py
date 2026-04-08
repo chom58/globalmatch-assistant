@@ -1125,6 +1125,8 @@ st.markdown("""
         background: #ffffff;
         padding: 2rem 2.5rem !important;
         max-width: 1200px;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
     }
 
     /* サイドバー */
@@ -1135,6 +1137,29 @@ st.markdown("""
 
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
         color: #374151;
+    }
+
+    /* サイドバー - カテゴリナビゲーション */
+    [data-testid="stSidebar"] .stButton > button {
+        padding: 0.35rem 0.75rem !important;
+        font-size: 13px !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+        border-radius: 4px !important;
+    }
+
+    [data-testid="stSidebar"] .stButton > button[kind="primary"],
+    [data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"] {
+        background: #1e3a5f !important;
+        color: #ffffff !important;
+        border: 1px solid #1e3a5f !important;
+        font-weight: 600 !important;
+    }
+
+    [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+    [data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"]:hover {
+        background: #2a4f7f !important;
+        color: #ffffff !important;
     }
 
     /* ヘッダー */
@@ -1154,6 +1179,8 @@ st.markdown("""
         font-weight: 600;
         font-size: 1.2rem;
         margin-top: 1.5rem;
+        border-left: 4px solid #1e3a5f;
+        padding-left: 0.75rem;
     }
 
     h3 {
@@ -1199,6 +1226,28 @@ st.markdown("""
     .stButton > button:disabled {
         background: #e5e7eb !important;
         color: #9ca3af !important;
+    }
+
+    /* メインエリア - CTAボタン（primary） */
+    .main .stButton > button[kind="primary"],
+    .main .stButton > button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2a5f8f 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
+        padding: 0.7rem 1.5rem !important;
+        box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);
+        border-radius: 8px !important;
+        letter-spacing: 0.02em;
+    }
+
+    .main .stButton > button[kind="primary"]:hover,
+    .main .stButton > button[data-testid="stBaseButton-primary"]:hover {
+        background: linear-gradient(135deg, #2a4f7f 0%, #3570a0 100%) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(30, 58, 95, 0.3);
+        transform: translateY(-1px);
     }
 
     /* secondaryボタンも同様 */
@@ -1303,6 +1352,33 @@ st.markdown("""
         border: none;
         border-top: 1px solid #e5e7eb;
         margin: 1.5rem 0;
+    }
+
+    /* タブ */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        font-family: 'Noto Sans JP', sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        color: #6b7280;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: color 0.15s ease;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #1e3a5f;
+    }
+
+    .stTabs [aria-selected="true"] {
+        color: #1e3a5f !important;
+        font-weight: 600;
+        border-bottom-color: #1e3a5f !important;
     }
 
     /* エクスパンダー */
@@ -2141,16 +2217,29 @@ def main():
         """, height=0)
         st.session_state['localstorage_loaded'] = True
 
-    # ヘッダー
-    st.markdown(t("app_title"))
-    st.markdown(t("app_subtitle"))
-    st.divider()
+    # ヘッダー（グラデーションバナー）
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2a5f8f 100%);
+                padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 2rem; line-height: 1;">🌏</span>
+            <div>
+                <h1 style="color: white; margin: 0; font-size: 1.5rem; border: none;
+                           padding: 0; line-height: 1.3; letter-spacing: 0.01em;">
+                    {t("app_name")}
+                </h1>
+                <p style="color: rgba(255,255,255,0.8); margin: 0.3rem 0 0; font-size: 0.85rem;
+                          line-height: 1.4; font-weight: 400;">
+                    {t("app_tagline")}
+                </p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # サイドバー設定
     with st.sidebar:
-        st.header(t("settings"))
-
-        # 言語切り替え
+        # 言語切り替え（常に表示）
         if 'ui_lang' not in st.session_state:
             st.session_state['ui_lang'] = 'ja'
         lang_choice = st.radio(
@@ -2165,83 +2254,77 @@ def main():
             st.session_state['ui_lang'] = lang_choice
             st.rerun()
 
+        # 設定（API・インポート）折りたたみ
+        with st.expander(t("settings"), expanded=False):
+            api_key = ""
+            try:
+                api_key = st.secrets.get("GROQ_API_KEY", "")
+            except Exception:
+                pass
+
+            if not api_key:
+                api_key = st.text_input(
+                    t("api_key_label"),
+                    type="password",
+                    placeholder=t("api_key_placeholder"),
+                    help=t("api_key_help")
+                )
+            else:
+                st.success(t("api_key_set"))
+
+            # クイックインポート（履歴がない場合のみ表示）
+            resume_count = len(st.session_state.get('resume_history', []))
+            jd_count = len(st.session_state.get('jd_history', []))
+
+            if resume_count == 0 and jd_count == 0:
+                st.divider()
+                st.caption(t("import_hint"))
+                uploaded_backup = st.file_uploader(
+                    t("backup_file"),
+                    type=["json"],
+                    key="sidebar_import_uploader",
+                    help=t("backup_file_help")
+                )
+                if uploaded_backup:
+                    try:
+                        json_string = uploaded_backup.read().decode('utf-8')
+                        if st.button(t("restore_btn"), key="sidebar_import_btn", use_container_width=True):
+                            success, message = import_history_from_json(json_string)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(message)
+                    except Exception as e:
+                        st.error(t("file_read_error").format(error=str(e)))
+
         st.divider()
 
-        # APIキー取得（secretsまたは入力）
-        api_key = ""
-        try:
-            api_key = st.secrets.get("GROQ_API_KEY", "")
-        except Exception:
-            pass  # secrets.tomlがない場合は無視
-
-        if not api_key:
-            api_key = st.text_input(
-                t("api_key_label"),
-                type="password",
-                placeholder=t("api_key_placeholder"),
-                help=t("api_key_help")
-            )
-        else:
-            st.success(t("api_key_set"))
-
-        st.divider()
-
-        # クイックインポート機能（履歴がない場合に表示）
-        resume_count = len(st.session_state.get('resume_history', []))
-        jd_count = len(st.session_state.get('jd_history', []))
-
-        if resume_count == 0 and jd_count == 0:
-            st.warning(t("no_history"))
-            st.caption(t("import_hint"))
-
-            uploaded_backup = st.file_uploader(
-                t("backup_file"),
-                type=["json"],
-                key="sidebar_import_uploader",
-                help=t("backup_file_help")
-            )
-
-            if uploaded_backup:
-                try:
-                    json_string = uploaded_backup.read().decode('utf-8')
-                    if st.button(t("restore_btn"), key="sidebar_import_btn", use_container_width=True):
-                        success, message = import_history_from_json(json_string)
-                        if success:
-                            st.success(message)
-                            st.rerun()
-                        else:
-                            st.error(message)
-                except Exception as e:
-                    st.error(t("file_read_error").format(error=str(e)))
-
-            st.divider()
-
-        # 機能選択（カテゴリ分け）
+        # 機能選択（カテゴリ別エクスパンダー）
         st.subheader(t("feature_select"))
 
-        # カテゴリ定義
         _feature_categories = {
             "resume": ["resume_optimize", "resume_anonymize", "resume_pii"],
             "jd": ["jd_jp_en", "jd_en_jp", "jd_jp_jp", "jd_en_en", "jd_anonymize", "company_intro"],
             "analysis": ["matching", "cv_extract", "email", "batch"],
         }
 
-        # 現在の選択を保持
         if 'selected_feature' not in st.session_state:
             st.session_state['selected_feature'] = "resume_optimize"
 
         for cat_key, cat_features in _feature_categories.items():
-            st.caption(t(f"feature_cat_{cat_key}"))
-            for feat_key in cat_features:
-                is_selected = st.session_state['selected_feature'] == feat_key
-                if st.button(
-                    t(f"feature.{feat_key}"),
-                    key=f"feat_btn_{feat_key}",
-                    use_container_width=True,
-                    type="primary" if is_selected else "secondary",
-                ):
-                    st.session_state['selected_feature'] = feat_key
-                    st.rerun()
+            _cat_has_selected = st.session_state['selected_feature'] in cat_features
+            with st.expander(t(f"feature_cat_{cat_key}"), expanded=_cat_has_selected):
+                for feat_key in cat_features:
+                    is_selected = st.session_state['selected_feature'] == feat_key
+                    if st.button(
+                        t(f"feature.{feat_key}"),
+                        key=f"feat_btn_{feat_key}",
+                        use_container_width=True,
+                        type="primary" if is_selected else "secondary",
+                    ):
+                        st.session_state['selected_feature'] = feat_key
+                        st.rerun()
 
         feature = st.session_state['selected_feature']
 

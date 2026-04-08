@@ -8,6 +8,8 @@ TRANSLATIONS = {
         # ===== Header =====
         "app_title": "# 🌏 GlobalMatch Assistant",
         "app_subtitle": "*外国人エンジニア × 日本企業をつなぐ人材紹介業務効率化ツール*",
+        "app_name": "GlobalMatch Assistant",
+        "app_tagline": "外国人エンジニア × 日本企業をつなぐ人材紹介業務効率化ツール",
 
         # ===== Sidebar =====
         "settings": "⚙️ 設定",
@@ -468,6 +470,8 @@ TRANSLATIONS = {
         # ===== Header =====
         "app_title": "# 🌏 GlobalMatch Assistant",
         "app_subtitle": "*Streamlining recruitment between international engineers and Japanese companies*",
+        "app_name": "GlobalMatch Assistant",
+        "app_tagline": "Streamlining recruitment between international engineers and Japanese companies",
 
         # ===== Sidebar =====
         "settings": "⚙️ Settings",
