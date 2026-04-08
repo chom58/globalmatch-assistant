@@ -3775,7 +3775,7 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error("❌ 予期せぬエラーが発生しました。しばらく待ってから再試行してください")
+                            st.error(f"❌ 予期せぬエラーが発生しました: {type(e).__name__}: {e}")
 
             # 結果表示
             if 'jd_anon_result' in st.session_state:
