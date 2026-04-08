@@ -2351,16 +2351,6 @@ def main():
         with st.expander(t("usage_guide"), expanded=_is_first_visit):
             st.markdown(t("usage_guide_content"))
 
-    # 初回体験（オンボーディング）
-    _has_history = bool(st.session_state.get('resume_history')) or bool(st.session_state.get('jd_history'))
-    if not _has_history and not st.session_state.get('onboarding_dismissed'):
-        with st.container(border=True):
-            st.markdown(f"#### {t('onboarding_title')}")
-            st.markdown(t("onboarding_body"))
-            if st.button(t("onboarding_dismiss"), key="dismiss_onboarding"):
-                st.session_state['onboarding_dismissed'] = True
-                st.rerun()
-
     # メインコンテンツ
     if feature == "resume_optimize":
         st.subheader(t("resume_opt_title"))
