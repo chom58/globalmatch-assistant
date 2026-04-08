@@ -3820,7 +3820,8 @@ def main():
                         key="jd_anon_txt"
                     )
                 with col_dl3:
-                    html_content = generate_html(st.session_state['jd_anon_result'], "求人票（匿名化）")
+                    html_title = "Job Description" if jd_anon_output_lang == "en" else "求人票"
+                    html_content = generate_html(st.session_state['jd_anon_result'], html_title)
                     st.download_button(
                         "🌐 HTML",
                         data=html_content,
