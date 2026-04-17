@@ -2676,10 +2676,10 @@ def main():
                 st.markdown(t("additional_convert"))
                 if st.button(t("convert_to_en"), key="convert_to_en_anonymize", use_container_width=True, help=t("convert_to_en_help")):
                     try:
-                        # 元の英語レジュメを取得
-                        if 'resume_text_input' in st.session_state and st.session_state['resume_text_input']:
-                            original_english_resume = st.session_state['resume_text_input']
-                            prompt_en = get_english_anonymization_prompt(original_english_resume, "full")
+                        # 手直し済みの日本語レジュメを翻訳（元入力から再生成ではなく、編集内容を保持）
+                        edited_jp_resume = st.session_state.get('resume_result', '').strip()
+                        if edited_jp_resume:
+                            prompt_en = get_translate_to_english_prompt(edited_jp_resume)
                             st.caption(t("generating_en"))
                             stream_container = st.empty()
                             result_en = stream_to_container(api_key, prompt_en, stream_container)
@@ -2964,11 +2964,12 @@ def main():
                 # 追加変換ボタン
                 st.divider()
                 st.markdown("##### 🔄 追加変換")
-                if st.button(t("convert_to_jp"), key="convert_to_jp_translate", use_container_width=True, help="英語匿名化レジュメを日本語フォーマットに変換"):
+                if st.button(t("convert_to_jp"), key="convert_to_jp_translate", use_container_width=True, help="手直し済みの英語レジュメを日本語に翻訳（編集内容を保持）"):
                     try:
-                        if 'resume_en_result' in st.session_state and st.session_state['resume_en_result']:
-                            english_resume = st.session_state['resume_en_result']
-                            prompt_jp = get_resume_optimization_prompt(english_resume, "full")
+                        # 手直し済みの英語レジュメを翻訳（ゼロからの再構成ではなく編集内容を保持）
+                        edited_en_resume = st.session_state.get('resume_en_result', '').strip()
+                        if edited_en_resume:
+                            prompt_jp = get_translate_to_japanese_prompt(edited_en_resume)
                             st.caption(t("generating_jp"))
                             stream_container = st.empty()
                             result_jp = stream_to_container(api_key, prompt_jp, stream_container)
