@@ -1791,6 +1791,177 @@ def regex_pii_scan(text: str) -> list[dict]:
     return findings
 
 
+def run_resume_transform_loop(
+    api_key: str,
+    *,
+    original_text: str,
+    base_prompt: str,
+    verification_mode: str,
+    status_container,
+    status_generating: str,
+    status_regenerating: str,
+    status_verifying: str,
+    max_iterations: int = 5,
+    apply_regex_pii: bool = True,
+    post_processor=None,
+) -> tuple[str, list[dict], bool]:
+    """レジュメ変換を「生成 → 検証 → (不合格なら)再生成」する共通ループ。
+
+    Args:
+        original_text: 検証で比較する原文（元レジュメ等）
+        base_prompt: 初回に渡すプロンプト（フィードバック無し版）
+        verification_mode: get_resume_transform_verification_prompt() の mode 引数
+        status_container: st.empty() で作ったキャプション表示用コンテナ
+        status_generating / status_regenerating / status_verifying: 進捗メッセージ
+        apply_regex_pii: 正規表現PII残存チェックを適用するか（翻訳モードは False 推奨）
+        post_processor: 生成結果に適用する後処理関数（例: normalize_resume_bullets）
+
+    Returns:
+        (最終出力, iterations のリスト, 合格したかどうか)
+    """
+
+    iterations: list[dict] = []
+    current_output = ""
+    feedback_json = ""
+
+    for iter_num in range(1, max_iterations + 1):
+        if iter_num == 1:
+            status_container.caption(status_generating)
+            prompt = base_prompt
+        else:
+            status_container.caption(
+                status_regenerating.format(n=iter_num, max=max_iterations)
+            )
+            prompt = append_feedback_to_prompt(base_prompt, current_output, feedback_json)
+
+        stream_container = st.empty()
+        current_output = stream_to_container(api_key, prompt, stream_container)
+        stream_container.empty()
+
+        if post_processor:
+            current_output = post_processor(current_output)
+
+        # LLM検証
+        status_container.caption(
+            status_verifying.format(n=iter_num, max=max_iterations)
+        )
+        try:
+            verify_prompt = get_resume_transform_verification_prompt(
+                original_text, current_output, verification_mode
+            )
+            verification = call_groq_api_json(api_key, verify_prompt)
+        except ValueError as ve:
+            st.warning(f"⚠️ {ve}")
+            verification = {
+                "passed": False,
+                "pii_leaks": [],
+                "fact_mismatches": [],
+                "missing_facts": [],
+                "fabrications": [],
+                "summary": "検証エラー（結果は未検証）",
+            }
+
+        # 正規表現PII検証（匿名化モード時のみ）
+        if apply_regex_pii:
+            regex_leaks = regex_pii_scan(current_output)
+            if regex_leaks:
+                verification.setdefault("pii_leaks", [])
+                existing = {
+                    (l.get("type"), l.get("text"))
+                    for l in verification["pii_leaks"]
+                }
+                for leak in regex_leaks:
+                    if (leak["type"], leak["text"]) not in existing:
+                        verification["pii_leaks"].append(leak)
+                verification["passed"] = False
+
+        iterations.append({
+            "iter": iter_num,
+            "output": current_output,
+            "verification": verification,
+        })
+
+        if verification.get("passed"):
+            break
+
+        feedback_json = json.dumps(
+            {
+                "pii_leaks": verification.get("pii_leaks", []),
+                "fact_mismatches": verification.get("fact_mismatches", []),
+                "missing_facts": verification.get("missing_facts", []),
+                "fabrications": verification.get("fabrications", []),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    passed = iterations[-1]["verification"].get("passed") if iterations else False
+    return current_output, iterations, passed
+
+
+def render_verification_details(iterations: list[dict], key_suffix: str = "") -> None:
+    """検証結果のアコーディオンUIを描画する共通関数。
+
+    PII削除・最適化・翻訳など全ての検証機能で同じ見た目を提供する。
+    """
+    if not iterations:
+        return
+
+    last_v = iterations[-1]["verification"]
+    icon = "✅" if last_v.get("passed") else "⚠️"
+    label = t("pii_verify_details_label").format(icon=icon, iters=len(iterations))
+
+    with st.expander(label, expanded=not last_v.get("passed")):
+        for step in iterations:
+            v = step["verification"]
+            step_icon = "✅" if v.get("passed") else "⚠️"
+            st.markdown(
+                f"**{step_icon} {t('pii_iter_label').format(n=step['iter'])}** — "
+                f"{v.get('summary') or ''}"
+            )
+
+            issue_rendered = False
+
+            for leak in v.get("pii_leaks") or []:
+                issue_rendered = True
+                st.markdown(
+                    f"- 🔴 {t('pii_v_leak')} "
+                    f"[`{leak.get('type', '?')}`]: "
+                    f"`{leak.get('text', '')}`"
+                )
+            for mm in v.get("fact_mismatches") or []:
+                issue_rendered = True
+                gen_val = mm.get('generated') or mm.get('anonymized') or ''
+                st.markdown(
+                    f"- 🟡 {t('pii_v_mismatch')} "
+                    f"[`{mm.get('field', '?')}`]: "
+                    f"{t('pii_v_original')}「{mm.get('original', '')}」 → "
+                    f"{t('pii_v_anonymized')}「{gen_val}」 "
+                    f"({mm.get('issue', '')})"
+                )
+            for miss in v.get("missing_facts") or []:
+                issue_rendered = True
+                st.markdown(
+                    f"- 🟠 {t('pii_v_missing')} "
+                    f"[`{miss.get('field', '?')}`]: "
+                    f"「{miss.get('original', '')}」"
+                )
+            for fab in v.get("fabrications") or []:
+                issue_rendered = True
+                gen_val = fab.get('generated') or fab.get('anonymized') or ''
+                st.markdown(
+                    f"- 🔵 {t('pii_v_fabricated')} "
+                    f"[`{fab.get('field', '?')}`]: "
+                    f"「{gen_val}」"
+                )
+
+            if not issue_rendered and v.get("passed"):
+                st.markdown(f"- {t('pii_v_all_clear')}")
+
+            if step["iter"] < len(iterations):
+                st.divider()
+
+
 def stream_to_container(api_key: str, prompt: str, container=None):
     """ストリーミングでコンテナにリアルタイム表示し、完成テキストを返す"""
     if container is None:
@@ -2599,17 +2770,40 @@ def main():
                     else:
                         try:
                             start_time = time.time()
-                            prompt = get_resume_optimization_prompt(resume_input, anonymize)
-                            st.caption(t("resume_opt_ai"))
-                            stream_container = st.empty()
-                            result = stream_to_container(api_key, prompt, stream_container)
-                            result = normalize_resume_bullets(result)
+                            base_prompt = get_resume_optimization_prompt(resume_input, anonymize)
+                            status_container = st.empty()
+
+                            verification_mode = f"optimize_{anonymize}" if anonymize in ("full", "light") else "optimize_none"
+
+                            result, iterations, passed = run_resume_transform_loop(
+                                api_key,
+                                original_text=resume_input,
+                                base_prompt=base_prompt,
+                                verification_mode=verification_mode,
+                                status_container=status_container,
+                                status_generating=t("resume_opt_ai"),
+                                status_regenerating=t("pii_regenerating"),
+                                status_verifying=t("pii_verifying"),
+                                apply_regex_pii=(anonymize in ("full", "light")),
+                                post_processor=normalize_resume_bullets,
+                            )
                             elapsed_time = time.time() - start_time
+                            status_container.empty()
 
                             st.session_state['resume_result'] = result
                             st.session_state['resume_time'] = elapsed_time
-                            stream_container.empty()
-                            st.success(t("resume_opt_done").format(time=f"{elapsed_time:.1f}"))
+                            st.session_state['resume_iterations'] = iterations
+
+                            if passed:
+                                st.success(t("pii_done_verified").format(
+                                    time=f"{elapsed_time:.1f}",
+                                    iters=len(iterations),
+                                ))
+                            else:
+                                st.warning(t("pii_max_iter").format(
+                                    time=f"{elapsed_time:.1f}",
+                                    iters=len(iterations),
+                                ))
 
                         except ValueError as e:
                             st.error(str(e))
@@ -2639,6 +2833,13 @@ def main():
                         key="edit_resume_result_jp"
                     )
                     st.session_state['resume_result'] = edited_result
+
+                # 精度検証の詳細パネル
+                if st.session_state.get('resume_iterations'):
+                    render_verification_details(
+                        st.session_state['resume_iterations'],
+                        key_suffix="opt",
+                    )
 
                 # ファーストネームをタイトル・ファイル名に使用
                 _opt_first = extract_first_name(st.session_state['resume_result'])
@@ -2676,15 +2877,28 @@ def main():
                 st.markdown(t("additional_convert"))
                 if st.button(t("convert_to_en"), key="convert_to_en_anonymize", use_container_width=True, help=t("convert_to_en_help")):
                     try:
-                        # 手直し済みの日本語レジュメを翻訳（元入力から再生成ではなく、編集内容を保持）
+                        # 手直し済みの日本語レジュメを翻訳（編集内容を保持）+ 検証ループ
                         edited_jp_resume = st.session_state.get('resume_result', '').strip()
                         if edited_jp_resume:
-                            prompt_en = get_translate_to_english_prompt(edited_jp_resume)
-                            st.caption(t("generating_en"))
-                            stream_container = st.empty()
-                            result_en = stream_to_container(api_key, prompt_en, stream_container)
+                            base_prompt_en = get_translate_to_english_prompt(edited_jp_resume)
+                            status_container = st.empty()
+
+                            result_en, iterations_en, passed_en = run_resume_transform_loop(
+                                api_key,
+                                original_text=edited_jp_resume,
+                                base_prompt=base_prompt_en,
+                                verification_mode="translate_to_en",
+                                status_container=status_container,
+                                status_generating=t("generating_en"),
+                                status_regenerating=t("pii_regenerating"),
+                                status_verifying=t("pii_verifying"),
+                                apply_regex_pii=False,
+                                post_processor=None,
+                            )
+                            status_container.empty()
+
                             st.session_state['resume_en_result'] = result_en
-                            stream_container.empty()
+                            st.session_state['resume_en_iterations'] = iterations_en
                             st.success(t("en_done"))
                             st.info(t("scroll_hint"))
                             st.rerun()
@@ -2716,6 +2930,13 @@ def main():
                             key="edit_resume_result_en2"
                         )
                         st.session_state['resume_en_result'] = edited_result_en2
+
+                    # 精度検証の詳細パネル（JP→EN翻訳）
+                    if st.session_state.get('resume_en_iterations'):
+                        render_verification_details(
+                            st.session_state['resume_en_iterations'],
+                            key_suffix="tr_en",
+                        )
 
                     # ファーストネームをタイトル・ファイル名に使用
                     _en2_first = extract_first_name(st.session_state['resume_en_result'])
@@ -2889,16 +3110,38 @@ def main():
                     else:
                         try:
                             start_time = time.time()
-                            prompt = get_english_anonymization_prompt(resume_en_input, anonymize_en)
-                            st.caption(t("resume_anon_ai"))
-                            stream_container = st.empty()
-                            result = stream_to_container(api_key, prompt, stream_container)
+                            base_prompt = get_english_anonymization_prompt(resume_en_input, anonymize_en)
+                            status_container = st.empty()
+
+                            result, iterations, passed = run_resume_transform_loop(
+                                api_key,
+                                original_text=resume_en_input,
+                                base_prompt=base_prompt,
+                                verification_mode=f"anonymize_{anonymize_en}",
+                                status_container=status_container,
+                                status_generating=t("resume_anon_ai"),
+                                status_regenerating=t("pii_regenerating"),
+                                status_verifying=t("pii_verifying"),
+                                apply_regex_pii=True,
+                                post_processor=None,
+                            )
                             elapsed_time = time.time() - start_time
+                            status_container.empty()
 
                             st.session_state['resume_en_result'] = result
                             st.session_state['resume_en_time'] = elapsed_time
-                            stream_container.empty()
-                            st.success(t("resume_anon_done").format(time=f"{elapsed_time:.1f}"))
+                            st.session_state['resume_en_iterations'] = iterations
+
+                            if passed:
+                                st.success(t("pii_done_verified").format(
+                                    time=f"{elapsed_time:.1f}",
+                                    iters=len(iterations),
+                                ))
+                            else:
+                                st.warning(t("pii_max_iter").format(
+                                    time=f"{elapsed_time:.1f}",
+                                    iters=len(iterations),
+                                ))
 
                         except ValueError as e:
                             st.error(str(e))
@@ -2926,6 +3169,13 @@ def main():
                         key="edit_resume_result_en"
                     )
                     st.session_state['resume_en_result'] = edited_result_en
+
+                # 精度検証の詳細パネル
+                if st.session_state.get('resume_en_iterations'):
+                    render_verification_details(
+                        st.session_state['resume_en_iterations'],
+                        key_suffix="anon",
+                    )
 
                 # ファーストネームをタイトル・ファイル名に使用
                 _en_first = extract_first_name(st.session_state['resume_en_result'])
@@ -2966,16 +3216,28 @@ def main():
                 st.markdown("##### 🔄 追加変換")
                 if st.button(t("convert_to_jp"), key="convert_to_jp_translate", use_container_width=True, help="手直し済みの英語レジュメを日本語に翻訳（編集内容を保持）"):
                     try:
-                        # 手直し済みの英語レジュメを翻訳（ゼロからの再構成ではなく編集内容を保持）
+                        # 手直し済みの英語レジュメを翻訳（編集内容を保持）+ 検証ループ
                         edited_en_resume = st.session_state.get('resume_en_result', '').strip()
                         if edited_en_resume:
-                            prompt_jp = get_translate_to_japanese_prompt(edited_en_resume)
-                            st.caption(t("generating_jp"))
-                            stream_container = st.empty()
-                            result_jp = stream_to_container(api_key, prompt_jp, stream_container)
-                            result_jp = normalize_resume_bullets(result_jp)
+                            base_prompt_jp = get_translate_to_japanese_prompt(edited_en_resume)
+                            status_container = st.empty()
+
+                            result_jp, iterations_jp, passed_jp = run_resume_transform_loop(
+                                api_key,
+                                original_text=edited_en_resume,
+                                base_prompt=base_prompt_jp,
+                                verification_mode="translate_to_jp",
+                                status_container=status_container,
+                                status_generating=t("generating_jp"),
+                                status_regenerating=t("pii_regenerating"),
+                                status_verifying=t("pii_verifying"),
+                                apply_regex_pii=False,
+                                post_processor=normalize_resume_bullets,
+                            )
+                            status_container.empty()
+
                             st.session_state['resume_result'] = result_jp
-                            stream_container.empty()
+                            st.session_state['resume_iterations'] = iterations_jp
                             st.success(t("jp_done"))
                             st.info("💡 下にスクロールして結果を確認してください")
                             st.rerun()
@@ -3007,6 +3269,13 @@ def main():
                             key="edit_resume_result_jp2"
                         )
                         st.session_state['resume_result'] = edited_result_jp2
+
+                    # 精度検証の詳細パネル（EN→JP翻訳）
+                    if st.session_state.get('resume_iterations'):
+                        render_verification_details(
+                            st.session_state['resume_iterations'],
+                            key_suffix="tr_jp",
+                        )
 
                     # ファーストネームをタイトル・ファイル名に使用
                     _jp2_first = extract_first_name(st.session_state['resume_result'])

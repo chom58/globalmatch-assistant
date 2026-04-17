@@ -676,6 +676,182 @@ STRICT RULES
 """
 
 
+def append_feedback_to_prompt(base_prompt: str, previous_output: str, issues_feedback: str) -> str:
+    """任意のレジュメ変換プロンプトに検証フィードバックを追記する汎用ラッパー。
+
+    初回は issues_feedback が空なので base_prompt をそのまま返す。
+    2回目以降は末尾に修正要求ブロックを追加し、LLMに前回の問題を修正させる。
+    """
+    if not issues_feedback:
+        return base_prompt
+
+    return base_prompt + f"""
+
+================================================================================
+【REVISION REQUIRED — FIX THESE QA ISSUES FROM PREVIOUS ATTEMPT】
+================================================================================
+
+A previous attempt produced the output shown below but a QA audit detected issues.
+Redo the task and fix ALL of them in this new output.
+
+QA ISSUES (JSON):
+{issues_feedback}
+
+Priority:
+1. Remove every leak listed in "pii_leaks".
+2. Restore every item in "missing_facts" exactly as stated in the ORIGINAL input above.
+3. Correct every "fact_mismatches" entry so the value matches the ORIGINAL.
+4. Delete every "fabrications" entry — do not keep invented numbers, companies, credentials, or claims.
+5. Preserve parts that were already correct.
+
+Previous output (reference only — do NOT copy its mistakes):
+---
+{previous_output}
+---
+
+Output the corrected result, following the same format specified above.
+"""
+
+
+def get_resume_transform_verification_prompt(
+    original_text: str,
+    generated_text: str,
+    mode: str,
+) -> str:
+    """レジュメ変換系の精度検証プロンプトを生成 (汎用 / JSON出力)。
+
+    mode:
+      - "optimize_full"   : 日本語最適化・完全匿名化
+      - "optimize_light"  : 日本語最適化・軽度匿名化（企業名保持）
+      - "optimize_none"   : 日本語最適化・匿名化なし
+      - "anonymize_full"  : 英文匿名化・完全
+      - "anonymize_light" : 英文匿名化・軽度
+      - "translate_to_en" : 日本語→英語翻訳
+      - "translate_to_jp" : 英語→日本語翻訳
+    """
+
+    # --- モード別の task 説明 ---
+    if mode.startswith("optimize"):
+        task_desc = (
+            "The GENERATED output is a RESTRUCTURED Japanese candidate summary produced from the ORIGINAL resume, "
+            "formatted for submission by a recruiting agency. Wording and structure differ, but every factual claim "
+            "(companies, universities, dates, durations, numbers, skills, certifications) must be grounded in the ORIGINAL."
+        )
+    elif mode.startswith("anonymize"):
+        task_desc = (
+            "The GENERATED output is the ORIGINAL English resume with personal information removed. "
+            "Content should closely mirror the original; only PII (and possibly company names) should be altered."
+        )
+    else:  # translate_*
+        src_lang = "Japanese" if mode == "translate_to_en" else "English"
+        dst_lang = "English" if mode == "translate_to_en" else "Japanese"
+        task_desc = (
+            f"The GENERATED output is a {dst_lang} translation of the ORIGINAL {src_lang} document. "
+            "Every section, bullet, number, date, and proper noun must be preserved exactly. "
+            "No content may be added, dropped, or summarized. Markdown structure must be identical to the original."
+        )
+
+    # --- PII ルール ---
+    if mode == "optimize_none":
+        pii_rule = "This mode does NOT require PII removal. Leave pii_leaks as an empty array."
+    elif mode in ("optimize_full", "anonymize_full"):
+        pii_rule = (
+            "Flag any remaining: email, phone number, detailed street address, postal code, personal URL "
+            "(LinkedIn / GitHub / blog / Twitter / portfolio), last/family name, date of birth, age, gender, "
+            "nationality, reference person. First name alone is allowed. "
+            "Company and university names MUST be generalized (e.g., 'Google' → 'US big tech company'). "
+            "A specific brand or organization name appearing as-is counts as a leak with type='company_not_generalized'."
+        )
+    elif mode in ("optimize_light", "anonymize_light"):
+        pii_rule = (
+            "Flag any remaining: email, phone number, detailed street address, postal code, personal URL, "
+            "last/family name, date of birth, age, gender, nationality, reference person. "
+            "First name alone is allowed. Company names and university names may be preserved in this light mode."
+        )
+    else:  # translate_*
+        pii_rule = (
+            "Both ORIGINAL and GENERATED are already PII-processed upstream. "
+            "Only flag NEW PII that appears in GENERATED and is NOT present in the ORIGINAL. "
+            "Do not flag content that is legitimately in the source."
+        )
+
+    # --- 構造ルール ---
+    if mode.startswith("translate"):
+        structural_rule = (
+            "STRUCTURAL FIDELITY: section headings, tables, bullet counts, and emoji markers must match the "
+            "ORIGINAL exactly. Missing or added sections are violations."
+        )
+    elif mode.startswith("optimize"):
+        structural_rule = (
+            "Structural reorganization is expected (the task summarizes and regroups content). "
+            "Focus on CONTENT FIDELITY rather than exact structural match."
+        )
+    else:
+        structural_rule = (
+            "Structure should mirror the original closely; only PII-related changes are expected."
+        )
+
+    return f"""You are a strict QA auditor for resume transformation.
+
+{task_desc}
+
+Compare ORIGINAL vs GENERATED and identify every issue. Return a SINGLE JSON object (no prose, no markdown fences, no explanation) with this exact schema:
+
+{{
+  "passed": true | false,
+  "pii_leaks": [
+    {{
+      "type": "email | phone | url | linkedin | github | blog | last_name | street_address | postal_code | dob | age | gender | nationality | reference_person | company_not_generalized | other",
+      "text": "exact leaked substring present in GENERATED",
+      "severity": "high | medium | low"
+    }}
+  ],
+  "fact_mismatches": [
+    {{
+      "field": "company | title | period | metric | skill | certification | education | language | visa | other",
+      "original": "value in ORIGINAL",
+      "generated": "value in GENERATED",
+      "issue": "altered | wrong_number | wrong_date | translated_badly | typo"
+    }}
+  ],
+  "missing_facts": [
+    {{
+      "field": "company | title | period | metric | skill | certification | education | language | visa | other",
+      "original": "concrete fact present in ORIGINAL but absent from GENERATED"
+    }}
+  ],
+  "fabrications": [
+    {{
+      "field": "company | title | period | metric | skill | certification | education | language | visa | other",
+      "generated": "specific claim in GENERATED that is NOT supported by ORIGINAL"
+    }}
+  ],
+  "summary": "one short sentence in Japanese describing the overall verdict"
+}}
+
+PII RULES
+{pii_rule}
+
+FACT RULES
+- fact_mismatches: A concrete fact (company name, job title, period, amount, percentage, team size, certification) differs between the two documents. Linguistic/stylistic rewording that preserves the fact is NOT a mismatch.
+- missing_facts: A concrete fact present in ORIGINAL but absent from GENERATED. For 'optimize' mode, summarized/compressed wording is OK — only flag when a hard fact (company, role, period, quantified metric, certification) is lost. For 'anonymize' and 'translate' modes, ALL content must be preserved.
+- fabrications: Specific numbers, companies, credentials, accomplishments, or metrics appearing in GENERATED but not supported by ORIGINAL. Generic phrases like "Led team" without invented numbers are NOT fabrications.
+
+STRUCTURAL
+{structural_rule}
+
+If a category has no issues, use an empty array [].
+Set "passed" to true ONLY when pii_leaks, fact_mismatches, missing_facts, and fabrications are all empty arrays.
+Output ONLY the JSON object — no surrounding text, no ``` fences.
+
+【ORIGINAL】
+{original_text}
+
+【GENERATED】
+{generated_text}
+"""
+
+
 def get_jd_transformation_prompt(jd_text: str) -> str:
     """求人票変換用のプロンプトを生成（日本語→英語）"""
 
