@@ -103,6 +103,17 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 *習熟度: Expert（専門家レベル）/ Advanced（上級）/ Intermediate（中級）/ Beginner（初級）*
 *※ 該当カテゴリに情報がない場合はその行を省略*
 
+**経験年数の算出ルール（厳守）:**
+- **正規雇用（フルタイム/契約社員）の職務経歴のみを対象**とする。以下は**絶対に含めない**:
+  - 学歴期間（学士・修士・博士課程）、学術研究、授業・ゼミ・卒業研究
+  - インターンシップ（明示的にフルタイム雇用として扱える長期有償インターンを除く）
+  - 個人プロジェクト、サイドプロジェクト、OSS貢献、Kaggle、ハッカソン
+  - 資格取得のための学習期間、独学、オンラインコース受講
+- 職務経歴書に**明示的にその技術を使用した記載がある期間のみ**カウントする（推測で加算しない）
+- 同じ技術を複数社で使用していた場合、**期間が重複する部分は二重計上しない**（実年数で算出）
+- 技術の使用期間が明確でない場合は空欄にする（推測で「◯年」と書かない）
+- ブランク期間（離職期間、育休等）はカウントに含めない
+
 ## 5. 語学・ビザ
 - **日本語レベル**: （JLPTレベルだけでなく、実務でどう活用しているかを文脈から読み取って補足。例：「JLPT N2。日本語での仕様書作成、クライアントとの要件定義MTGに参加」「JLPT N3。日常会話レベル、技術文書は英語メイン」。日本滞在歴があれば記載）
 - **英語レベル**: （同様に実務活用を補足。例：「ネイティブ」「ビジネスレベル。海外ベンダーとの技術折衝、英語での技術プレゼン経験あり」）
@@ -172,7 +183,7 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 
 1. **成果には必ず数値を含める**: ユーザー数、パフォーマンス改善率、コスト削減額、チーム規模など
 2. **AI/ML固有の成果指標も抽出**: モデル精度改善（accuracy, F1スコア等）、推論レイテンシ（p99 latency等）、学習データ規模（トークン数、データ量）、学習コスト削減（GPU時間等）、プロダクション規模（日次リクエスト数等）
-3. **技術スキルには経験年数・習熟度を併記**: 職歴の時期から推定して記載。特にAI/ML関連技術は細かく分類
+3. **技術スキルには経験年数・習熟度を併記**: **正規雇用（フルタイム/契約社員）の職務経歴の期間のみ**から算出すること。学歴期間（学士・修士・博士）、学術研究、ゼミ・卒業研究、インターン（有償長期フルタイムを除く）、個人プロジェクト、OSS、Kaggle、独学・資格学習は**絶対にカウントに含めない**。職務経歴書に該当技術の使用が明記されている期間のみを対象とし、複数社で並行使用していた場合は期間が重複する部分を二重計上しない。使用期間が不明確なら空欄にする（推測で年数を書かない）。特にAI/ML関連技術は細かく分類
 4. **リーダーシップ経験を見逃さない**: メンター、チームリード、採用関与など
 5. **プロジェクトの規模感を記載**: ユーザー数、売上、予算、チーム規模など
 6. **代表プロジェクトの選定**: 職歴の中から最もインパクトのあるプロジェクトを1つ選び、課題→解決策→技術→成果→体制の構造で深掘り
@@ -292,6 +303,17 @@ Maintain the resume in English with this standardized structure:
 *Last Used: "Currently using", "2024", "2022", etc. — estimate from work history dates*
 *Omit categories with no relevant information*
 
+**Years of Experience — STRICT CALCULATION RULES:**
+- Count **ONLY full-time / contract professional employment periods** from the Work Experience section. The following MUST NEVER be included:
+  - Academic periods (Bachelor's, Master's, PhD), coursework, thesis research, lab work
+  - Internships (unless explicitly full-time, long-term, paid employment)
+  - Personal projects, side projects, OSS contributions, Kaggle, hackathons
+  - Self-study, online courses, certification preparation
+- Count ONLY periods where the resume **explicitly states the technology was used on the job** — do not infer or assume usage.
+- If the same technology was used across multiple overlapping roles, **do not double-count overlapping periods** (use actual elapsed years).
+- If the usage period is unclear, **leave the field blank** — never guess a number.
+- Exclude employment gaps (unemployment, parental leave, etc.) from the total.
+
 ## 5. Languages & Visa
 - **Japanese Level**: (Beyond just the JLPT level — interpret from context how the language is used in practice. E.g., "JLPT N2. Writes technical specifications in Japanese, participates in client requirements meetings in Japanese" or "JLPT N3. Conversational level, primarily uses English for technical work". Include Japan residency history if available)
 - **English Level**: (Similarly interpret practical usage. E.g., "Native" or "Business level. Experience in technical negotiations with overseas vendors, technical presentations in English")
@@ -367,7 +389,7 @@ Pay special attention to the following:
 
 1. **Always include metrics in achievements**: User numbers, performance improvement %, cost savings, team size, etc.
 2. **Extract AI/ML-specific metrics**: Model accuracy improvements (accuracy, F1 score, etc.), inference latency (p99 latency, etc.), training data scale (token count, data volume), training cost reduction (GPU hours, etc.), production scale (daily request volume, etc.)
-3. **Specify experience years, proficiency, and last-used date for technical skills**: Estimate from work history dates. Classify AI/ML technologies in detail
+3. **Specify experience years, proficiency, and last-used date for technical skills**: Calculate years **ONLY from full-time / contract professional employment periods** in the Work Experience section. NEVER include academic periods (Bachelor's, Master's, PhD, thesis, lab work), internships (unless explicitly full-time long-term paid), personal projects, OSS contributions, Kaggle, hackathons, or self-study. Count only periods where the resume explicitly states the technology was used on the job; do not double-count overlapping periods across concurrent roles; leave the field blank if the usage period is unclear (never guess). Classify AI/ML technologies in detail
 4. **Don't miss leadership experience**: Mentoring, team lead, hiring involvement, etc.
 5. **Include project scale information**: User count, revenue, budget, team size, etc.
 6. **Select highlight project**: Choose the single most impactful project from work history and describe using the Challenge → Solution → Tech → Results → Team structure
@@ -385,8 +407,40 @@ Pay special attention to the following:
 """
 
 
-def get_resume_pii_removal_prompt(resume_text: str) -> str:
-    """レジュメから個人情報を削除し、高品質なMarkdown形式に再構成するプロンプトを生成"""
+def get_resume_pii_removal_prompt(
+    resume_text: str,
+    previous_output: str = "",
+    issues_feedback: str = "",
+) -> str:
+    """レジュメから個人情報を削除し、高品質なMarkdown形式に再構成するプロンプトを生成。
+
+    再生成時は previous_output と issues_feedback を指定すると、
+    前回の不整合を修正する追加指示が末尾に挿入される。
+    """
+
+    feedback_block = ""
+    if issues_feedback:
+        feedback_block = f"""
+
+【REVISION REQUIRED — FIX THESE ISSUES FROM PREVIOUS ATTEMPT】
+A prior attempt produced the output shown below but a QA audit detected issues.
+You MUST fix ALL of them in this new output.
+
+QA ISSUES (JSON):
+{issues_feedback}
+
+Fix priority:
+1. Remove every PII leak listed in "pii_leaks" (emails, phones, URLs, last names, DOB, etc.).
+2. Restore every item in "missing_facts" exactly as stated in the ORIGINAL resume below.
+3. Correct every "fact_mismatches" entry so the value matches the ORIGINAL resume.
+4. Delete every "fabrications" entry — do not keep invented numbers, credentials, or claims.
+5. Preserve the parts that were already correct.
+
+Previous output (for reference only — do NOT copy its mistakes):
+---
+{previous_output}
+---
+"""
 
     return f"""You are a professional English resume editing specialist for technical and managerial roles.
 Your task is to convert the provided resume text into a high-quality Markdown format suitable for submission by a recruitment agency to hiring companies.
@@ -500,9 +554,66 @@ Apply these formatting rules:
 
 【INPUT RESUME】
 {resume_text}
-
+{feedback_block}
 【OUTPUT】
 Output the processed resume with personal data removed, restructured and formatted as clean Markdown.
+"""
+
+
+def get_resume_pii_verification_prompt(original_text: str, anonymized_text: str) -> str:
+    """匿名化済みレジュメが元レジュメと整合しているか検証するプロンプトを生成 (JSON出力)"""
+
+    return f"""You are a strict QA auditor for resume anonymization.
+Compare the ORIGINAL resume with the ANONYMIZED resume and identify every issue.
+
+Return a SINGLE JSON object (no prose, no markdown fences, no explanation) with this exact schema:
+
+{{
+  "passed": true | false,
+  "pii_leaks": [
+    {{
+      "type": "email | phone | url | linkedin | github | blog | last_name | street_address | postal_code | dob | age | gender | nationality | reference_person | other",
+      "text": "exact leaked substring present in ANONYMIZED output",
+      "severity": "high | medium | low"
+    }}
+  ],
+  "fact_mismatches": [
+    {{
+      "field": "company | title | period | metric | skill | certification | education | language | visa | other",
+      "original": "value in ORIGINAL",
+      "anonymized": "value in ANONYMIZED",
+      "issue": "altered | translated_badly | wrong_number | wrong_date | typo"
+    }}
+  ],
+  "missing_facts": [
+    {{
+      "field": "company | title | period | metric | skill | certification | education | language | visa | other",
+      "original": "concrete fact present in ORIGINAL but dropped from ANONYMIZED"
+    }}
+  ],
+  "fabrications": [
+    {{
+      "field": "company | title | period | metric | skill | certification | education | language | visa | other",
+      "anonymized": "specific claim in ANONYMIZED that is NOT supported by ORIGINAL"
+    }}
+  ],
+  "summary": "one short sentence in Japanese describing the overall verdict"
+}}
+
+STRICT RULES
+- pii_leaks: flag any remaining email, phone number, detailed street address, postal code, personal URL (LinkedIn / GitHub / blog / portfolio / Twitter), last/family name, date of birth, age, gender, nationality, or reference person (name / contact). First name alone is allowed. Company, university, and project names are allowed.
+- fact_mismatches: a concrete fact (company name, job title, period, amount, percentage, headcount, certification name) differs between the two documents. Minor rewording of bullet wording is NOT a mismatch.
+- missing_facts: a concrete fact present in the original but absent from the anonymized output. Do NOT flag the removal of "Objective / Summary / Profile / References / Personal Attributes" sections — those are intentionally dropped.
+- fabrications: a specific number, company, credential, accomplishment, or metric that appears in the anonymized output but cannot be found in the original. Phrases like "Led team" without a number are NOT fabrications.
+- If a category has no issues, use an empty array [].
+- Set "passed" to true ONLY when pii_leaks, fact_mismatches, missing_facts, and fabrications are all empty arrays.
+- Output ONLY the JSON object — no surrounding text, no ``` fences.
+
+【ORIGINAL RESUME】
+{original_text}
+
+【ANONYMIZED RESUME】
+{anonymized_text}
 """
 
 

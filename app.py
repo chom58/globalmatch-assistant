@@ -1659,6 +1659,88 @@ def call_groq_api_stream(api_key: str, prompt: str):
     raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）。しばらく待ってから再試行してください")
 
 
+def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dict:
+    """Groq APIをJSONモードで呼び出し、dictを返す（リトライ機能付き）。
+
+    PII削除の精度検証など、構造化された結果が必要な箇所で使用する。
+    """
+
+    allowed, msg = _check_rate_limit()
+    if not allowed:
+        raise ValueError(f"⏳ {msg}")
+    _record_api_call()
+
+    client = Groq(api_key=api_key)
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                timeout=60,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content or "{}"
+            return json.loads(content)
+
+        except json.JSONDecodeError:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(1)
+                continue
+            raise ValueError("🔄 検証結果のJSON解析に失敗しました。再試行してください")
+
+        except Exception as e:
+            error_str = str(e).lower()
+
+            if "invalid api key" in error_str or "authentication" in error_str:
+                raise ValueError("❌ APIキーが無効です。正しいキーを入力してください")
+
+            if "rate limit" in error_str:
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep((attempt + 1) * 5)
+                    continue
+                raise ValueError("⏳ API制限に達しました。しばらく待ってから再試行してください")
+
+            if "timeout" in error_str or "timed out" in error_str:
+                if attempt < MAX_RETRIES - 1:
+                    continue
+                raise ValueError("⏱️ 検証がタイムアウトしました。再試行してください")
+
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2)
+                continue
+
+    raise ValueError(f"🔄 検証に失敗しました（{MAX_RETRIES}回試行）")
+
+
+# PII残存を決定的に検出するための正規表現セット
+_PII_REGEX_PATTERNS = {
+    "email": re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"),
+    "phone_intl": re.compile(r"\+\d{1,3}[\s\-]?\d{1,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}"),
+    "phone_jp": re.compile(r"\b0\d{1,4}[\-(\s]\d{2,4}[\-)\s]\d{3,4}\b"),
+    "linkedin": re.compile(r"linkedin\.com/[A-Za-z0-9\-_/]+", re.I),
+    "github": re.compile(r"github\.com/[A-Za-z0-9\-_/]+", re.I),
+    "twitter": re.compile(r"(?:twitter\.com|x\.com)/[A-Za-z0-9_]+", re.I),
+    "postal_jp": re.compile(r"\b\d{3}-\d{4}\b"),
+}
+
+
+def regex_pii_scan(text: str) -> list[dict]:
+    """正規表現でPII残存を決定的に検出する。LLM検証を補完する最終防衛線。"""
+    findings = []
+    seen = set()
+    for pii_type, pattern in _PII_REGEX_PATTERNS.items():
+        for m in pattern.finditer(text or ""):
+            value = m.group(0)
+            key = (pii_type, value)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append({"type": pii_type, "text": value, "severity": "high"})
+    return findings
+
+
 def stream_to_container(api_key: str, prompt: str, container=None):
     """ストリーミングでコンテナにリアルタイム表示し、完成テキストを返す"""
     if container is None:
@@ -3005,16 +3087,105 @@ def main():
                     else:
                         try:
                             start_time = time.time()
-                            prompt = get_resume_pii_removal_prompt(resume_pii_input)
-                            st.caption(t("pii_ai"))
-                            stream_container = st.empty()
-                            result = stream_to_container(api_key, prompt, stream_container)
-                            elapsed_time = time.time() - start_time
+                            MAX_PII_ITERATIONS = 5
 
-                            st.session_state['resume_pii_result'] = result
+                            iterations = []
+                            current_output = ""
+                            feedback_json = ""
+                            status_container = st.empty()
+
+                            for iter_num in range(1, MAX_PII_ITERATIONS + 1):
+                                # 1st: 通常生成 / 2nd以降: フィードバック付き再生成
+                                if iter_num == 1:
+                                    status_container.caption(t("pii_ai"))
+                                    prompt = get_resume_pii_removal_prompt(resume_pii_input)
+                                else:
+                                    status_container.caption(
+                                        t("pii_regenerating").format(n=iter_num, max=MAX_PII_ITERATIONS)
+                                    )
+                                    prompt = get_resume_pii_removal_prompt(
+                                        resume_pii_input,
+                                        previous_output=current_output,
+                                        issues_feedback=feedback_json,
+                                    )
+
+                                stream_container = st.empty()
+                                current_output = stream_to_container(api_key, prompt, stream_container)
+                                stream_container.empty()
+
+                                # 精度検証 (LLM + regex)
+                                status_container.caption(
+                                    t("pii_verifying").format(n=iter_num, max=MAX_PII_ITERATIONS)
+                                )
+                                try:
+                                    verify_prompt = get_resume_pii_verification_prompt(
+                                        resume_pii_input, current_output
+                                    )
+                                    verification = call_groq_api_json(api_key, verify_prompt)
+                                except ValueError as ve:
+                                    # 検証失敗時は結果そのものは保持し、警告のみ出す
+                                    st.warning(f"⚠️ {ve}")
+                                    verification = {
+                                        "passed": False,
+                                        "pii_leaks": [],
+                                        "fact_mismatches": [],
+                                        "missing_facts": [],
+                                        "fabrications": [],
+                                        "summary": "検証エラー（結果は未検証）",
+                                    }
+
+                                # 正規表現による決定的PIIチェック
+                                regex_leaks = regex_pii_scan(current_output)
+                                if regex_leaks:
+                                    verification.setdefault("pii_leaks", [])
+                                    existing_leaks = {
+                                        (l.get("type"), l.get("text"))
+                                        for l in verification["pii_leaks"]
+                                    }
+                                    for leak in regex_leaks:
+                                        if (leak["type"], leak["text"]) not in existing_leaks:
+                                            verification["pii_leaks"].append(leak)
+                                    verification["passed"] = False
+
+                                iterations.append({
+                                    "iter": iter_num,
+                                    "output": current_output,
+                                    "verification": verification,
+                                })
+
+                                if verification.get("passed"):
+                                    break
+
+                                # 次イテレーションへのフィードバック
+                                feedback_json = json.dumps(
+                                    {
+                                        "pii_leaks": verification.get("pii_leaks", []),
+                                        "fact_mismatches": verification.get("fact_mismatches", []),
+                                        "missing_facts": verification.get("missing_facts", []),
+                                        "fabrications": verification.get("fabrications", []),
+                                    },
+                                    ensure_ascii=False,
+                                    indent=2,
+                                )
+
+                            elapsed_time = time.time() - start_time
+                            status_container.empty()
+
+                            st.session_state['resume_pii_result'] = current_output
                             st.session_state['resume_pii_time'] = elapsed_time
-                            stream_container.empty()
-                            st.success(t("pii_done").format(time=f"{elapsed_time:.1f}"))
+                            st.session_state['resume_pii_iterations'] = iterations
+
+                            last_verification = iterations[-1]["verification"] if iterations else {}
+                            if last_verification.get("passed"):
+                                st.success(t("pii_done_verified").format(
+                                    time=f"{elapsed_time:.1f}",
+                                    iters=len(iterations),
+                                ))
+                            else:
+                                st.warning(t("pii_max_iter").format(
+                                    time=f"{elapsed_time:.1f}",
+                                    iters=len(iterations),
+                                ))
 
                         except ValueError as e:
                             st.error(str(e))
@@ -3041,6 +3212,64 @@ def main():
                         key="edit_resume_result_pii"
                     )
                     st.session_state['resume_pii_result'] = edited_result_pii
+
+                # 精度検証の詳細パネル
+                if st.session_state.get('resume_pii_iterations'):
+                    iterations = st.session_state['resume_pii_iterations']
+                    last_v = iterations[-1]["verification"]
+                    verify_icon = "✅" if last_v.get("passed") else "⚠️"
+                    expander_label = t("pii_verify_details_label").format(
+                        icon=verify_icon,
+                        iters=len(iterations),
+                    )
+
+                    with st.expander(expander_label, expanded=not last_v.get("passed")):
+                        for step in iterations:
+                            v = step["verification"]
+                            step_icon = "✅" if v.get("passed") else "⚠️"
+                            st.markdown(
+                                f"**{step_icon} {t('pii_iter_label').format(n=step['iter'])}** — "
+                                f"{v.get('summary') or ''}"
+                            )
+
+                            issue_rendered = False
+
+                            for leak in v.get("pii_leaks") or []:
+                                issue_rendered = True
+                                st.markdown(
+                                    f"- 🔴 {t('pii_v_leak')} "
+                                    f"[`{leak.get('type', '?')}`]: "
+                                    f"`{leak.get('text', '')}`"
+                                )
+                            for mm in v.get("fact_mismatches") or []:
+                                issue_rendered = True
+                                st.markdown(
+                                    f"- 🟡 {t('pii_v_mismatch')} "
+                                    f"[`{mm.get('field', '?')}`]: "
+                                    f"{t('pii_v_original')}「{mm.get('original', '')}」 → "
+                                    f"{t('pii_v_anonymized')}「{mm.get('anonymized', '')}」 "
+                                    f"({mm.get('issue', '')})"
+                                )
+                            for miss in v.get("missing_facts") or []:
+                                issue_rendered = True
+                                st.markdown(
+                                    f"- 🟠 {t('pii_v_missing')} "
+                                    f"[`{miss.get('field', '?')}`]: "
+                                    f"「{miss.get('original', '')}」"
+                                )
+                            for fab in v.get("fabrications") or []:
+                                issue_rendered = True
+                                st.markdown(
+                                    f"- 🔵 {t('pii_v_fabricated')} "
+                                    f"[`{fab.get('field', '?')}`]: "
+                                    f"「{fab.get('anonymized', '')}」"
+                                )
+
+                            if not issue_rendered and v.get("passed"):
+                                st.markdown(f"- {t('pii_v_all_clear')}")
+
+                            if step["iter"] < len(iterations):
+                                st.divider()
 
                 # ファーストネームをタイトル・ファイル名に使用
                 _pii_first = extract_first_name(st.session_state['resume_pii_result'])
