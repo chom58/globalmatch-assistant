@@ -2808,7 +2808,10 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(t("unexpected_error"))
+                            st.error(f"❌ {t('unexpected_error')}\n\n[詳細] {type(e).__name__}: {e}")
+                            import traceback
+                            with st.expander("🐛 スタックトレース（開発者向け）"):
+                                st.code(traceback.format_exc())
 
             # 結果表示
             if 'resume_result' in st.session_state:
@@ -2905,7 +2908,10 @@ def main():
                         else:
                             st.error(t("no_original_resume"))
                     except Exception as e:
-                        st.error(t("generation_error"))
+                        st.error(f"❌ {t('generation_error')}\n\n[詳細] {type(e).__name__}: {e}")
+                        import traceback
+                        with st.expander("🐛 スタックトレース（開発者向け）"):
+                            st.code(traceback.format_exc())
 
                 # 英語匿名化結果の表示
                 if 'resume_en_result' in st.session_state and st.session_state.get('resume_result'):
@@ -3146,7 +3152,10 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                                st.error(t("unexpected_error"))
+                            st.error(f"❌ {t('unexpected_error')}\n\n[詳細] {type(e).__name__}: {e}")
+                            import traceback
+                            with st.expander("🐛 スタックトレース（開発者向け）"):
+                                st.code(traceback.format_exc())
 
             # 結果表示
             if 'resume_en_result' in st.session_state:
@@ -3244,7 +3253,10 @@ def main():
                         else:
                             st.error("❌ 英語レジュメが見つかりません。最初から変換し直してください。")
                     except Exception as e:
-                        st.error("❌ 生成エラーが発生しました。しばらく待ってから再試行してください")
+                        st.error(f"❌ 生成エラーが発生しました。\n\n[詳細] {type(e).__name__}: {e}")
+                        import traceback
+                        with st.expander("🐛 スタックトレース（開発者向け）"):
+                            st.code(traceback.format_exc())
 
                 # 日本語変換結果の表示（英語匿名化後の追加変換）
                 if 'resume_result' in st.session_state and st.session_state.get('resume_en_result') and not st.session_state.get('resume_text_input'):
@@ -3512,7 +3524,10 @@ def main():
                         except ValueError as e:
                             st.error(str(e))
                         except Exception as e:
-                            st.error(t("unexpected_error"))
+                            st.error(f"❌ {t('unexpected_error')}\n\n[詳細] {type(e).__name__}: {e}")
+                            import traceback
+                            with st.expander("🐛 スタックトレース（開発者向け）"):
+                                st.code(traceback.format_exc())
 
             # 結果表示
             if 'resume_pii_result' in st.session_state:
