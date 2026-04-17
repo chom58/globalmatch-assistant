@@ -1726,6 +1726,56 @@ _PII_REGEX_PATTERNS = {
 }
 
 
+def normalize_resume_bullets(text: str) -> str:
+    """レジュメ出力に残る inline `*` 箇条書き圧縮を検出し、`-` 行リストに正規化する。
+
+    LLMが複数項目を `* 課題: ... * 解決策: ... * 成果: ...` のように
+    1行に圧縮して出力した場合、Markdown上で literal な `*` として表示されてしまう。
+    これを `- **課題**: ...` の改行リストへ決定的に変換する後処理。
+
+    `**bold**` マーカーは保護される。純粋なイタリック `*foo*` には影響しない
+    （スペースで挟まれた ` * ` のみ分割対象）。
+    """
+    if not text:
+        return text
+
+    # 1) `**bold**` をプレースホルダへ退避
+    bold_store: list[str] = []
+
+    def _stash_bold(m: re.Match) -> str:
+        bold_store.append(m.group(0))
+        return f"\x00BOLD{len(bold_store) - 1}\x01"
+
+    protected = re.sub(r"\*\*[^*\n]+?\*\*", _stash_bold, text)
+
+    # 2) 行単位で走査
+    out_lines: list[str] = []
+    for line in protected.split("\n"):
+        # 行頭の `* ` を `- ` に置換（`*（...）*` のようなイタリックは空白なしで通常はマッチしない）
+        line = re.sub(r"^(\s*)\*(\s+)", r"\1-\2", line)
+
+        # 行頭が `- ` のリスト項目で、inline に ` * ` が混入している場合、分割
+        m = re.match(r"^(\s*- )(.*)$", line)
+        if m and " * " in m.group(2):
+            prefix, body = m.group(1), m.group(2)
+            parts = re.split(r"\s+\*\s+", body)
+            for p in parts:
+                p = p.strip()
+                if p:
+                    out_lines.append(prefix + p)
+            continue
+
+        out_lines.append(line)
+
+    result = "\n".join(out_lines)
+
+    # 3) bold を復元
+    for i, bold in enumerate(bold_store):
+        result = result.replace(f"\x00BOLD{i}\x01", bold)
+
+    return result
+
+
 def regex_pii_scan(text: str) -> list[dict]:
     """正規表現でPII残存を決定的に検出する。LLM検証を補完する最終防衛線。"""
     findings = []
@@ -2193,7 +2243,7 @@ def _process_single_resume(api_key: str, index: int, resume: str, anonymize: str
         prompt = get_resume_optimization_prompt(resume, anonymize)
         output = call_groq_api(api_key, prompt)
         result["status"] = "success"
-        result["output"] = output
+        result["output"] = normalize_resume_bullets(output)
         result["time"] = time.time() - item_start
     except Exception as e:
         result["status"] = "error"
@@ -2553,6 +2603,7 @@ def main():
                             st.caption(t("resume_opt_ai"))
                             stream_container = st.empty()
                             result = stream_to_container(api_key, prompt, stream_container)
+                            result = normalize_resume_bullets(result)
                             elapsed_time = time.time() - start_time
 
                             st.session_state['resume_result'] = result
@@ -2921,6 +2972,7 @@ def main():
                             st.caption(t("generating_jp"))
                             stream_container = st.empty()
                             result_jp = stream_to_container(api_key, prompt_jp, stream_container)
+                            result_jp = normalize_resume_bullets(result_jp)
                             st.session_state['resume_result'] = result_jp
                             stream_container.empty()
                             st.success(t("jp_done"))
@@ -6025,7 +6077,7 @@ Full-stack Developer...
                             prompt = get_resume_optimization_prompt(resume_text, batch_anonymize)
                             output = call_groq_api(api_key, prompt)
                             result["status"] = "success"
-                            result["output"] = output
+                            result["output"] = normalize_resume_bullets(output)
                             result["time"] = time.time() - item_start
                         except Exception as e:
                             result["status"] = "error"
