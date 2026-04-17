@@ -1555,12 +1555,99 @@ def validate_input(text: str, input_type: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """GroqのレートリミットValueErrorを識別する"""
+    msg = str(exc).lower()
+    return (
+        "api制限" in msg
+        or "rate limit" in msg
+        or "429" in msg
+        or "quota" in msg
+        or "resource_exhausted" in msg
+    )
+
+
+def _get_gemini_fallback_key() -> str:
+    """UI/Secrets から Gemini フォールバックキーを取得"""
+    key = st.session_state.get("gemini_api_key", "") or ""
+    if not key:
+        try:
+            key = st.secrets.get("GEMINI_API_KEY", "") or ""
+        except Exception:
+            pass
+    return key.strip()
+
+
+def _notify_gemini_fallback() -> None:
+    try:
+        st.toast("⚡ Groqレート制限検知 → Geminiに自動フェイルオーバー中", icon="🔄")
+    except Exception:
+        pass
+
+
+def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
+    """Gemini 2.0 Flash でテキスト生成（フォールバック用）"""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(max_output_tokens=max_tokens),
+    )
+    return response.text or ""
+
+
+def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
+    """Gemini 2.0 Flash でストリーミング生成（フォールバック用）"""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    stream = client.models.generate_content_stream(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(max_output_tokens=max_tokens),
+    )
+    for chunk in stream:
+        text = getattr(chunk, "text", None)
+        if text:
+            yield text
+
+
+def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dict:
+    """Gemini 2.0 Flash で JSON 構造化出力を取得（フォールバック用）"""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            max_output_tokens=max_tokens,
+        ),
+    )
+    content = response.text or "{}"
+    return json.loads(content)
+
+
 def call_groq_api(api_key: str, prompt: str) -> str:
-    """Groq APIを呼び出してテキストを生成（リトライ機能付き）"""
+    """Groq APIを呼び出してテキストを生成（リトライ機能付き、Geminiフォールバック付き）"""
 
     # アプリレベルのレート制限チェック
     allowed, msg = _check_rate_limit()
     if not allowed:
+        # アプリ側レート制限にぶつかった場合もGeminiにフォールバックを試みる
+        gemini_key = _get_gemini_fallback_key()
+        if gemini_key:
+            _notify_gemini_fallback()
+            try:
+                return _call_gemini_api(gemini_key, prompt)
+            except Exception as gemini_exc:
+                raise ValueError(f"⏳ {msg}（Geminiフォールバックも失敗: {gemini_exc}）")
         raise ValueError(f"⏳ {msg}")
     _record_api_call()
 
@@ -1590,6 +1677,14 @@ def call_groq_api(api_key: str, prompt: str) -> str:
                     wait_time = (attempt + 1) * 5  # 5秒、10秒、15秒
                     time.sleep(wait_time)
                     continue
+                # 最終リトライも失敗 → Gemini にフォールバック
+                gemini_key = _get_gemini_fallback_key()
+                if gemini_key:
+                    _notify_gemini_fallback()
+                    try:
+                        return _call_gemini_api(gemini_key, prompt)
+                    except Exception as gemini_exc:
+                        raise ValueError(f"⏳ Groq制限＆Geminiフォールバックも失敗: {gemini_exc}")
                 raise ValueError("⏳ API制限に達しました。しばらく待ってから再試行してください")
 
             if "timeout" in error_str or "timed out" in error_str:
@@ -1602,7 +1697,14 @@ def call_groq_api(api_key: str, prompt: str) -> str:
                 time.sleep(2)
                 continue
 
-    # すべてのリトライが失敗
+    # すべてのリトライが失敗 → 最終フォールバック
+    gemini_key = _get_gemini_fallback_key()
+    if gemini_key:
+        _notify_gemini_fallback()
+        try:
+            return _call_gemini_api(gemini_key, prompt)
+        except Exception as gemini_exc:
+            raise ValueError(f"🔄 処理に失敗（Groq {MAX_RETRIES}回＋Gemini: {gemini_exc}）")
     raise ValueError(f"🔄 処理に失敗しました（{MAX_RETRIES}回試行）。しばらく待ってから再試行してください")
 
 
@@ -1667,6 +1769,14 @@ def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dic
 
     allowed, msg = _check_rate_limit()
     if not allowed:
+        # アプリ側レート制限でも Gemini にフォールバック
+        gemini_key = _get_gemini_fallback_key()
+        if gemini_key:
+            _notify_gemini_fallback()
+            try:
+                return _call_gemini_api_json(gemini_key, prompt, max_tokens=max_tokens)
+            except Exception as gemini_exc:
+                raise ValueError(f"⏳ {msg}（Geminiフォールバックも失敗: {gemini_exc}）")
         raise ValueError(f"⏳ {msg}")
     _record_api_call()
 
@@ -1700,6 +1810,14 @@ def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dic
                 if attempt < MAX_RETRIES - 1:
                     time.sleep((attempt + 1) * 5)
                     continue
+                # Gemini フォールバック
+                gemini_key = _get_gemini_fallback_key()
+                if gemini_key:
+                    _notify_gemini_fallback()
+                    try:
+                        return _call_gemini_api_json(gemini_key, prompt, max_tokens=max_tokens)
+                    except Exception as gemini_exc:
+                        raise ValueError(f"⏳ Groq制限＆Geminiフォールバックも失敗: {gemini_exc}")
                 raise ValueError("⏳ API制限に達しました。しばらく待ってから再試行してください")
 
             if "timeout" in error_str or "timed out" in error_str:
@@ -1711,6 +1829,14 @@ def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dic
                 time.sleep(2)
                 continue
 
+    # 全リトライ失敗 → Gemini にフォールバック
+    gemini_key = _get_gemini_fallback_key()
+    if gemini_key:
+        _notify_gemini_fallback()
+        try:
+            return _call_gemini_api_json(gemini_key, prompt, max_tokens=max_tokens)
+        except Exception as gemini_exc:
+            raise ValueError(f"🔄 検証失敗（Groq {MAX_RETRIES}回＋Gemini: {gemini_exc}）")
     raise ValueError(f"🔄 検証に失敗しました（{MAX_RETRIES}回試行）")
 
 
@@ -1963,14 +2089,34 @@ def render_verification_details(iterations: list[dict], key_suffix: str = "") ->
 
 
 def stream_to_container(api_key: str, prompt: str, container=None):
-    """ストリーミングでコンテナにリアルタイム表示し、完成テキストを返す"""
+    """ストリーミングでコンテナにリアルタイム表示し、完成テキストを返す。
+
+    Groq レート制限時は Gemini に自動フェイルオーバーする（キーが設定されている場合）。
+    """
     if container is None:
         container = st.empty()
 
-    collected = []
-    for chunk in call_groq_api_stream(api_key, prompt):
-        collected.append(chunk)
-        container.markdown("".join(collected) + "▍")
+    collected: list[str] = []
+
+    try:
+        for chunk in call_groq_api_stream(api_key, prompt):
+            collected.append(chunk)
+            container.markdown("".join(collected) + "▍")
+    except ValueError as e:
+        if _is_rate_limit_error(e):
+            gemini_key = _get_gemini_fallback_key()
+            if gemini_key:
+                _notify_gemini_fallback()
+                # バッファをリセットして Gemini で最初から生成し直す
+                collected = []
+                container.markdown("")
+                for chunk in _call_gemini_api_stream(gemini_key, prompt):
+                    collected.append(chunk)
+                    container.markdown("".join(collected) + "▍")
+            else:
+                raise
+        else:
+            raise
 
     full_text = "".join(collected)
     container.markdown(full_text)
@@ -2590,6 +2736,29 @@ def main():
                 )
             else:
                 st.success(t("api_key_set"))
+
+            # Gemini フォールバックキー（任意）
+            st.markdown(f"**{t('gemini_fallback_label')}**")
+            existing_gemini_key = st.session_state.get("gemini_api_key", "") or ""
+            try:
+                if not existing_gemini_key:
+                    existing_gemini_key = st.secrets.get("GEMINI_API_KEY", "") or ""
+            except Exception:
+                pass
+
+            gemini_api_key_input = st.text_input(
+                t("gemini_fallback_placeholder"),
+                value=existing_gemini_key,
+                type="password",
+                placeholder="AIza...",
+                help=t("gemini_fallback_help"),
+                key="gemini_api_key_input",
+            )
+            if gemini_api_key_input:
+                st.session_state["gemini_api_key"] = gemini_api_key_input.strip()
+                st.caption(f"✅ {t('gemini_fallback_active')}")
+            else:
+                st.session_state.pop("gemini_api_key", None)
 
             # クイックインポート（履歴がない場合のみ表示）
             resume_count = len(st.session_state.get('resume_history', []))
