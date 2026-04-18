@@ -1673,11 +1673,7 @@ def call_groq_api(api_key: str, prompt: str) -> str:
                 raise ValueError("❌ APIキーが無効です。正しいキーを入力してください")
 
             if "rate limit" in error_str:
-                if attempt < MAX_RETRIES - 1:
-                    wait_time = (attempt + 1) * 5  # 5秒、10秒、15秒
-                    time.sleep(wait_time)
-                    continue
-                # 最終リトライも失敗 → Gemini にフォールバック
+                # Gemini キーが設定済みなら即フォールバック（Groqリトライ待ちをスキップ）
                 gemini_key = _get_gemini_fallback_key()
                 if gemini_key:
                     _notify_gemini_fallback()
@@ -1685,6 +1681,11 @@ def call_groq_api(api_key: str, prompt: str) -> str:
                         return _call_gemini_api(gemini_key, prompt)
                     except Exception as gemini_exc:
                         raise ValueError(f"⏳ Groq制限＆Geminiフォールバックも失敗: {gemini_exc}")
+                # Gemini未設定時のみ従来どおり Groq をリトライ
+                if attempt < MAX_RETRIES - 1:
+                    wait_time = (attempt + 1) * 5  # 5秒、10秒、15秒
+                    time.sleep(wait_time)
+                    continue
                 raise ValueError("⏳ API制限に達しました。しばらく待ってから再試行してください")
 
             if "timeout" in error_str or "timed out" in error_str:
@@ -1743,6 +1744,16 @@ def call_groq_api_stream(api_key: str, prompt: str):
                 raise ValueError("❌ APIキーが無効です。正しいキーを入力してください")
 
             if "rate limit" in error_str:
+                # Gemini キーが設定済みなら即フォールバック（ストリーミング）
+                gemini_key = _get_gemini_fallback_key()
+                if gemini_key:
+                    _notify_gemini_fallback()
+                    try:
+                        for gchunk in _call_gemini_api_stream(gemini_key, prompt):
+                            yield gchunk
+                        return
+                    except Exception as gemini_exc:
+                        raise ValueError(f"⏳ Groq制限＆Geminiフォールバックも失敗: {gemini_exc}")
                 if attempt < MAX_RETRIES - 1:
                     wait_time = (attempt + 1) * 5
                     time.sleep(wait_time)
@@ -1807,10 +1818,7 @@ def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dic
                 raise ValueError("❌ APIキーが無効です。正しいキーを入力してください")
 
             if "rate limit" in error_str:
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep((attempt + 1) * 5)
-                    continue
-                # Gemini フォールバック
+                # Gemini キーが設定済みなら即フォールバック（JSON）
                 gemini_key = _get_gemini_fallback_key()
                 if gemini_key:
                     _notify_gemini_fallback()
@@ -1818,6 +1826,9 @@ def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dic
                         return _call_gemini_api_json(gemini_key, prompt, max_tokens=max_tokens)
                     except Exception as gemini_exc:
                         raise ValueError(f"⏳ Groq制限＆Geminiフォールバックも失敗: {gemini_exc}")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep((attempt + 1) * 5)
+                    continue
                 raise ValueError("⏳ API制限に達しました。しばらく待ってから再試行してください")
 
             if "timeout" in error_str or "timed out" in error_str:
