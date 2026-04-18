@@ -1585,12 +1585,26 @@ def _notify_gemini_fallback() -> None:
         pass
 
 
-def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
-    """Gemini 2.5 Flash でテキスト生成（フォールバック用）"""
+def _make_gemini_client(api_key: str):
+    """Gemini クライアントを timeout 付きで生成する。SDKバージョン差異に備えてフォールバックあり。"""
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=api_key)
+    try:
+        return genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=60_000),  # 60秒
+        )
+    except (TypeError, AttributeError):
+        # 古い SDK は http_options 引数を受け取れない
+        return genai.Client(api_key=api_key)
+
+
+def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
+    """Gemini 2.5 Flash でテキスト生成（フォールバック用）"""
+    from google.genai import types
+
+    client = _make_gemini_client(api_key)
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
@@ -1604,10 +1618,9 @@ def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
 
 def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
     """Gemini 2.5 Flash でストリーミング生成（フォールバック用）"""
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=api_key)
+    client = _make_gemini_client(api_key)
     stream = client.models.generate_content_stream(
         model="gemini-2.5-flash",
         contents=prompt,
@@ -1629,10 +1642,9 @@ def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 8192) -> 
     - コードフェンス（```json ... ```）の混入を除去
     - JSONDecodeError 時は最大3回までリトライ
     """
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=api_key)
+    client = _make_gemini_client(api_key)
     last_error: Exception | None = None
 
     for attempt in range(3):
@@ -1977,7 +1989,7 @@ def run_resume_transform_loop(
     status_generating: str,
     status_regenerating: str,
     status_verifying: str,
-    max_iterations: int = 5,
+    max_iterations: int = 2,
     apply_regex_pii: bool = True,
     post_processor=None,
 ) -> tuple[str, list[dict], bool]:

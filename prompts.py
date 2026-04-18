@@ -59,6 +59,31 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 
 {anonymize_instruction}
 
+【省略ルール - 最優先（他のすべての指示より優先）】
+元のレジュメに該当する情報が無いセクション・テーブル行・項目は、空欄にせず**完全に省略**してください。
+具体的には以下を厳守：
+
+1. 「記載なし」「要確認」「0年」「不明」「なし」「Not specified」等の**固定文言を出力しない**
+2. **空のテーブル行を残さない**（「| プログラミング言語 | | | |」のような空セルの行は出力しない）
+3. **推定・推測・文脈からの合成を禁止**する：
+   - 居住地から語学レベルを推定しない（例：「東京都在住」→「日本語：日常会話レベル（推定）」はNG）
+   - 職歴から語学レベルを推定しない（例：「グローバル企業勤務」→「英語：ビジネスレベル」はNG）
+   - 職種から技術を推定しない（例：コンサル職→「Python」「McKinsey7S」等をLLMが合成するのはNG）
+   - 習熟度・経験年数は原文に明示があるときのみ記入
+4. **該当情報が無いセクションは見出しごと削除**する（例：OSS活動の記載がなければ「## 10. オープンソース・副業プロジェクト」見出しを出さない）
+5. **候補者スナップショットの行**は原文に根拠があるもののみ記載：
+   - 非エンジニア候補の場合、「エンジニア歴」「直近の注力技術」行は省略
+   - 「現在のレベル」は明確な役職名が原文にあるときのみ記載（推測禁止）
+6. **語学・ビザ**は原文に記載がある項目のみ記載：
+   - JLPT・TOEIC等のスコア記載がなければ「日本語レベル」行を省略
+   - ビザ記載がなければ「ビザステータス」行を省略
+   - 語学情報が全くなければセクション自体を省略
+7. **技術スタック表**は原文に明示された技術のみ記載：
+   - 経験年数・習熟度は原文に明記がある場合のみ記入（空欄または行ごと省略）
+   - 職種から推測した技術を追加しない
+
+出力はレジュメに根拠がある事実のみで構成してください。**無理に埋めるくらいなら省略してください**。
+
 【出力フォーマット - 厳守】
 以下の「日本企業向け標準フォーマット」に必ず従って出力してください。
 元のレジュメのフォーマットに関わらず、この構造で統一してください。
@@ -255,8 +280,9 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 13. **最新トレンドの反映**: AIツール（GitHub Copilot, ChatGPT API等）の活用やモダンな開発手法（Agile, Scrum, DevOps, CI/CD, IaC等）の経験があれば必ず強調する
 14. **実績の抽象化と具体化のバランス**: 守秘義務に触れない範囲で、数字や技術名を用いて「何ができるか」を具体化する。抽象的すぎる表現（「様々なプロジェクトに参画」）は避け、規模・技術・成果を含めた具体的な記述に変換する
 
-**重要**: レジュメに情報が全くない場合のみ「記載なし」とし、少しでも関連する記述があれば必ず抽出して記載してください。
-**重要**: 該当するセクション（研究実績、OSS、受賞歴など）に情報がない場合は、そのセクション自体を省略してください。
+**重要**: 原文に少しでも関連する記述があれば必ず抽出してください（埋められる情報は埋める）。
+**重要**: 一方で、**情報が全く無い項目・行・セクションは「記載なし」等の固定文言で埋めず、見出し・テーブル行ごと省略**してください（冒頭の「省略ルール」を厳守）。
+**重要**: 推定・推測による合成は禁止です。原文に根拠があるもののみ記載してください。
 """
 
 
@@ -752,6 +778,12 @@ def get_resume_transform_verification_prompt(
         )
 
     # --- PII ルール ---
+    initials_exception = (
+        "IMPORTANT INITIALS EXCEPTION: The source prompt REQUIRES names to be converted to initials "
+        "in the format [A-Z]\\.[A-Z]\\. (e.g., 'A.V.', 'T.T.', 'J.S.'). These initials are the EXPECTED "
+        "output and MUST NOT be flagged as last_name leaks. Only flag when a FULL last name "
+        "(e.g., 'Smith', 'Volkov', '田中', 'Garcia') actually appears in GENERATED."
+    )
     if mode == "optimize_none":
         pii_rule = "This mode does NOT require PII removal. Leave pii_leaks as an empty array."
     elif mode in ("optimize_full", "anonymize_full"):
@@ -760,13 +792,15 @@ def get_resume_transform_verification_prompt(
             "(LinkedIn / GitHub / blog / Twitter / portfolio), last/family name, date of birth, age, gender, "
             "nationality, reference person. First name alone is allowed. "
             "Company and university names MUST be generalized (e.g., 'Google' → 'US big tech company'). "
-            "A specific brand or organization name appearing as-is counts as a leak with type='company_not_generalized'."
+            "A specific brand or organization name appearing as-is counts as a leak with type='company_not_generalized'. "
+            + initials_exception
         )
     elif mode in ("optimize_light", "anonymize_light"):
         pii_rule = (
             "Flag any remaining: email, phone number, detailed street address, postal code, personal URL, "
             "last/family name, date of birth, age, gender, nationality, reference person. "
-            "First name alone is allowed. Company names and university names may be preserved in this light mode."
+            "First name alone is allowed. Company names and university names may be preserved in this light mode. "
+            + initials_exception
         )
     else:  # translate_*
         pii_rule = (
@@ -836,6 +870,23 @@ FACT RULES
 - fact_mismatches: A concrete fact (company name, job title, period, amount, percentage, team size, certification) differs between the two documents. Linguistic/stylistic rewording that preserves the fact is NOT a mismatch.
 - missing_facts: A concrete fact present in ORIGINAL but absent from GENERATED. For 'optimize' mode, summarized/compressed wording is OK — only flag when a hard fact (company, role, period, quantified metric, certification) is lost. For 'anonymize' and 'translate' modes, ALL content must be preserved.
 - fabrications: Specific numbers, companies, credentials, accomplishments, or metrics appearing in GENERATED but not supported by ORIGINAL. Generic phrases like "Led team" without invented numbers are NOT fabrications.
+
+DATE FORMAT (optimize_* only)
+Period values translated from English to Japanese date format are CORRECT translations, NOT fact_mismatches. Examples that MUST NOT be flagged:
+- "Jan 2024 - Jan 2026" → "2024年01月 〜 2026年01月"
+- "Aug 2014 - Sep 2019" → "2014年08月 〜 2019年09月"
+- "Sep 2011 - Aug 2014" → "2011年09月 〜 2014年08月"
+Only flag when the actual year, month, or date range differs between ORIGINAL and GENERATED (e.g., 2014 vs 2015, or Jan vs Feb).
+
+SECTION / ROW OMISSION (optimize_* only)
+The source optimization prompt REQUIRES the LLM to OMIT sections, table rows, and fields entirely when ORIGINAL has no supporting information. This is by-design:
+- Missing template rows (e.g., "エンジニア歴", "ビザステータス", "直近の注力技術") when ORIGINAL lacks data → EXPECTED, do NOT flag as missing_facts
+- Missing sections (e.g., OSS, 受賞歴, 研究実績, 代表プロジェクト) when ORIGINAL lacks relevant content → EXPECTED, do NOT flag
+- Empty skill table rows omitted → EXPECTED
+Only flag missing_facts when a HARD FACT explicitly present in ORIGINAL (a company name, job title, employment period, quantified metric like "reduced cost by 40%", or certification like "PMP") is absent from GENERATED.
+
+INFERRED CONTENT (optimize_* only)
+The source prompt PROHIBITS the LLM from inferring or synthesizing content not in ORIGINAL. If GENERATED contains inferred content (e.g., "日本語レベル: 日常会話レベル（東京都居住経験に基づく推定）", "英語レベル: ビジネスレベル（PwC経験から推定）", made-up proficiency labels, invented year counts), DO flag them as fabrications — the prompt explicitly forbids this and the LLM should have omitted these rows instead.
 
 STRUCTURAL
 {structural_rule}
