@@ -1616,22 +1616,54 @@ def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
             yield text
 
 
-def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dict:
-    """Gemini 2.5 Flash で JSON 構造化出力を取得（フォールバック用）"""
+def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 8192) -> dict:
+    """Gemini 2.5 Flash で JSON 構造化出力を取得（フォールバック用）。
+
+    - max_tokens を余裕ある値に設定（検証JSONは長くなりがち）
+    - コードフェンス（```json ... ```）の混入を除去
+    - JSONDecodeError 時は最大3回までリトライ
+    """
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            max_output_tokens=max_tokens,
-        ),
-    )
-    content = response.text or "{}"
-    return json.loads(content)
+    last_error: Exception | None = None
+
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    max_output_tokens=max_tokens,
+                ),
+            )
+            content = (response.text or "{}").strip()
+
+            # コードフェンス除去（```json ... ``` / ``` ... ```）
+            if content.startswith("```"):
+                content = re.sub(r"^```(?:json)?\s*\n?", "", content)
+                content = re.sub(r"\n?```\s*$", "", content)
+                content = content.strip()
+
+            # 前後の余計なテキストを除去し、最初の { から最後の } までを抽出
+            if not content.startswith("{"):
+                first_brace = content.find("{")
+                last_brace = content.rfind("}")
+                if 0 <= first_brace < last_brace:
+                    content = content[first_brace:last_brace + 1]
+
+            return json.loads(content)
+
+        except json.JSONDecodeError as e:
+            last_error = e
+            continue
+        except Exception as e:
+            last_error = e
+            break
+
+    raise ValueError(f"Gemini JSONパース失敗（3回試行）: {last_error}")
 
 
 def call_groq_api(api_key: str, prompt: str) -> str:
