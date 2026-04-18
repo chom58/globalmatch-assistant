@@ -1969,6 +1969,97 @@ def normalize_resume_bullets(text: str) -> str:
     return result
 
 
+# スキルメタデータ除去用の正規表現
+_SKILLS_HEADING_RE = re.compile(
+    r"^\s*#{1,4}\s*(?:Skills?|スキル|Technical Skills?|技術スキル|Tech Stack|Skill Set)\b",
+    re.IGNORECASE,
+)
+_MAJOR_HEADING_RE = re.compile(r"^\s*#{1,2}\s+\S")
+_SKILL_YEAR_RE = re.compile(r"\s*\|?\s*\d+\s*年(?:\s*\d+\s*ヶ月)?\b")
+_SKILL_YEAR_EN_RE = re.compile(
+    r"\s*\|?\s*\d+(?:\.\d+)?\s*(?:years?|yrs?|months?|mos?)\b",
+    re.IGNORECASE,
+)
+_SKILL_LEVEL_RE = re.compile(
+    r"\s*[|/]\s*(?:Expert|Advanced|Intermediate|Beginner|Native|"
+    r"専門家(?:レベル)?|上級|中級|初級)(?:\s*（[^）]+）)?",
+    re.IGNORECASE,
+)
+_PROFICIENCY_LEGEND_RE = re.compile(
+    r"習熟度[:：].*(?:Expert|Advanced|Intermediate|Beginner)",
+    re.IGNORECASE,
+)
+_ENGINEER_TOTAL_RE = re.compile(r"エンジニア歴\s*\d+\s*年")
+_YEAR_CELL_FULL_RE = re.compile(r"^\s*\d+\s*年(?:\s*\d+\s*ヶ月)?\s*$")
+_YEAR_CELL_EN_FULL_RE = re.compile(
+    r"^\s*\d+(?:\.\d+)?\s*(?:years?|yrs?|months?|mos?)\s*$", re.IGNORECASE
+)
+_LEVEL_CELL_FULL_RE = re.compile(
+    r"^\s*(?:Expert|Advanced|Intermediate|Beginner|Native|"
+    r"専門家(?:レベル)?|上級|中級|初級)(?:\s*（[^）]+）)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def strip_skill_metadata(text: str) -> str:
+    """Skills セクション内からスキル単位の経験年数・習熟度ラベルを除去する。
+
+    LLM が原文に無い `Python 9年2ヶ月` / `Python | Advanced` / `習熟度: Expert ...` 等の
+    推測メタデータを付与するハルシネーション対策の決定論的な後処理。
+    Experience セクションは触らない（日数ベースの業務記述を保護するため）。
+    """
+    if not text:
+        return text
+
+    lines = text.split("\n")
+    in_skills = False
+    out: list[str] = []
+
+    for line in lines:
+        # セクション境界の検出
+        if _SKILLS_HEADING_RE.match(line):
+            in_skills = True
+            out.append(line)
+            continue
+        if in_skills and _MAJOR_HEADING_RE.match(line) and not _SKILLS_HEADING_RE.match(line):
+            in_skills = False
+
+        if in_skills:
+            # 凡例・合計行は丸ごと削除
+            if _PROFICIENCY_LEGEND_RE.search(line):
+                continue
+            if _ENGINEER_TOTAL_RE.search(line):
+                continue
+
+            # Markdown テーブル行（`| A | B | C |`）から年数・習熟度セルを落とす
+            stripped = line.strip()
+            if stripped.startswith("|") and stripped.count("|") >= 2:
+                parts = line.split("|")
+                new_parts = []
+                for p in parts:
+                    tok = p.strip()
+                    if not tok:
+                        new_parts.append(p)
+                        continue
+                    if (
+                        _YEAR_CELL_FULL_RE.match(tok)
+                        or _YEAR_CELL_EN_FULL_RE.match(tok)
+                        or _LEVEL_CELL_FULL_RE.match(tok)
+                    ):
+                        continue
+                    new_parts.append(p)
+                line = "|".join(new_parts)
+
+            # インラインの " | 9年2ヶ月" / "9年2ヶ月" / " | Advanced" を除去
+            line = _SKILL_YEAR_RE.sub("", line)
+            line = _SKILL_YEAR_EN_RE.sub("", line)
+            line = _SKILL_LEVEL_RE.sub("", line)
+
+        out.append(line)
+
+    return "\n".join(out)
+
+
 def regex_pii_scan(text: str) -> list[dict]:
     """正規表現でPII残存を決定的に検出する。LLM検証を補完する最終防衛線。"""
     findings = []
@@ -3935,6 +4026,9 @@ def main():
                                 current_output = stream_to_container(api_key, prompt, stream_container)
                                 stream_container.empty()
 
+                                # スキル欄の推測メタデータ（経験年数・習熟度）を機械的に除去
+                                current_output = strip_skill_metadata(current_output)
+
                                 # 精度検証 (LLM + regex)
                                 status_container.caption(
                                     t("pii_verifying").format(n=iter_num, max=MAX_PII_ITERATIONS)
@@ -4030,6 +4124,7 @@ def main():
                                 )
                                 format_stream_container.empty()
                                 formatted_output = normalize_resume_bullets(formatted_output)
+                                formatted_output = strip_skill_metadata(formatted_output)
 
                                 status_container.caption(t("pii_format_verifying"))
                                 try:

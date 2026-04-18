@@ -601,8 +601,14 @@ Never infer or invent facts from indirect signals. Specifically:
   or employment history. Do NOT write "要確認" / "TBD" / "unknown" — simply omit.
 - **Years of experience (total)**: Do NOT compute or estimate a total from employment dates.
   Only keep a total-years statement if the input itself says so verbatim.
-- **Skill proficiency / level (Beginner/Intermediate/Advanced)**: Do NOT assign levels.
-  Do NOT add "years of experience per skill" unless the input explicitly states it for that skill.
+- **Skill proficiency / level**: NEVER add Beginner/Intermediate/Advanced/Expert/専門家/上級/中級/初級
+  to any skill, under any circumstances, even if the input contains such labels. Output bare skill names only.
+- **Years-per-skill**: NEVER add per-skill experience (e.g., "Python 9年2ヶ月", "Python | 2 years",
+  "Python: 3y"). Even if the input contains these, strip them. Student-era experience is often ambiguous
+  and aggregating it misleads reviewers. Output bare skill names only.
+- **Engineering total years**: NEVER add a total-years line (e.g., "エンジニア歴 9年2ヶ月") unless
+  the input states that exact value verbatim. Do not compute from employment dates.
+- **Proficiency legends**: NEVER output a legend line like "習熟度: Expert（専門家レベル）/ Advanced..."
 - **Current seniority label (Junior/Senior/Lead/Manager)**: Do NOT add unless the input states it verbatim.
   Job titles that already appear in the Experience section are allowed but do NOT summarize them into a new label.
 - **Location / residency**: Do NOT infer from company addresses or university country.
@@ -727,9 +733,14 @@ Never infer or invent facts from indirect signals. Specifically:
   location, or company history. Never write "要確認" / "TBD" / "unknown" — simply omit the field.
 - **Total years of experience**: Do NOT compute or estimate from dates. Only include if the input
   states a total-years value verbatim.
-- **Skill proficiency (Beginner/Intermediate/Advanced) or years-per-skill**: Do NOT assign levels
-  or experience years to individual skills. If the input lists bare skill names, output bare skill names.
-  No tables like `Python | 2年 | Intermediate` unless the input already contains them.
+- **Skill proficiency (Beginner/Intermediate/Advanced/Expert/専門家/上級/中級/初級)**: NEVER assign
+  levels to any skill, even if the input contains such labels. Output bare skill names only.
+- **Years-per-skill**: NEVER add experience years to individual skills (e.g., "Python 9年2ヶ月",
+  "Python | 2年 | Intermediate", "Python: 3y"). Even if the input contains these, strip them.
+  Produce skill lists as bare names grouped by category.
+- **Engineering total years**: NEVER add a "エンジニア歴 X年" summary line unless the input states
+  that exact value verbatim. Do not compute totals from employment dates.
+- **Proficiency legends**: NEVER output a legend like "習熟度: Expert（専門家レベル）/ Advanced...".
 - **Seniority label (Junior/Senior/Lead)**: Do NOT add unless the input states it verbatim.
 - **Location / residency**: Do NOT infer from company or university location.
 
@@ -953,7 +964,10 @@ STRICT RULES
   - Skill-name identity: "Python" vs "Python" is NOT a mismatch. If the output adds metadata like
     "Python | 2年 | Intermediate" to a bare "Python", classify this as a **fabrication** (added
     unsupported claim), NOT a mismatch.
-  - Date-format rewrites: "2022/04" vs "Apr 2022" is NOT a mismatch (same year-month).
+  - Date-format equivalence: dates with identical year+month (any format) are NOT mismatches.
+    Equivalent forms include: `Jan 2024` / `Jan. 2024` / `January 2024` / `2024/01` / `2024-01`
+    / `2024年1月` / `2024年01月`. Range separators `-`, `–`, `—`, `〜`, `~` are equivalent.
+    Example: `Jan. 2024 - Present` ≡ `2024年01月 〜 Present` — NOT a mismatch.
   - Minor rewording of bullet text is NOT a mismatch.
 - missing_facts:
   - A concrete fact present in the original but absent from the anonymized output.
