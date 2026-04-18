@@ -492,6 +492,217 @@ Pay special attention to the following:
 """
 
 
+def get_resume_pii_redaction_only_prompt(
+    resume_text: str,
+    previous_output: str = "",
+    issues_feedback: str = "",
+) -> str:
+    """レジュメから PII のみを削除する「削除専用・コピー主義」プロンプトを生成。
+
+    整形・翻訳・要約・新規文生成は一切行わない。
+    原文のテキストをそのままコピーし、PII 該当箇所だけを削除・置換する。
+
+    再生成時は previous_output と issues_feedback を指定すると、
+    前回の漏れを修正する追加指示が末尾に挿入される。
+    """
+
+    feedback_block = ""
+    if issues_feedback:
+        feedback_block = f"""
+
+【REVISION REQUIRED — FIX THESE ISSUES FROM PREVIOUS ATTEMPT】
+A prior attempt produced the output shown below but a QA audit detected issues.
+You MUST fix ALL of them in this new output.
+
+QA ISSUES (JSON):
+{issues_feedback}
+
+Fix priority:
+1. Remove every PII leak listed in "pii_leaks" (emails, phones, URLs, last names, DOB, etc.).
+2. If "missing_facts" are listed, restore them by copying the EXACT wording from the ORIGINAL resume below.
+   Do NOT paraphrase, summarize, or translate — verbatim copy only.
+3. Correct every "fact_mismatches" entry so the value matches the ORIGINAL resume (verbatim copy).
+4. Delete every "fabrications" entry — do not keep invented numbers, credentials, or claims.
+5. Preserve the parts that were already correct.
+
+ABSOLUTE PROHIBITION: Do not generate any sentence or phrase that is not present verbatim in the original resume.
+
+Previous output (for reference only — do NOT copy its mistakes):
+---
+{previous_output}
+---
+"""
+
+    return f"""You are a precise PII-redaction specialist. Your ONLY task is to remove personal identifying information from the resume below.
+
+【GOLDEN RULE】
+Copy the original text verbatim. Remove or replace ONLY the tokens listed in the redaction targets.
+Do NOT rewrite, rephrase, summarize, translate, restructure, or embellish any part of the text.
+
+【1. WHAT TO REMOVE (redaction targets — nothing else)】
+
+1. **Last name (family name / surname)**
+   - Keep ONLY the first name (given name). Remove the last name.
+   - Examples: "John Smith" → "John", "Taro Yamada" → "Taro", "Wei-Lin Chen" → "Wei-Lin"
+   - If the name appears in a header/title line, remove only the last name token.
+
+2. **Email addresses** — remove the entire token (e.g., john@example.com → delete)
+
+3. **Phone numbers** — remove the entire token (e.g., +1-555-123-4567, 090-1234-5678 → delete)
+
+4. **Detailed addresses** — remove street address, building name, apartment/unit number, postal code.
+   Keep city/prefecture and country if they appear in a header-equivalent line.
+
+5. **All personal URLs** — remove LinkedIn, GitHub, Twitter/X, Qiita, personal blogs, portfolio sites,
+   and any other personal URLs. Remove the entire line if the line contains only a URL.
+
+6. **Personal attributes** — remove date of birth, age, gender, nationality, marital status, religion,
+   photo references. Delete the entire line containing these attributes.
+
+7. **References section** — delete all lines in any References section, including "Available upon request".
+
+8. **Annotations and metadata** — remove notes such as "Resume (PII Removed)", generation timestamps,
+   or any metadata lines that are not part of the candidate's original content.
+
+9. **Objective / Summary / Profile / About Me section** — delete the ENTIRE section (heading + body).
+   Do NOT replace it with new text. If no such section exists, do nothing.
+
+【2. WHAT TO KEEP (do NOT touch these)】
+
+- Company names, university names, project names (keep exactly as written)
+- Job titles, departments, team names
+- Employment periods, project dates, graduation dates
+- All technical skills, programming languages, frameworks, tools, certifications
+- All numerical metrics, achievements, and quantified results
+- Every bullet point and its content — copy verbatim
+- Section headings (except Objective/Summary/Profile/About Me)
+- The original language of each part (Japanese stays Japanese, English stays English)
+- Markdown formatting that already exists in the input
+
+【3. STRICT PROHIBITIONS】
+
+- Do NOT add any new sentences, phrases, or words
+- Do NOT write a Professional Summary or any replacement for the removed Objective/Summary section
+- Do NOT translate any part of the text
+- Do NOT reorder sections
+- Do NOT reformat, bold, or change date formats
+- Do NOT add Markdown if it is not already present
+- Do NOT add blank lines, headers, or separators beyond what already exists
+
+【INPUT RESUME】
+{resume_text}
+{feedback_block}
+【OUTPUT】
+Output the resume with ONLY the PII tokens removed, preserving all other text exactly as in the input.
+"""
+
+
+def get_resume_format_prompt(
+    redacted_text: str,
+    previous_output: str = "",
+    issues_feedback: str = "",
+) -> str:
+    """PII 削除済みレジュメを Markdown に整形する「整形専用・創作禁止」プロンプトを生成。
+
+    入力はすでに PII が除去されたテキスト。
+    セクション順序の整理・Markdown 化・日付フォーマット統一・スキルのカテゴリ分けを行う。
+    入力に存在しない文や情報を一切追加しない。
+
+    再生成時は previous_output と issues_feedback を指定すると、
+    前回の問題を修正する追加指示が末尾に挿入される。
+    """
+
+    feedback_block = ""
+    if issues_feedback:
+        feedback_block = f"""
+
+【REVISION REQUIRED — FIX THESE ISSUES FROM PREVIOUS ATTEMPT】
+A prior attempt produced the output shown below but a QA audit detected issues.
+You MUST fix ALL of them in this new output.
+
+QA ISSUES (JSON):
+{issues_feedback}
+
+Fix priority:
+1. Correct every "fact_mismatches" entry so the value matches the INPUT text (verbatim copy only).
+2. Delete every "fabrications" entry — remove invented numbers, credentials, or claims not in the input.
+3. Fix formatting issues listed in "format_issues".
+4. Preserve the parts that were already correct.
+
+ABSOLUTE PROHIBITION: Do not generate any sentence or phrase that is not present verbatim in the input text.
+
+Previous output (for reference only — do NOT copy its mistakes):
+---
+{previous_output}
+---
+"""
+
+    return f"""You are a technical resume formatter. Your task is to reorganize and format the already-PII-redacted resume below into clean Markdown.
+
+【GOLDEN RULE】
+Every bullet point and description must be a verbatim copy of the input text.
+You may only change: section order, Markdown syntax, date format, and skill categorization.
+You may NOT add, invent, paraphrase, summarize, or embellish any content.
+
+【1. SECTION ORDER】
+
+Reorganize into this order (include only sections that exist in the input):
+1. **Header** (name, location, visa status, key credentials — only what is present in the input)
+2. **Experience** (reverse chronological order)
+3. **Skills**
+4. **Education**
+5. **Certifications** (if present)
+6. **Language Proficiency** (if present)
+7. Any other sections present in the input
+
+【2. FORMATTING RULES】
+
+- Use `##` for major section headings, `###` for sub-headings (company names, job titles)
+- Use `-` bullet points for listing items
+- **Bold** numerical achievements and metrics (e.g., **5M JPY**, **50% increase**, **20-person team**)
+- **Date format**: Standardize all dates to "MMM YYYY" (e.g., "Apr 2022", "Jan 2020").
+  Convert other formats (2022/04, 04/2022, 2022年4月) to this standard.
+  Do NOT change the year or month values — only reformat the string representation.
+- Separate sections with blank lines
+
+【3. SKILLS CATEGORIZATION】
+
+Group skills into logical categories. Suggested categories (use only those relevant to the candidate):
+- Languages
+- Frameworks & Libraries
+- Data & AI/ML
+- Infrastructure & DevOps
+- Cloud & Platforms
+- Mobile & Frontend
+- IT Strategy & Security
+
+Rules:
+- Each skill must appear in exactly ONE category — no duplicates across categories
+- Only include skills that are present in the input text
+- Do NOT add skills that are not mentioned in the input
+- Omit empty categories entirely
+- Use a Markdown table or bullet list — whichever is already more consistent with the input
+
+【4. ABSOLUTE PROHIBITIONS】
+
+- Do NOT write a Professional Summary, Objective, or About Me section
+  (If the input contains no such section, the output must not have one either)
+- Do NOT add any new sentences, phrases, or descriptive content
+- Do NOT paraphrase or rewrite any bullet point — copy verbatim
+- Do NOT translate any part of the text (Japanese stays Japanese, English stays English)
+- Do NOT use subjective adjectives: seasoned, passionate, driven, exceptional, rare, unique, outstanding
+- Do NOT change any numbers, dates (year/month values), company names, or credential names
+  beyond the date format standardization defined above
+- Do NOT add section headings for sections that do not exist in the input
+
+【INPUT (PII-redacted resume)】
+{redacted_text}
+{feedback_block}
+【OUTPUT】
+Output the formatted resume as clean Markdown. Every content word must come verbatim from the input.
+"""
+
+
 def get_resume_pii_removal_prompt(
     resume_text: str,
     previous_output: str = "",
