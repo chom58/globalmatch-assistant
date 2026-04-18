@@ -1594,7 +1594,10 @@ def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
-        config=types.GenerateContentConfig(max_output_tokens=max_tokens),
+        config=types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
     )
     return response.text or ""
 
@@ -1608,7 +1611,10 @@ def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
     stream = client.models.generate_content_stream(
         model="gemini-2.5-flash",
         contents=prompt,
-        config=types.GenerateContentConfig(max_output_tokens=max_tokens),
+        config=types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        ),
     )
     for chunk in stream:
         text = getattr(chunk, "text", None)
@@ -1637,6 +1643,7 @@ def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 8192) -> 
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     max_output_tokens=max_tokens,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )
             content = (response.text or "{}").strip()
