@@ -2319,10 +2319,52 @@ def run_resume_transform_loop(
     return current_output, iterations, passed
 
 
+def _render_verification_step(v: dict) -> None:
+    """検証ステップ 1 件分の issue リストを描画する内部ヘルパー。"""
+    issue_rendered = False
+
+    for leak in v.get("pii_leaks") or []:
+        issue_rendered = True
+        st.markdown(
+            f"- 🔴 {t('pii_v_leak')} "
+            f"[`{leak.get('type', '?')}`]: "
+            f"`{leak.get('text', '')}`"
+        )
+    for mm in v.get("fact_mismatches") or []:
+        issue_rendered = True
+        gen_val = mm.get('generated') or mm.get('anonymized') or ''
+        st.markdown(
+            f"- 🟡 {t('pii_v_mismatch')} "
+            f"[`{mm.get('field', '?')}`]: "
+            f"{t('pii_v_original')}「{mm.get('original', '')}」 → "
+            f"{t('pii_v_anonymized')}「{gen_val}」 "
+            f"({mm.get('issue', '')})"
+        )
+    for miss in v.get("missing_facts") or []:
+        issue_rendered = True
+        st.markdown(
+            f"- 🟠 {t('pii_v_missing')} "
+            f"[`{miss.get('field', '?')}`]: "
+            f"「{miss.get('original', '')}」"
+        )
+    for fab in v.get("fabrications") or []:
+        issue_rendered = True
+        gen_val = fab.get('generated') or fab.get('anonymized') or ''
+        st.markdown(
+            f"- 🔵 {t('pii_v_fabricated')} "
+            f"[`{fab.get('field', '?')}`]: "
+            f"「{gen_val}」"
+        )
+
+    if not issue_rendered and v.get("passed"):
+        st.markdown(f"- {t('pii_v_all_clear')}")
+
+
 def render_verification_details(iterations: list[dict], key_suffix: str = "") -> None:
     """検証結果のアコーディオンUIを描画する共通関数。
 
-    PII削除・最適化・翻訳など全ての検証機能で同じ見た目を提供する。
+    表示は「最終結果の残存 issue」のみ既定で展開し、過去の全試行は入れ子の
+    expander に折り畳む。最終結果が合格済みなら全体を閉じる。
     """
     if not iterations:
         return
@@ -2332,54 +2374,27 @@ def render_verification_details(iterations: list[dict], key_suffix: str = "") ->
     label = t("pii_verify_details_label").format(icon=icon, iters=len(iterations))
 
     with st.expander(label, expanded=not last_v.get("passed")):
-        for step in iterations:
-            v = step["verification"]
-            step_icon = "✅" if v.get("passed") else "⚠️"
-            st.markdown(
-                f"**{step_icon} {t('pii_iter_label').format(n=step['iter'])}** — "
-                f"{v.get('summary') or ''}"
-            )
+        # 最終結果の summary と残存 issue のみを目立たせる
+        st.markdown(
+            f"**{icon} {t('pii_iter_final_label')}** — "
+            f"{last_v.get('summary') or ''}"
+        )
+        _render_verification_step(last_v)
 
-            issue_rendered = False
-
-            for leak in v.get("pii_leaks") or []:
-                issue_rendered = True
-                st.markdown(
-                    f"- 🔴 {t('pii_v_leak')} "
-                    f"[`{leak.get('type', '?')}`]: "
-                    f"`{leak.get('text', '')}`"
-                )
-            for mm in v.get("fact_mismatches") or []:
-                issue_rendered = True
-                gen_val = mm.get('generated') or mm.get('anonymized') or ''
-                st.markdown(
-                    f"- 🟡 {t('pii_v_mismatch')} "
-                    f"[`{mm.get('field', '?')}`]: "
-                    f"{t('pii_v_original')}「{mm.get('original', '')}」 → "
-                    f"{t('pii_v_anonymized')}「{gen_val}」 "
-                    f"({mm.get('issue', '')})"
-                )
-            for miss in v.get("missing_facts") or []:
-                issue_rendered = True
-                st.markdown(
-                    f"- 🟠 {t('pii_v_missing')} "
-                    f"[`{miss.get('field', '?')}`]: "
-                    f"「{miss.get('original', '')}」"
-                )
-            for fab in v.get("fabrications") or []:
-                issue_rendered = True
-                gen_val = fab.get('generated') or fab.get('anonymized') or ''
-                st.markdown(
-                    f"- 🔵 {t('pii_v_fabricated')} "
-                    f"[`{fab.get('field', '?')}`]: "
-                    f"「{gen_val}」"
-                )
-
-            if not issue_rendered and v.get("passed"):
-                st.markdown(f"- {t('pii_v_all_clear')}")
-
-            if step["iter"] < len(iterations):
-                st.divider()
+        # 過去の試行は折り畳んでノイズを減らす
+        if len(iterations) > 1:
+            history_label = t("pii_iter_history_label").format(n=len(iterations) - 1)
+            with st.expander(history_label, expanded=False):
+                for step in iterations[:-1]:
+                    v = step["verification"]
+                    step_icon = "✅" if v.get("passed") else "⚠️"
+                    st.markdown(
+                        f"**{step_icon} {t('pii_iter_label').format(n=step['iter'])}** — "
+                        f"{v.get('summary') or ''}"
+                    )
+                    _render_verification_step(v)
+                    if step["iter"] < len(iterations) - 1:
+                        st.divider()
 
 
 def stream_to_container(api_key: str, prompt: str, container=None):
@@ -4112,61 +4127,10 @@ def main():
 
                 # 精度検証の詳細パネル
                 if st.session_state.get('resume_pii_iterations'):
-                    iterations = st.session_state['resume_pii_iterations']
-                    last_v = iterations[-1]["verification"]
-                    verify_icon = "✅" if last_v.get("passed") else "⚠️"
-                    expander_label = t("pii_verify_details_label").format(
-                        icon=verify_icon,
-                        iters=len(iterations),
+                    render_verification_details(
+                        st.session_state['resume_pii_iterations'],
+                        key_suffix="pii",
                     )
-
-                    with st.expander(expander_label, expanded=not last_v.get("passed")):
-                        for step in iterations:
-                            v = step["verification"]
-                            step_icon = "✅" if v.get("passed") else "⚠️"
-                            st.markdown(
-                                f"**{step_icon} {t('pii_iter_label').format(n=step['iter'])}** — "
-                                f"{v.get('summary') or ''}"
-                            )
-
-                            issue_rendered = False
-
-                            for leak in v.get("pii_leaks") or []:
-                                issue_rendered = True
-                                st.markdown(
-                                    f"- 🔴 {t('pii_v_leak')} "
-                                    f"[`{leak.get('type', '?')}`]: "
-                                    f"`{leak.get('text', '')}`"
-                                )
-                            for mm in v.get("fact_mismatches") or []:
-                                issue_rendered = True
-                                st.markdown(
-                                    f"- 🟡 {t('pii_v_mismatch')} "
-                                    f"[`{mm.get('field', '?')}`]: "
-                                    f"{t('pii_v_original')}「{mm.get('original', '')}」 → "
-                                    f"{t('pii_v_anonymized')}「{mm.get('anonymized', '')}」 "
-                                    f"({mm.get('issue', '')})"
-                                )
-                            for miss in v.get("missing_facts") or []:
-                                issue_rendered = True
-                                st.markdown(
-                                    f"- 🟠 {t('pii_v_missing')} "
-                                    f"[`{miss.get('field', '?')}`]: "
-                                    f"「{miss.get('original', '')}」"
-                                )
-                            for fab in v.get("fabrications") or []:
-                                issue_rendered = True
-                                st.markdown(
-                                    f"- 🔵 {t('pii_v_fabricated')} "
-                                    f"[`{fab.get('field', '?')}`]: "
-                                    f"「{fab.get('anonymized', '')}」"
-                                )
-
-                            if not issue_rendered and v.get("passed"):
-                                st.markdown(f"- {t('pii_v_all_clear')}")
-
-                            if step["iter"] < len(iterations):
-                                st.divider()
 
                 # ファーストネームをタイトル・ファイル名に使用
                 _pii_first = extract_first_name(st.session_state['resume_pii_result'])

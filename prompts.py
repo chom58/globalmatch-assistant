@@ -589,6 +589,27 @@ Do NOT rewrite, rephrase, summarize, translate, restructure, or embellish any pa
 - Do NOT add Markdown if it is not already present
 - Do NOT add blank lines, headers, or separators beyond what already exists
 
+【4. NO-INFERENCE RULE (critical)】
+
+Never infer or invent facts from indirect signals. Specifically:
+
+- **Language proficiency**: Only keep language level statements that appear verbatim in the input.
+  If the input does NOT explicitly state Japanese/English/other language ability, do NOT add a Language
+  section. Do NOT assume the candidate speaks Japanese just because they live/work in Japan.
+  Do NOT assume the candidate speaks English just because the resume is written in English.
+- **Visa status**: Only keep if explicitly stated in the input. Do NOT guess from nationality, location,
+  or employment history. Do NOT write "要確認" / "TBD" / "unknown" — simply omit.
+- **Years of experience (total)**: Do NOT compute or estimate a total from employment dates.
+  Only keep a total-years statement if the input itself says so verbatim.
+- **Skill proficiency / level (Beginner/Intermediate/Advanced)**: Do NOT assign levels.
+  Do NOT add "years of experience per skill" unless the input explicitly states it for that skill.
+- **Current seniority label (Junior/Senior/Lead/Manager)**: Do NOT add unless the input states it verbatim.
+  Job titles that already appear in the Experience section are allowed but do NOT summarize them into a new label.
+- **Location / residency**: Do NOT infer from company addresses or university country.
+  Only keep the location if the candidate explicitly states where they live.
+
+When in doubt: OMIT the line entirely. Silence is safer than guessing.
+
 【INPUT RESUME】
 {resume_text}
 {feedback_block}
@@ -694,6 +715,25 @@ Rules:
 - Do NOT change any numbers, dates (year/month values), company names, or credential names
   beyond the date format standardization defined above
 - Do NOT add section headings for sections that do not exist in the input
+
+【5. NO-INFERENCE RULE (critical)】
+
+Never infer or invent facts from indirect signals. Specifically:
+
+- **Language proficiency**: Include a Language section ONLY if the input explicitly states
+  language levels (e.g., "Japanese: N1", "English: business"). Do NOT assume Japanese ability
+  from living/working in Japan. Do NOT assume English ability from resume language.
+- **Visa status**: Include ONLY if explicitly stated in the input. Do NOT guess from nationality,
+  location, or company history. Never write "要確認" / "TBD" / "unknown" — simply omit the field.
+- **Total years of experience**: Do NOT compute or estimate from dates. Only include if the input
+  states a total-years value verbatim.
+- **Skill proficiency (Beginner/Intermediate/Advanced) or years-per-skill**: Do NOT assign levels
+  or experience years to individual skills. If the input lists bare skill names, output bare skill names.
+  No tables like `Python | 2年 | Intermediate` unless the input already contains them.
+- **Seniority label (Junior/Senior/Lead)**: Do NOT add unless the input states it verbatim.
+- **Location / residency**: Do NOT infer from company or university location.
+
+When in doubt: OMIT the section entirely. Silence is safer than guessing.
 
 【INPUT (PII-redacted resume)】
 {redacted_text}
@@ -897,10 +937,36 @@ Return a SINGLE JSON object (no prose, no markdown fences, no explanation) with 
 }}
 
 STRICT RULES
-- pii_leaks: flag any remaining email, phone number, detailed street address, postal code, personal URL (LinkedIn / GitHub / blog / portfolio / Twitter), last/family name, date of birth, age, gender, nationality, or reference person (name / contact). First name alone is allowed. Company, university, and project names are allowed.
-- fact_mismatches: a concrete fact (company name, job title, period, amount, percentage, headcount, certification name) differs between the two documents. Minor rewording of bullet wording is NOT a mismatch.
-- missing_facts: a concrete fact present in the original but absent from the anonymized output. Do NOT flag the removal of "Objective / Summary / Profile / References / Personal Attributes" sections — those are intentionally dropped.
-- fabrications: a specific number, company, credential, accomplishment, or metric that appears in the anonymized output but cannot be found in the original. Phrases like "Led team" without a number are NOT fabrications.
+- pii_leaks:
+  - Flag actual leaks: emails, phone numbers, detailed street addresses, postal codes,
+    personal URLs (`linkedin.com/...`, `github.com/...`, blog URLs, portfolio URLs, Twitter/X URLs),
+    last/family names, dates of birth, ages, genders, nationalities, and reference-person names/contacts.
+  - First name alone is allowed. Company, university, and project names are allowed.
+  - **Do NOT flag** the bare word "LinkedIn" / "GitHub" / "Twitter" when used as a descriptive label
+    without an actual URL — only flag if the text contains the domain (e.g. `linkedin.com/...`).
+  - **Do NOT flag** the `type` "linkedin" / "github" unless an actual URL is present.
+- fact_mismatches:
+  - Flag ONLY when a concrete fact (company name, job title, period, amount, percentage, headcount,
+    certification name) has DIFFERENT values between the two documents.
+  - **Identity check first**: if the `original` value and the `anonymized` value are identical strings
+    (case-insensitive, trimmed), it is NOT a mismatch — exclude it.
+  - Skill-name identity: "Python" vs "Python" is NOT a mismatch. If the output adds metadata like
+    "Python | 2年 | Intermediate" to a bare "Python", classify this as a **fabrication** (added
+    unsupported claim), NOT a mismatch.
+  - Date-format rewrites: "2022/04" vs "Apr 2022" is NOT a mismatch (same year-month).
+  - Minor rewording of bullet text is NOT a mismatch.
+- missing_facts:
+  - A concrete fact present in the original but absent from the anonymized output.
+  - Do NOT flag the removal of "Objective / Summary / Profile / References / Personal Attributes" sections.
+  - Do NOT flag "language" or "visa" as missing when the original did NOT explicitly state them
+    (do not demand the output invent what the original lacked).
+- fabrications:
+  - A specific number, company, credential, accomplishment, skill-level (Beginner/Intermediate/Advanced),
+    years-per-skill, language-level, visa status, or seniority label that appears in the anonymized
+    output but cannot be found verbatim (or as a clear equivalent) in the original.
+  - Phrases like "Led team" without a number are NOT fabrications (too generic).
+  - Any inference-based claim — language ability inferred from residency, English level inferred from
+    resume language, skill level inferred from job title — IS a fabrication.
 - If a category has no issues, use an empty array [].
 - Set "passed" to true ONLY when pii_leaks, fact_mismatches, missing_facts, and fabrications are all empty arrays.
 - Output ONLY the JSON object — no surrounding text, no ``` fences.
