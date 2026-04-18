@@ -1586,13 +1586,13 @@ def _notify_gemini_fallback() -> None:
 
 
 def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
-    """Gemini 2.0 Flash でテキスト生成（フォールバック用）"""
+    """Gemini 2.5 Flash でテキスト生成（フォールバック用）"""
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(max_output_tokens=max_tokens),
     )
@@ -1600,13 +1600,13 @@ def _call_gemini_api(api_key: str, prompt: str, max_tokens: int = 4096) -> str:
 
 
 def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
-    """Gemini 2.0 Flash でストリーミング生成（フォールバック用）"""
+    """Gemini 2.5 Flash でストリーミング生成（フォールバック用）"""
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
     stream = client.models.generate_content_stream(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(max_output_tokens=max_tokens),
     )
@@ -1617,13 +1617,13 @@ def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
 
 
 def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dict:
-    """Gemini 2.0 Flash で JSON 構造化出力を取得（フォールバック用）"""
+    """Gemini 2.5 Flash で JSON 構造化出力を取得（フォールバック用）"""
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
