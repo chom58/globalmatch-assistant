@@ -9,6 +9,7 @@ import streamlit.components.v1
 from groq import Groq
 import time
 import re
+import calendar
 import html as html_module
 from datetime import datetime
 import pdfplumber
@@ -1613,6 +1614,7 @@ def _call_gemini_api_stream(api_key: str, prompt: str, max_tokens: int = 4096):
         contents=prompt,
         config=types.GenerateContentConfig(
             max_output_tokens=max_tokens,
+            temperature=0,
             thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
@@ -1643,6 +1645,7 @@ def _call_gemini_api_json(api_key: str, prompt: str, max_tokens: int = 8192) -> 
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     max_output_tokens=max_tokens,
+                    temperature=0,
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )
@@ -1766,6 +1769,7 @@ def call_groq_api_stream(api_key: str, prompt: str):
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=4096,
+                temperature=0,
                 timeout=60,
                 stream=True
             )
@@ -1838,6 +1842,7 @@ def call_groq_api_json(api_key: str, prompt: str, max_tokens: int = 3072) -> dic
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
+                temperature=0,
                 timeout=60,
                 response_format={"type": "json_object"},
             )
@@ -1965,6 +1970,233 @@ def regex_pii_scan(text: str) -> list[dict]:
             seen.add(key)
             findings.append({"type": pii_type, "text": value, "severity": "high"})
     return findings
+
+
+# ---------------------------------------------------------------------------
+# 決定論的エンティティ比較 (PII 幻覚検出補助)
+# ---------------------------------------------------------------------------
+
+def _normalize_month_year(raw: str):
+    """月+年表記を 'YYYY-MM' 形式に正規化する純粋関数。失敗したら None を返す。
+
+    対応フォーマット:
+    - 2022/04  /  04/2022
+    - Apr 2022 / 2022 Apr
+    - 2022年4月 / 2022年04月
+    """
+    raw = raw.strip()
+
+    # 2022/04 or 04/2022
+    m = re.fullmatch(r"((?:19|20)\d{2})[/\-](\d{1,2})", raw)
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}"
+
+    m = re.fullmatch(r"(\d{1,2})[/\-]((?:19|20)\d{2})", raw)
+    if m:
+        return f"{m.group(2)}-{int(m.group(1)):02d}"
+
+    # Apr 2022 / 2022 Apr (月名3文字 or フル)
+    month_abbrs = {v.lower(): i for i, v in enumerate(calendar.month_abbr) if v}
+    month_names = {v.lower(): i for i, v in enumerate(calendar.month_name) if v}
+    month_map = {**month_abbrs, **month_names}
+
+    m = re.fullmatch(r"([A-Za-z]+)\s+((?:19|20)\d{2})", raw)
+    if m:
+        mn = month_map.get(m.group(1).lower())
+        if mn:
+            return f"{m.group(2)}-{mn:02d}"
+
+    m = re.fullmatch(r"((?:19|20)\d{2})\s+([A-Za-z]+)", raw)
+    if m:
+        mn = month_map.get(m.group(2).lower())
+        if mn:
+            return f"{m.group(1)}-{mn:02d}"
+
+    # 2022年4月 / 2022年04月
+    m = re.search(r"((?:19|20)\d{2})\s*年\s*(\d{1,2})\s*月", raw)
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}"
+
+    return None
+
+
+def extract_resume_entities(text: str) -> dict:
+    """テキストから事実単位の集合を抽出する純粋関数（IO/Streamlit 呼び出し禁止）。
+
+    Returns:
+        {
+            "numbers": set[str],        # 通貨・パーセント・倍率・人数
+            "years": set[str],          # 西暦年
+            "month_years": set[str],    # YYYY-MM 形式に正規化した月年
+            "companies": set[str],      # 組織名トークン（best-effort）
+            "certifications": set[str], # 資格・スコア名
+        }
+    """
+    if not text:
+        return {"numbers": set(), "years": set(), "month_years": set(),
+                "companies": set(), "certifications": set()}
+
+    # ── numbers ──────────────────────────────────────────────────────────────
+    number_patterns = [
+        # 通貨付き: $240K, ¥5M, 5M JPY, $8.1M, 5M JPY
+        r"(?:[\$¥€£]\s?\d[\d,]*(?:\.\d+)?[KMBkmb]?|\d[\d,]*(?:\.\d+)?[KMBkmb]?\s?(?:JPY|USD|EUR|GBP))",
+        # パーセント: 60%, 99.95%
+        r"\d+(?:\.\d+)?%",
+        # 倍率・大規模: 2M+, 240K, 3.5B
+        r"\b\d+(?:\.\d+)?[KMBkmb]\+?\b",
+        # 人数: 18 engineers, 5 junior engineers
+        r"\b\d+\s+(?:engineers?|people|members?|users?|clients?|customers?|teams?)\b",
+    ]
+    numbers: set = set()
+    for pat in number_patterns:
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            numbers.add(re.sub(r"\s+", " ", m.group(0).strip()))
+
+    # ── years ────────────────────────────────────────────────────────────────
+    years: set = set()
+    for m in re.finditer(r"\b((?:19|20)\d{2})\b", text):
+        years.add(m.group(1))
+
+    # ── month_years ──────────────────────────────────────────────────────────
+    month_years: set = set()
+
+    # 候補パターンを列挙して _normalize_month_year に渡す
+    my_patterns = [
+        r"(?:19|20)\d{2}[/\-]\d{1,2}",           # 2022/04
+        r"\d{1,2}[/\-](?:19|20)\d{2}",            # 04/2022
+        r"(?:[A-Za-z]+)\s+(?:19|20)\d{2}",        # Apr 2022
+        r"(?:19|20)\d{2}\s+(?:[A-Za-z]+)",        # 2022 Apr
+        r"(?:19|20)\d{2}\s*年\s*\d{1,2}\s*月",    # 2022年4月
+    ]
+    for pat in my_patterns:
+        for m in re.finditer(pat, text):
+            normalized = _normalize_month_year(m.group(0))
+            if normalized:
+                month_years.add(normalized)
+
+    # ── companies ────────────────────────────────────────────────────────────
+    company_keywords = re.compile(
+        r"\b(?:Inc\.|Ltd\.|Corp\.|Co\.|LLC|LLP|株式会社|University|College|Group|Holdings|Technologies|Solutions|Services)\b",
+        re.IGNORECASE,
+    )
+    companies: set = set()
+    for line in text.splitlines():
+        if company_keywords.search(line):
+            # 行全体を 1 トークンとして保持（空白正規化）
+            token = re.sub(r"\s+", " ", line.strip())
+            if token:
+                companies.add(token)
+
+    # ── certifications ───────────────────────────────────────────────────────
+    cert_patterns = [
+        r"\bCISSP\b", r"\bCPA\b", r"\bPMP\b",
+        r"\bCFA\b", r"\bCMA\b",
+        r"\bAWS\s+(?:Solutions?\s+Architect|Developer|SysOps|DevOps)[^\s,]*",
+        r"\bTOEIC\s+\d{3,4}\b",
+        r"\bJLPT\s+N\d\b",
+        r"\bISO\s+\d+\b",
+    ]
+    certifications: set = set()
+    for pat in cert_patterns:
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            certifications.add(re.sub(r"\s+", " ", m.group(0).strip()))
+
+    return {
+        "numbers": numbers,
+        "years": years,
+        "month_years": month_years,
+        "companies": companies,
+        "certifications": certifications,
+    }
+
+
+def compare_resume_entities(original_text: str, generated_text: str) -> dict:
+    """原文と生成物のエンティティを比較し、捏造・欠落を検出する。
+
+    Returns:
+        {
+            "fabrications": [{"field": str, "anonymized": str}, ...],
+            "missing_facts": [{"field": str, "original": str}, ...],
+        }
+    各リストは最大 20 件。
+    """
+    orig = extract_resume_entities(original_text)
+    gen = extract_resume_entities(generated_text)
+
+    fabrications: list = []
+    missing_facts: list = []
+
+    # ── fabrications 判定 ────────────────────────────────────────────────────
+    # numbers: generated にあって original にない
+    for val in gen["numbers"]:
+        if val not in orig["numbers"]:
+            fabrications.append({"field": "metric", "anonymized": val})
+
+    # month_years: generated にあって original にない
+    for val in gen["month_years"]:
+        if val not in orig["month_years"]:
+            fabrications.append({"field": "period", "anonymized": val})
+
+    # certifications: generated にあって original にない
+    for val in gen["certifications"]:
+        # 大文字小文字正規化で再確認
+        if not any(val.lower() == o.lower() for o in orig["certifications"]):
+            fabrications.append({"field": "certification", "anonymized": val})
+
+    # companies: 部分一致 (generated トークンが original の任意行に含まれるか)
+    for val in gen["companies"]:
+        if not any(val.lower() in o.lower() or o.lower() in val.lower()
+                   for o in orig["companies"]):
+            fabrications.append({"field": "company", "anonymized": val})
+
+    # years はスキップ（表記揺れ・抽出ノイズが多いため誤報回避）
+
+    # ── missing_facts 判定 ───────────────────────────────────────────────────
+    # 年齢っぽい数値を original から除外するためのヘルパー
+    age_context_re = re.compile(
+        r"born|birth|dob|age|\d{1,2}\s*歳|生年", re.IGNORECASE
+    )
+
+    for val in orig["numbers"]:
+        if val not in gen["numbers"]:
+            # 2 桁数値で前後 30 文字に年齢コンテキストがあればスキップ
+            m = re.search(re.escape(val), original_text)
+            if m:
+                ctx_start = max(0, m.start() - 30)
+                ctx_end = min(len(original_text), m.end() + 30)
+                ctx = original_text[ctx_start:ctx_end]
+                if age_context_re.search(ctx):
+                    continue
+            missing_facts.append({"field": "metric", "original": val})
+
+    for val in orig["month_years"]:
+        if val not in gen["month_years"]:
+            missing_facts.append({"field": "period", "original": val})
+
+    for val in orig["certifications"]:
+        if not any(val.lower() == g.lower() for g in gen["certifications"]):
+            missing_facts.append({"field": "certification", "original": val})
+
+    for val in orig["companies"]:
+        if not any(val.lower() in g.lower() or g.lower() in val.lower()
+                   for g in gen["companies"]):
+            missing_facts.append({"field": "company", "original": val})
+
+    # 重複除去と上限
+    def _dedup(lst: list) -> list:
+        seen: set = set()
+        out = []
+        for item in lst:
+            key = (item.get("field"), item.get("anonymized", item.get("original")))
+            if key not in seen:
+                seen.add(key)
+                out.append(item)
+        return out
+
+    return {
+        "fabrications": _dedup(fabrications)[:20],
+        "missing_facts": _dedup(missing_facts)[:20],
+    }
 
 
 def run_resume_transform_loop(
@@ -3615,6 +3847,15 @@ def main():
 
             st.info(t("pii_info"))
 
+            pii_mode = st.radio(
+                t("pii_mode_label"),
+                options=["redact_only", "redact_and_format"],
+                format_func=lambda v: t("pii_mode_redact_only") if v == "redact_only" else t("pii_mode_redact_and_format"),
+                horizontal=True,
+                key="pii_mode",
+                help=t("pii_mode_help"),
+            )
+
             _show_btn_hint(api_key, bool(resume_pii_input))
             process_pii_btn = st.button(
                 t("pii_btn"),
@@ -3649,14 +3890,15 @@ def main():
 
                             for iter_num in range(1, MAX_PII_ITERATIONS + 1):
                                 # 1st: 通常生成 / 2nd以降: フィードバック付き再生成
+                                # 「削除のみ」プロンプトを採用（整形・要約・翻訳を禁止しハルシネーションを抑制）
                                 if iter_num == 1:
                                     status_container.caption(t("pii_ai"))
-                                    prompt = get_resume_pii_removal_prompt(resume_pii_input)
+                                    prompt = get_resume_pii_redaction_only_prompt(resume_pii_input)
                                 else:
                                     status_container.caption(
                                         t("pii_regenerating").format(n=iter_num, max=MAX_PII_ITERATIONS)
                                     )
-                                    prompt = get_resume_pii_removal_prompt(
+                                    prompt = get_resume_pii_redaction_only_prompt(
                                         resume_pii_input,
                                         previous_output=current_output,
                                         issues_feedback=feedback_json,
@@ -3700,6 +3942,32 @@ def main():
                                             verification["pii_leaks"].append(leak)
                                     verification["passed"] = False
 
+                                # 決定論的な事実集合チェック（数値・月年・資格名・社名）
+                                # LLM が創作した数値・日付を Python で突き合わせて検出する最終防衛線
+                                entity_diff = compare_resume_entities(resume_pii_input, current_output)
+                                if entity_diff.get("fabrications"):
+                                    verification.setdefault("fabrications", [])
+                                    existing_fab = {
+                                        (f.get("field"), f.get("anonymized"))
+                                        for f in verification["fabrications"]
+                                    }
+                                    for fab in entity_diff["fabrications"]:
+                                        key = (fab.get("field"), fab.get("anonymized"))
+                                        if key not in existing_fab:
+                                            verification["fabrications"].append(fab)
+                                    verification["passed"] = False
+                                if entity_diff.get("missing_facts"):
+                                    verification.setdefault("missing_facts", [])
+                                    existing_miss = {
+                                        (m.get("field"), m.get("original"))
+                                        for m in verification["missing_facts"]
+                                    }
+                                    for miss in entity_diff["missing_facts"]:
+                                        key = (miss.get("field"), miss.get("original"))
+                                        if key not in existing_miss:
+                                            verification["missing_facts"].append(miss)
+                                    verification["passed"] = False
+
                                 iterations.append({
                                     "iter": iter_num,
                                     "output": current_output,
@@ -3720,6 +3988,67 @@ def main():
                                     ensure_ascii=False,
                                     indent=2,
                                 )
+
+                            # 整形モード: 削除が通った後に 1 回だけ整形パスを走らせる
+                            if (
+                                pii_mode == "redact_and_format"
+                                and iterations
+                                and iterations[-1]["verification"].get("passed")
+                            ):
+                                status_container.caption(t("pii_formatting"))
+                                format_prompt = get_resume_format_prompt(current_output)
+                                format_stream_container = st.empty()
+                                formatted_output = stream_to_container(
+                                    api_key, format_prompt, format_stream_container
+                                )
+                                format_stream_container.empty()
+                                formatted_output = normalize_resume_bullets(formatted_output)
+
+                                status_container.caption(t("pii_format_verifying"))
+                                try:
+                                    fmt_verify_prompt = get_resume_pii_verification_prompt(
+                                        resume_pii_input, formatted_output
+                                    )
+                                    fmt_verification = call_groq_api_json(
+                                        api_key, fmt_verify_prompt
+                                    )
+                                except ValueError as ve:
+                                    st.warning(f"⚠️ {ve}")
+                                    fmt_verification = {
+                                        "passed": False,
+                                        "pii_leaks": [],
+                                        "fact_mismatches": [],
+                                        "missing_facts": [],
+                                        "fabrications": [],
+                                        "summary": "整形検証エラー（結果は未検証）",
+                                    }
+
+                                # 整形結果にも regex + 決定論チェックを再適用
+                                fmt_regex = regex_pii_scan(formatted_output)
+                                if fmt_regex:
+                                    fmt_verification.setdefault("pii_leaks", []).extend(fmt_regex)
+                                    fmt_verification["passed"] = False
+                                fmt_diff = compare_resume_entities(resume_pii_input, formatted_output)
+                                if fmt_diff.get("fabrications"):
+                                    fmt_verification.setdefault("fabrications", []).extend(
+                                        fmt_diff["fabrications"]
+                                    )
+                                    fmt_verification["passed"] = False
+                                if fmt_diff.get("missing_facts"):
+                                    fmt_verification.setdefault("missing_facts", []).extend(
+                                        fmt_diff["missing_facts"]
+                                    )
+                                    fmt_verification["passed"] = False
+
+                                iterations.append({
+                                    "iter": len(iterations) + 1,
+                                    "output": formatted_output,
+                                    "verification": fmt_verification,
+                                    "stage": "format",
+                                })
+
+                                if fmt_verification.get("passed"):
+                                    current_output = formatted_output
 
                             elapsed_time = time.time() - start_time
                             status_container.empty()
