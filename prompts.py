@@ -109,8 +109,8 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 - レジュメに明記されている定量的な実績（あれば）
 - 他の候補者と差別化できる経験の組み合わせ（例：「MLエンジニアリング×大規模プロダクション×マネジメント」）
 
-**キャリアパス**: （例：Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead）
-*（職歴から抽出した1行のキャリア遷移。事実のみ記載）*
+**キャリアパス**: （職歴から抽出した役職名を時系列で矢印連結。原文の役職名をそのまま使用。**以下はフォーマット例であり、候補者が AI/ML 分野でない場合は絶対にこの例を転記しないこと**：[役職1] → [役職2] → [役職3]）
+*（原文の職歴にある役職名のみを使用。存在しない役職や分野は追加しない）*
 
 ## 4. 技術スタック
 | カテゴリ | スキル |
@@ -216,19 +216,19 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 
 ## 正しい出力
 
-✅ OK 1: 代表プロジェクトは必ず各項目を独立した行で `-` で記載
+✅ OK 1: 代表プロジェクトは必ず各項目を独立した行で `-` で記載（**以下はフォーマット構造の例のみ。`[...]` 内の文言は候補者のレジュメから抽出した具体内容に置き換えること。プレースホルダや以下の例文をそのままコピー禁止**）
 ```
-- **課題**: 大規模な教育プロジェクトの運営効率化
-- **解決策**: プロジェクトマネジメントツールの導入、ワークフローの最適化
-- **技術スタック**: Python, Asana, Figma
-- **成果**: プロジェクト期間の短縮、コストの削減
-- **チーム体制**: リーダーとして、10人規模のチームを管理
+- **課題**: [原文から抽出した課題内容]
+- **解決策**: [原文から抽出した解決策]
+- **技術スタック**: [原文に明記された技術のみ]
+- **成果**: [原文に記載された成果・数値]
+- **チーム体制**: [原文に記載されたチーム規模・役割]
 ```
 
-✅ OK 2: 職務経歴の担当業務も各行を `-` で改行
+✅ OK 2: 職務経歴の担当業務も各行を `-` で改行（**以下はフォーマット構造の例のみ**）
 ```
-- 複数の教育プロジェクトを統括
-- 組織の効率化と生徒満足度の向上に貢献
+- [原文から抽出した担当業務1]
+- [原文から抽出した担当業務2]
 ```
 
 ## ルール
@@ -261,7 +261,7 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 
 1. **成果には必ず数値を含める**: ユーザー数、パフォーマンス改善率、コスト削減額、チーム規模など
 2. **AI/ML固有の成果指標も抽出**: モデル精度改善（accuracy, F1スコア等）、推論レイテンシ（p99 latency等）、学習データ規模（トークン数、データ量）、学習コスト削減（GPU時間等）、プロダクション規模（日次リクエスト数等）
-3. **技術スキルには経験年数・習熟度を併記**: **正規雇用（フルタイム/契約社員）の職務経歴の期間のみ**から算出すること。学歴期間（学士・修士・博士）、学術研究、ゼミ・卒業研究、インターン（有償長期フルタイムを除く）、個人プロジェクト、OSS、Kaggle、独学・資格学習は**絶対にカウントに含めない**。職務経歴書に該当技術の使用が明記されている期間のみを対象とし、複数社で並行使用していた場合は期間が重複する部分を二重計上しない。使用期間が不明確なら空欄にする（推測で年数を書かない）。特にAI/ML関連技術は細かく分類
+3. **技術スキルは原文に明示された名称のみをカテゴリ分類**: 経験年数・習熟度ラベル（Expert/Advanced 等）は**一切付与しない**（学生期間混入による捏造防止）。職種や企業ドメインから推測したスキルを追加してはならない。特にAI/ML関連技術は細かく分類して記載する。
 4. **リーダーシップ経験を見逃さない**: メンター、チームリード、採用関与など
 5. **プロジェクトの規模感を記載**: ユーザー数、売上、予算、チーム規模など
 6. **代表プロジェクトの選定**: 職歴の中から最もインパクトのあるプロジェクトを1つ選び、課題→解決策→技術→成果→体制の構造で深掘り
@@ -269,7 +269,7 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 8. **OSS貢献・副業があれば必ず記載**: GitHub、個人プロジェクト、登壇、記事執筆など
 9. **受賞歴・表彰があれば記載**: 社内賞、ハッカソン、競技プログラミングなど
 10. **最近の学習活動を記載**: 資格取得、コース修了、カンファレンス参加など
-11. **キャリアパスの抽出**: 職歴全体を俯瞰し、キャリアの遷移を1行で表現（例：Backend → ML → AI Platform Lead）
+11. **キャリアパスの抽出**: 職歴全体を俯瞰し、原文に記載された役職名を時系列で矢印連結して 1 行で表現する。**原文に存在しない分野（AI/ML、Platform Lead 等）を例文から追加してはならない**
 12. **語学力の解釈**: 単なる資格名（JLPT N3, TOEIC等）だけでなく、実務でどう活用しているか（仕様書作成、海外ベンダー調整、クライアントとの折衝等）を文脈から読み取って補足する
 13. **最新トレンドの反映**: AIツール（GitHub Copilot, ChatGPT API等）の活用やモダンな開発手法（Agile, Scrum, DevOps, CI/CD, IaC等）の経験があれば必ず強調する
 14. **実績の抽象化と具体化のバランス**: 守秘義務に触れない範囲で、数字や技術名を用いて「何ができるか」を具体化する。抽象的すぎる表現（「様々なプロジェクトに参画」）は避け、規模・技術・成果を含めた具体的な記述に変換する
@@ -361,8 +361,8 @@ Maintain the resume in English with this standardized structure:
 - Notable quantified achievements (only if explicitly stated in the resume)
 - Differentiating combination of experiences (e.g., "ML engineering × large-scale production × team management")
 
-**Career Path**: (e.g., Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead)
-*(One-line career progression extracted from work history — facts only)*
+**Career Path**: (Chain the job titles from the resume in chronological order with arrows. **Do NOT copy the formatting example; use only job titles present in the resume**: [Title 1] → [Title 2] → [Title 3])
+*(One-line career progression extracted from work history — use only titles that appear verbatim in the resume)*
 
 ## 4. Technical Skills
 | Category | Skills |
@@ -468,7 +468,7 @@ Pay special attention to the following:
 8. **Extract OSS contributions & side projects**: GitHub, personal projects, speaking, writing, etc.
 9. **Include awards & recognition**: Company awards, hackathons, competitive programming, etc.
 10. **Capture recent learning activities**: Certifications, courses, conference attendance, etc.
-11. **Extract career path**: Summarize the overall career progression in one line (e.g., Backend → ML → AI Platform Lead)
+11. **Extract career path**: Chain the resume's job titles in chronological order with arrows to form a one-line career progression. Use ONLY titles that appear verbatim in the resume — do NOT add domains or titles from the formatting example.
 12. **Interpret language proficiency**: Go beyond just listing certification names (JLPT N3, TOEIC, etc.). Read from context how the language is actually used in practice (e.g., writing specifications, coordinating with overseas vendors, client-facing meetings)
 13. **Highlight modern trends**: If the candidate uses AI tools (GitHub Copilot, ChatGPT API, etc.) or modern development practices (Agile, Scrum, DevOps, CI/CD, IaC, etc.), always emphasize these
 14. **Balance abstraction and specificity**: Use numbers and technology names to concretize "what they can do" within the bounds of confidentiality. Avoid overly abstract expressions (e.g., "participated in various projects") — instead, include scale, technology, and outcomes
@@ -1165,6 +1165,23 @@ Only flag missing_facts when a HARD FACT explicitly present in ORIGINAL (a compa
 
 INFERRED CONTENT (optimize_* only)
 The source prompt PROHIBITS the LLM from inferring or synthesizing content not in ORIGINAL. If GENERATED contains inferred content (e.g., "日本語レベル: 日常会話レベル（東京都居住経験に基づく推定）", "英語レベル: ビジネスレベル（PwC経験から推定）", made-up proficiency labels, invented year counts), DO flag them as fabrications — the prompt explicitly forbids this and the LLM should have omitted these rows instead.
+
+TEMPLATE STRUCTURE — NOT FABRICATIONS (optimize_* only)
+The source prompt defines a fixed document skeleton. The following are STRUCTURAL ELEMENTS of the template itself and MUST NOT be flagged as fabrications, even if they don't literally appear in ORIGINAL:
+- **Section headings** (e.g., "## リーダーシップ・ソフトスキル", "## 研究実績・学術活動", "## オープンソース・副業プロジェクト", "## 受賞歴・表彰", "## 継続的学習", "## Leadership & Soft Skills", "## Research & Academic Activities")
+- **Table category names in the skills table** (e.g., "プログラミング言語", "AI/MLフレームワーク", "モデル種別・専門領域", "MLOps/推論基盤", "データ基盤", "フレームワーク（Web等）", "データベース", "インフラ/クラウド", "ツール/その他", "Programming Languages", "AI/ML Frameworks", "Model Types & Domains", "MLOps & Inference", "Data Infrastructure", "Cloud & Infrastructure")
+- **Table column headers** (e.g., "項目", "内容", "カテゴリ", "スキル", "Item", "Details", "Category", "Skills")
+- **Sub-section bullet labels** that serve as organizational structure (e.g., "- メンタリング・チーム管理経験", "- クロスファンクショナルチームでの協業", "- 技術プレゼンテーション・登壇", "- 論文発表", "- OSS貢献", "- 個人プロジェクト", "- 技術コミュニティ活動") when they introduce a category rather than state a specific candidate claim
+- **Captions and format guides** like "*Proficiency Levels: Expert / Advanced ...*", "*Omit categories with no relevant information*"
+
+Flag as fabrication ONLY when GENERATED asserts a SPECIFIC CONCRETE CLAIM not supported by ORIGINAL:
+- A specific company, product, university name
+- A specific number (team size, percentage, dollar amount, user count)
+- A specific credential, certification, award, paper title
+- A specific invented achievement ("led 10-person team", "reduced cost by 40%") not in ORIGINAL
+- An inferred proficiency label bound to a specific skill (e.g., "Python: Expert")
+
+If a section heading or category name appears in GENERATED without candidate-specific content underneath, that's a STRUCTURAL artifact of the template — NOT a fabrication. The source prompt may have instructed the LLM to omit empty sections, but leaving them in is a formatting issue, not a factual fabrication.
 
 STRUCTURAL
 {structural_rule}
