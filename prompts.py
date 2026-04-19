@@ -72,8 +72,9 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
    - 習熟度・経験年数は原文に明示があるときのみ記入
 4. **該当情報が無いセクションは見出しごと削除**する（例：OSS活動の記載がなければ「## 10. オープンソース・副業プロジェクト」見出しを出さない）
 5. **候補者スナップショットの行**は原文に根拠があるもののみ記載：
-   - 非エンジニア候補の場合、「エンジニア歴」「直近の注力技術」行は省略
-   - 「現在のレベル」は明確な役職名が原文にあるときのみ記載（推測禁止）
+   - 非エンジニア候補の場合、「直近の注力技術」行は省略
+   - 「直近の役職」は原文に明記された役職名をそのままコピーする（正規化・推測禁止）
+   - 原文に役職名が無い場合は「直近の役職」行ごと省略
 6. **語学・ビザ**は原文に記載がある項目のみ記載：
    - JLPT・TOEIC等のスコア記載がなければ「日本語レベル」行を省略
    - ビザ記載がなければ「ビザステータス」行を省略
@@ -97,47 +98,40 @@ def get_resume_optimization_prompt(resume_text: str, anonymize: str) -> str:
 | 項目 | 内容 |
 |------|------|
 | 専門領域 | （例：LLM / NLP / RAGパイプライン、バックエンド / マイクロサービス等。レジュメの経歴から判断） |
-| エンジニア歴 | （総年数。AI/ML経験があれば「12年（うちAI/ML 7年）」のように内訳も記載） |
-| 現在のレベル | （ジュニア / ミドル / シニア / リード / マネージャー。直近の役職・経験年数から推定） |
+| 直近の役職 | （原文に明記された役職名を**そのままコピー**。例：「Senior ML Engineer」「Backend Engineer」「Team Lead」。ジュニア／ミドル／シニア等への正規化・翻訳・推測は禁止。役職名の記載が無ければ行ごと省略） |
 | 直近の注力技術 | （直近1-2年の職歴で使用している主要技術を3-5個） |
 | 所在地 | （レジュメ記載の居住国・都市。記載なしの場合は「記載なし」） |
 
 ## 3. Professional Summary（経歴サマリ）
-*（3〜5行で、候補者の最大の「売り」を記載。経験年数×技術×強みの掛け合わせで市場価値を表現する。ただし事実に基づくこと。「優秀」「卓越」等の主観的形容は使わず、具体的な数字・技術名・実績で説得力を持たせる）*
-- 総経験年数と主な役職
-- 主要な技術領域・業界
+*（3〜5行で、候補者の最大の「売り」を記載。技術×強み×実績の掛け合わせで市場価値を表現する。ただし事実に基づくこと。「優秀」「卓越」等の主観的形容は使わず、具体的な技術名・実績で説得力を持たせる。**総経験年数の記載は禁止**：学生期間混入による捏造防止のため、代わりに「直近の役職」と主要技術で表現する）*
+- 直近の役職と主な経験業界（原文の役職名をそのまま使用）
+- 主要な技術領域
 - レジュメに明記されている定量的な実績（あれば）
 - 他の候補者と差別化できる経験の組み合わせ（例：「MLエンジニアリング×大規模プロダクション×マネジメント」）
 
 **キャリアパス**: （例：Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead）
 *（職歴から抽出した1行のキャリア遷移。事実のみ記載）*
 
-## 4. 技術スタック・習熟度
-| カテゴリ | スキル | 経験年数 | 習熟度 |
-|---------|--------|----------|--------|
-| プログラミング言語 | | | |
-| AI/MLフレームワーク | （PyTorch, TensorFlow, JAX, Hugging Face等） | | |
-| モデル種別・専門領域 | （LLM, CV, NLP, RL, 推薦, RAG等） | | |
-| MLOps/推論基盤 | （MLflow, Kubeflow, SageMaker, TensorRT等） | | |
-| データ基盤 | （Spark, Airflow, BigQuery等） | | |
-| フレームワーク（Web等） | | | |
-| データベース | | | |
-| インフラ/クラウド | | | |
-| ツール/その他 | | | |
+## 4. 技術スタック
+| カテゴリ | スキル |
+|---------|--------|
+| プログラミング言語 | |
+| AI/MLフレームワーク | （PyTorch, TensorFlow, JAX, Hugging Face等） |
+| モデル種別・専門領域 | （LLM, CV, NLP, RL, 推薦, RAG等） |
+| MLOps/推論基盤 | （MLflow, Kubeflow, SageMaker, TensorRT等） |
+| データ基盤 | （Spark, Airflow, BigQuery等） |
+| フレームワーク（Web等） | |
+| データベース | |
+| インフラ/クラウド | |
+| ツール/その他 | |
 
-*習熟度: Expert（専門家レベル）/ Advanced（上級）/ Intermediate（中級）/ Beginner（初級）*
 *※ 該当カテゴリに情報がない場合はその行を省略*
 
-**経験年数の算出ルール（厳守）:**
-- **正規雇用（フルタイム/契約社員）の職務経歴のみを対象**とする。以下は**絶対に含めない**:
-  - 学歴期間（学士・修士・博士課程）、学術研究、授業・ゼミ・卒業研究
-  - インターンシップ（明示的にフルタイム雇用として扱える長期有償インターンを除く）
-  - 個人プロジェクト、サイドプロジェクト、OSS貢献、Kaggle、ハッカソン
-  - 資格取得のための学習期間、独学、オンラインコース受講
-- 職務経歴書に**明示的にその技術を使用した記載がある期間のみ**カウントする（推測で加算しない）
-- 同じ技術を複数社で使用していた場合、**期間が重複する部分は二重計上しない**（実年数で算出）
-- 技術の使用期間が明確でない場合は空欄にする（推測で「◯年」と書かない）
-- ブランク期間（離職期間、育休等）はカウントに含めない
+**スキル記載ルール（厳守）:**
+- スキル名のみを記載する。経験年数は併記しない（学生期間混入による捏造防止のため）
+- 習熟度ラベル（Expert / Advanced / Intermediate / Beginner / 専門家 / 上級 / 中級 / 初級）は、原文にそのスキルと併記されている場合のみ保持。原文に無ければ一切付与しない
+- 各スキルは最も該当するカテゴリに 1 度だけ記載（重複禁止）
+- 職種や企業ドメインから推測したスキルは追加しない（原文に明示されたもののみ）
 
 ## 5. 語学・ビザ
 - **日本語レベル**: （JLPTレベルだけでなく、実務でどう活用しているかを文脈から読み取って補足。例：「JLPT N2。日本語での仕様書作成、クライアントとの要件定義MTGに参加」「JLPT N3。日常会話レベル、技術文書は英語メイン」。日本滞在歴があれば記載）
@@ -356,14 +350,13 @@ Maintain the resume in English with this standardized structure:
 | Item | Details |
 |------|---------|
 | Specialization | (e.g., LLM / NLP / RAG Pipelines, Backend / Microservices. Determine from resume experience) |
-| Engineering Experience | (Total years. If AI/ML experience exists, break down: e.g., "12 years (7 years in AI/ML)") |
-| Current Level | (Junior / Mid / Senior / Lead / Manager. Estimate from most recent role and years of experience) |
+| Most Recent Role | (Copy the job title **verbatim** from the resume. e.g., "Senior ML Engineer", "Backend Engineer", "Team Lead". Do NOT normalize to Junior/Mid/Senior/Lead/Manager. Do NOT translate or paraphrase. If no job title is stated in the resume, omit this row entirely) |
 | Recent Focus Technologies | (3-5 key technologies used in the last 1-2 years of work history) |
 | Location | (Country/city from resume. "Not specified" if not mentioned) |
 
 ## 3. Professional Summary
-*(3-5 lines highlighting the candidate's key selling points: years of experience × technology × strengths. Express market value through the combination of these factors. Use specific numbers, technology names, and achievements for persuasiveness — but no subjective adjectives like "seasoned", "exceptional", or "passionate". No characterizing skills as "rare" or "unique".)*
-- Total years of experience and primary job titles held
+*(3-5 lines highlighting the candidate's key selling points through the combination of role × technology × strengths. Use specific technology names and achievements for persuasiveness — no subjective adjectives like "seasoned", "exceptional", or "passionate". No characterizing skills as "rare" or "unique". **Do NOT state total years of experience**: stating totals often leads to hallucination by mixing student years with professional years. Express seniority through job titles held instead.)*
+- Primary job titles held (copy verbatim from the resume)
 - Key technical domains and industries worked in
 - Notable quantified achievements (only if explicitly stated in the resume)
 - Differentiating combination of experiences (e.g., "ML engineering × large-scale production × team management")
@@ -371,33 +364,26 @@ Maintain the resume in English with this standardized structure:
 **Career Path**: (e.g., Backend Engineer → ML Engineer → Senior ML Engineer → AI Platform Lead)
 *(One-line career progression extracted from work history — facts only)*
 
-## 4. Technical Skills & Proficiency
-| Category | Skills | Years of Experience | Proficiency Level | Last Used |
-|----------|--------|---------------------|-------------------|-----------|
-| Programming Languages | | | | |
-| AI/ML Frameworks | (PyTorch, TensorFlow, JAX, Hugging Face, etc.) | | | |
-| Model Types & Domains | (LLM, CV, NLP, RL, Recommendation, RAG, etc.) | | | |
-| MLOps & Inference | (MLflow, Kubeflow, SageMaker, TensorRT, etc.) | | | |
-| Data Infrastructure | (Spark, Airflow, BigQuery, etc.) | | | |
-| Frameworks (Web, etc.) | | | | |
-| Databases | | | | |
-| Cloud & Infrastructure | | | | |
-| Tools & Others | | | | |
+## 4. Technical Skills
+| Category | Skills |
+|----------|--------|
+| Programming Languages | |
+| AI/ML Frameworks | (PyTorch, TensorFlow, JAX, Hugging Face, etc.) |
+| Model Types & Domains | (LLM, CV, NLP, RL, Recommendation, RAG, etc.) |
+| MLOps & Inference | (MLflow, Kubeflow, SageMaker, TensorRT, etc.) |
+| Data Infrastructure | (Spark, Airflow, BigQuery, etc.) |
+| Frameworks (Web, etc.) | |
+| Databases | |
+| Cloud & Infrastructure | |
+| Tools & Others | |
 
-*Proficiency Levels: Expert / Advanced / Intermediate / Beginner*
-*Last Used: "Currently using", "2024", "2022", etc. — estimate from work history dates*
 *Omit categories with no relevant information*
 
-**Years of Experience — STRICT CALCULATION RULES:**
-- Count **ONLY full-time / contract professional employment periods** from the Work Experience section. The following MUST NEVER be included:
-  - Academic periods (Bachelor's, Master's, PhD), coursework, thesis research, lab work
-  - Internships (unless explicitly full-time, long-term, paid employment)
-  - Personal projects, side projects, OSS contributions, Kaggle, hackathons
-  - Self-study, online courses, certification preparation
-- Count ONLY periods where the resume **explicitly states the technology was used on the job** — do not infer or assume usage.
-- If the same technology was used across multiple overlapping roles, **do not double-count overlapping periods** (use actual elapsed years).
-- If the usage period is unclear, **leave the field blank** — never guess a number.
-- Exclude employment gaps (unemployment, parental leave, etc.) from the total.
+**Skill listing rules (strict):**
+- Output bare skill names only. Do NOT add years of experience per skill.
+- Do NOT add proficiency labels (Expert / Advanced / Intermediate / Beginner) unless those labels appear verbatim next to the skill in the resume.
+- Each skill must appear in exactly ONE category — no duplicates.
+- Do NOT infer skills from job titles or company domains. Only list skills explicitly named in the resume.
 
 ## 5. Languages & Visa
 - **Japanese Level**: (Beyond just the JLPT level — interpret from context how the language is used in practice. E.g., "JLPT N2. Writes technical specifications in Japanese, participates in client requirements meetings in Japanese" or "JLPT N3. Conversational level, primarily uses English for technical work". Include Japan residency history if available)
@@ -474,7 +460,7 @@ Pay special attention to the following:
 
 1. **Always include metrics in achievements**: User numbers, performance improvement %, cost savings, team size, etc.
 2. **Extract AI/ML-specific metrics**: Model accuracy improvements (accuracy, F1 score, etc.), inference latency (p99 latency, etc.), training data scale (token count, data volume), training cost reduction (GPU hours, etc.), production scale (daily request volume, etc.)
-3. **Specify experience years, proficiency, and last-used date for technical skills**: Calculate years **ONLY from full-time / contract professional employment periods** in the Work Experience section. NEVER include academic periods (Bachelor's, Master's, PhD, thesis, lab work), internships (unless explicitly full-time long-term paid), personal projects, OSS contributions, Kaggle, hackathons, or self-study. Count only periods where the resume explicitly states the technology was used on the job; do not double-count overlapping periods across concurrent roles; leave the field blank if the usage period is unclear (never guess). Classify AI/ML technologies in detail
+3. **Do NOT compute or assign experience years and proficiency levels to technical skills**: Even if individual skill years can be estimated from employment dates, student periods often leak in and create fabrications. Output bare skill names grouped by category. Classify AI/ML technologies in detail, but do not add "X years" or "Expert/Advanced/Intermediate/Beginner" labels to any skill unless those exact labels appear verbatim in the resume.
 4. **Don't miss leadership experience**: Mentoring, team lead, hiring involvement, etc.
 5. **Include project scale information**: User count, revenue, budget, team size, etc.
 6. **Select highlight project**: Choose the single most impactful project from work history and describe using the Challenge → Solution → Tech → Results → Team structure
@@ -1171,7 +1157,8 @@ Only flag when the actual year, month, or date range differs between ORIGINAL an
 
 SECTION / ROW OMISSION (optimize_* only)
 The source optimization prompt REQUIRES the LLM to OMIT sections, table rows, and fields entirely when ORIGINAL has no supporting information. This is by-design:
-- Missing template rows (e.g., "エンジニア歴", "ビザステータス", "直近の注力技術") when ORIGINAL lacks data → EXPECTED, do NOT flag as missing_facts
+- Missing template rows (e.g., "直近の役職", "ビザステータス", "直近の注力技術") when ORIGINAL lacks data → EXPECTED, do NOT flag as missing_facts
+- "エンジニア歴", "現在のレベル", "総経験年数" rows are REMOVED from the template — if GENERATED contains them, DO flag as fabrications (they compute totals that typically mix student years with professional years)
 - Missing sections (e.g., OSS, 受賞歴, 研究実績, 代表プロジェクト) when ORIGINAL lacks relevant content → EXPECTED, do NOT flag
 - Empty skill table rows omitted → EXPECTED
 Only flag missing_facts when a HARD FACT explicitly present in ORIGINAL (a company name, job title, employment period, quantified metric like "reduced cost by 40%", or certification like "PMP") is absent from GENERATED.
@@ -1847,16 +1834,16 @@ def get_matching_analysis_prompt(resume_text: str, jd_text: str) -> str:
 
 ---
 
-## 経験年数・キャリアレベル
+## キャリア概要
 
 | 項目 | 求人要件 | 候補者（レジュメ記載） |
 |-----|---------|---------------------|
-| 総エンジニア経験 | | |
-| AI/ML領域の経験 | （該当する場合のみ記載） | |
-| 該当領域の経験 | | |
+| 直近の役職 | | （原文の役職名をそのままコピー。正規化・推測禁止。記載なしなら空欄） |
 | リーダーシップ | | |
 | 研究実績・論文 | （該当する場合のみ記載） | |
 | 言語レベル | | |
+
+*※ 総経験年数は記載しない（学生期間の混入による捏造を防ぐため）。求人要件・レジュメの双方で明示された項目のみ記載する。*
 
 ---
 
@@ -1987,20 +1974,21 @@ def get_anonymous_proposal_prompt(matching_result: str, resume_text: str, jd_tex
 # 候補者紹介資料
 
 ## 1. 見出し
-候補者の直近の役職、総経験年数、主要技術領域を1行で記載。
-形式：「[直近の役職] | 経験[X]年 | [主要技術領域]」
-例：「MLエンジニア | 経験10年 | LLMパイプライン・プロダクションML」
+候補者の直近の役職と主要技術領域を1行で記載。役職名は原文のままコピーすること。
+形式：「[原文の役職名] | [主要技術領域]」
+例：「Senior ML Engineer | LLMパイプライン・プロダクションML」
+※ 総経験年数は記載しない（学生期間混入による捏造を防ぐため）
 ※ 漠然とした主観的な形容（「優秀な」「卓越した」等）は使わず、具体的に書く
 
 ---
 
 ## 2. Professional Summary（200文字程度）
-候補者の最大の「売り」を経験年数×技術×強みの掛け合わせで記載
-- 総エンジニア経験年数
-- 経験した役職と業界
+候補者の最大の「売り」を役職×技術×強みの掛け合わせで記載
+- 経験した役職と業界（役職名は原文のままコピー、ジュニア／シニア等への正規化禁止）
 - レジュメに明記されている定量的な実績
 - 言語能力（資格名だけでなく実務での活用状況を文脈から読み取って補足。例：「JLPT N2。日本語での仕様書作成経験あり」）
 - AIツール活用やモダン開発手法（Agile/DevOps等）があれば強調
+※ **総経験年数は記載しない**。原文に「X年の経験」とverbatim記載がある場合のみその文をそのまま引用可
 
 ---
 
@@ -2173,16 +2161,18 @@ Your goal: Extract and organize facts from the CV to maximize the candidate's ma
 【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
 
 ## 1. Headline
-State the candidate's most recent job title, total years of experience, and primary technical domain. No marketing language.
-Format: "[Most recent title] | [X] years of experience | [Primary domain]"
-Example 1: "ML Engineer | 10 years of experience | LLM pipelines and production ML systems"
-Example 2: "DevOps Lead | 12 years of experience | Cloud infrastructure and CI/CD"
+State the candidate's most recent job title (verbatim from the CV) and primary technical domain. No marketing language.
+Format: "[Most recent title, copied verbatim] | [Primary domain]"
+Example 1: "Senior ML Engineer | LLM pipelines and production ML systems"
+Example 2: "DevOps Lead | Cloud infrastructure and CI/CD"
 ※ 60-100 characters. No names or company names. No subjective adjectives.
+※ **Do NOT state total years of experience** — totals often include student periods and become fabrications.
 
 ## 2. Professional Summary
-Highlight the candidate's key selling points through the combination of experience × technology × strengths. Include total experience, job titles held, industries worked in, key quantified achievements, and language proficiency (interpret practical usage, not just certification names).
-Example: "ML Engineer with 8 years of experience. Worked at Company A and Company B. Built a search platform processing 500K+ daily queries. Led a 12-person team. JLPT N2 — writes technical specs in Japanese."
+Highlight the candidate's key selling points through the combination of role × technology × strengths. Include job titles held (verbatim), industries worked in, key quantified achievements, and language proficiency (interpret practical usage, not just certification names).
+Example: "Senior ML Engineer. Worked at Company A and Company B. Built a search platform processing 500K+ daily queries. Led a 12-person team. JLPT N2 — writes technical specs in Japanese."
 ※ 200-300 characters. Facts from the CV.
+※ **Do NOT state total years of experience.** Only include a "X years of experience" phrase if the exact phrase appears verbatim in the CV.
 
 ## 3. Technical Skills
 List the candidate's technical skills as stated in the CV, grouped by category. Include years of experience only if explicitly mentioned. Do not infer proficiency levels.

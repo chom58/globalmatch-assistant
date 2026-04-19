@@ -1990,6 +1990,23 @@ _PROFICIENCY_LEGEND_RE = re.compile(
     re.IGNORECASE,
 )
 _ENGINEER_TOTAL_RE = re.compile(r"エンジニア歴\s*\d+\s*年")
+
+# 候補者スナップショット等のテーブル行で使う「エンジニア歴」「現在のレベル」系の行全体を
+# 機械的に除去するための正規表現。LLM が厳守ルールに違反して出力した場合の最終防衛線。
+# プロンプトから該当行を削除済みだが、LLM の慣性で出力されるケースを抑制する。
+_ENGINEER_YEARS_ROW_RE = re.compile(
+    r"^\s*(?:\|\s*\*{0,2})?\s*"
+    r"(?:エンジニア歴|総(?:エンジニア)?経験(?:年数)?|Engineering\s+Experience|Total\s+(?:Years?\s+of\s+)?Experience|Years?\s+of\s+Experience)"
+    r"\s*\*{0,2}\s*(?:[|:：].*)?$",
+    re.IGNORECASE,
+)
+_SENIORITY_LEVEL_ROW_RE = re.compile(
+    r"^\s*(?:\|\s*\*{0,2})?\s*"
+    r"(?:現在のレベル|キャリアレベル|Current\s+Level|Seniority(?:\s+Level)?)"
+    r"\s*\*{0,2}\s*(?:[|:：].*)?$",
+    re.IGNORECASE,
+)
+
 _YEAR_CELL_FULL_RE = re.compile(r"^\s*\d+\s*年(?:\s*\d+\s*ヶ月)?\s*$")
 _YEAR_CELL_EN_FULL_RE = re.compile(
     r"^\s*\d+(?:\.\d+)?\s*(?:years?|yrs?|months?|mos?)\s*$", re.IGNORECASE
@@ -1999,6 +2016,39 @@ _LEVEL_CELL_FULL_RE = re.compile(
     r"専門家(?:レベル)?|上級|中級|初級)(?:\s*（[^）]+）)?\s*$",
     re.IGNORECASE,
 )
+
+
+def finalize_resume_output(text: str) -> str:
+    """レジュメ最適化の最終出力に適用する後処理チェーン。
+
+    1. normalize_resume_bullets — inline `*` 箇条書きの正規化
+    2. strip_engineer_years_and_seniority — エンジニア歴／現在のレベル行の機械除去
+    3. strip_skill_metadata — スキル欄の推測メタデータ（年数・習熟度）除去
+    """
+    text = normalize_resume_bullets(text)
+    text = strip_engineer_years_and_seniority(text)
+    text = strip_skill_metadata(text)
+    return text
+
+
+def strip_engineer_years_and_seniority(text: str) -> str:
+    """文書全体から「エンジニア歴」「総経験年数」「現在のレベル」行を機械的に除去する。
+
+    プロンプトから該当行は削除済みだが、LLM が慣性で出力するケースを抑制するための
+    最終防衛線。行ごと削除することで、候補者スナップショット等のテーブル行も
+    クリーンに消える。表の区切り行（|---|）は自動的に整合性が保たれる。
+    """
+    if not text:
+        return text
+
+    out: list[str] = []
+    for line in text.split("\n"):
+        if _ENGINEER_YEARS_ROW_RE.match(line):
+            continue
+        if _SENIORITY_LEVEL_ROW_RE.match(line):
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 
 def strip_skill_metadata(text: str) -> str:
@@ -2960,7 +3010,7 @@ def _process_single_resume(api_key: str, index: int, resume: str, anonymize: str
         prompt = get_resume_optimization_prompt(resume, anonymize)
         output = call_groq_api(api_key, prompt)
         result["status"] = "success"
-        result["output"] = normalize_resume_bullets(output)
+        result["output"] = finalize_resume_output(output)
         result["time"] = time.time() - item_start
     except Exception as e:
         result["status"] = "error"
@@ -3354,7 +3404,7 @@ def main():
                                 status_regenerating=t("pii_regenerating"),
                                 status_verifying=t("pii_verifying"),
                                 apply_regex_pii=(anonymize in ("full", "light")),
-                                post_processor=normalize_resume_bullets,
+                                post_processor=finalize_resume_output,
                             )
                             elapsed_time = time.time() - start_time
                             status_container.empty()
@@ -3698,7 +3748,7 @@ def main():
                                 status_regenerating=t("pii_regenerating"),
                                 status_verifying=t("pii_verifying"),
                                 apply_regex_pii=True,
-                                post_processor=None,
+                                post_processor=finalize_resume_output,
                             )
                             elapsed_time = time.time() - start_time
                             status_container.empty()
@@ -3810,7 +3860,7 @@ def main():
                                 status_regenerating=t("pii_regenerating"),
                                 status_verifying=t("pii_verifying"),
                                 apply_regex_pii=False,
-                                post_processor=normalize_resume_bullets,
+                                post_processor=finalize_resume_output,
                             )
                             status_container.empty()
 
@@ -4028,6 +4078,8 @@ def main():
 
                                 # スキル欄の推測メタデータ（経験年数・習熟度）を機械的に除去
                                 current_output = strip_skill_metadata(current_output)
+                                # 候補者スナップショットに混入した「エンジニア歴」「現在のレベル」行も除去
+                                current_output = strip_engineer_years_and_seniority(current_output)
 
                                 # 精度検証 (LLM + regex)
                                 status_container.caption(
@@ -4123,8 +4175,7 @@ def main():
                                     api_key, format_prompt, format_stream_container
                                 )
                                 format_stream_container.empty()
-                                formatted_output = normalize_resume_bullets(formatted_output)
-                                formatted_output = strip_skill_metadata(formatted_output)
+                                formatted_output = finalize_resume_output(formatted_output)
 
                                 status_container.caption(t("pii_format_verifying"))
                                 try:
@@ -7034,7 +7085,7 @@ Full-stack Developer...
                             prompt = get_resume_optimization_prompt(resume_text, batch_anonymize)
                             output = call_groq_api(api_key, prompt)
                             result["status"] = "success"
-                            result["output"] = normalize_resume_bullets(output)
+                            result["output"] = finalize_resume_output(output)
                             result["time"] = time.time() - item_start
                         except Exception as e:
                             result["status"] = "error"
