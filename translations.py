@@ -184,6 +184,14 @@ TRANSLATIONS = {
         "anon_help_en": "完全：企業名を「大手SIer」等に置換 / 軽度：企業名・大学名をそのまま表示（個人情報のみ匿名化）",
         "anon_help_cv": "完全：企業名を「a major IT firm」等に置換 / 軽度：企業名・大学名をそのまま表示",
 
+        # ===== 処理モード =====
+        "mode_label": "処理モード",
+        "mode_deterministic": "⚡ PIIのみ削除（高速・幻覚ゼロ）",
+        "mode_llm_optimize": "🤖 AI最適化（整形・翻訳込み）",
+        "mode_help": "PIIのみ削除: 1秒未満・原文そのまま・幻覚なし / AI最適化: 20〜60秒・Markdown整形・日本語化",
+        "mode_det_done": "✅ PII削除完了（{time}秒・LLM未使用）",
+        "mode_det_residual": "⚠️ 以下のPIIが残存している可能性があります。手動で確認してください:",
+
         # ===== Feature 1: Resume Optimization =====
         "resume_opt_title": "レジュメ最適化（英語 → 日本語）",
         "resume_opt_desc": "外国人エンジニアの英語レジュメを、日本企業向けの統一フォーマットに変換します",
@@ -670,6 +678,14 @@ TRANSLATIONS = {
         "anon_light_en": "Light anonymization (show company names)",
         "anon_help_en": "Full: company names replaced (e.g., 'Major SIer') / Light: company/university names kept (personal info only anonymized)",
         "anon_help_cv": "Full: company names replaced (e.g., 'a major IT firm') / Light: company/university names kept",
+
+        # ===== Processing Mode =====
+        "mode_label": "Processing Mode",
+        "mode_deterministic": "⚡ PII removal only (fast, zero hallucination)",
+        "mode_llm_optimize": "🤖 AI optimization (formatting + translation)",
+        "mode_help": "PII removal only: <1s, verbatim, no hallucination / AI optimization: 20-60s, Markdown formatting, Japanese",
+        "mode_det_done": "✅ PII removed in {time}s (no LLM used)",
+        "mode_det_residual": "⚠️ The following PII may still remain. Please verify manually:",
 
         # ===== Feature 1: Resume Optimization =====
         "resume_opt_title": "Resume Optimization (English → Japanese)",

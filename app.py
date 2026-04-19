@@ -2126,6 +2126,244 @@ def regex_pii_scan(text: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# 決定論的 PII 削除（LLM を使わずに PII のみを除去する高速パス）
+# ---------------------------------------------------------------------------
+
+# 個人属性・注釈・住所の行単位削除パターン
+_PII_LINE_PATTERNS = [
+    # 個人属性（ラベル付き行）
+    re.compile(r"^\s*(?:Date\s+of\s+Birth|DOB|Birth\s*Date|Birthdate|生年月日)\b.*$", re.I),
+    re.compile(r"^\s*(?:Age|年齢)\s*[:：].*$", re.I),
+    re.compile(r"^\s*(?:Nationality|国籍|Citizenship)\s*[:：].*$", re.I),
+    re.compile(r"^\s*(?:Gender|Sex|性別)\s*[:：].*$", re.I),
+    re.compile(r"^\s*(?:Marital\s*Status|配偶者|婚姻状況|婚姻).*$", re.I),
+    re.compile(r"^\s*(?:Religion|宗教)\s*[:：].*$", re.I),
+    re.compile(r"^\s*(?:Photo|写真|Picture)\s*[:：].*$", re.I),
+    # 住所ラベル行（詳細住所が後続）
+    re.compile(r"^\s*(?:Address|住所|Home\s*Address|現住所|本籍)\s*[:：].*$", re.I),
+    # 注釈・タイムスタンプ
+    re.compile(r"^\s*Resume\s*\(.*PII.*\).*$", re.I),
+    re.compile(r"^\s*Generated\s+\d{4}[\-/]\d{1,2}[\-/]\d{1,2}.*$", re.I),
+    re.compile(r"^\s*Last\s+Updated\s*[:：].*$", re.I),
+]
+
+# 詳細住所を含む行（番地＋区/市/丁目 or US style）
+# 順序非依存: 番地パターンと地名語が同一行にあれば住所行とみなす
+_JP_ADDRESS_NUMBER_RE = re.compile(r"\d+[\-−–]\d+[\-−–]?\d*")
+_JP_ADDRESS_LOCALITY_RE = re.compile(
+    r"(?:区|市|町|村|丁目|番地|番\b|号\b|Tokyo|Osaka|Kyoto|Yokohama|Nagoya|Fukuoka|Sapporo|Kobe|"
+    r"ku\b|-ku\b|Minato|Shibuya|Shinjuku|Chiyoda|Chuo|Setagaya|Meguro|Shinagawa|Nakano|Suginami)",
+    re.I,
+)
+_US_ADDRESS_LINE_RE = re.compile(
+    r"^\s*\d+\s+[A-Z][\w\s]+(?:Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Way|Court|Ct\.?)\b",
+    re.I,
+)
+
+# 削除対象セクション（見出し〜次の見出し）
+_DELETE_HEADINGS = {
+    "objective", "career objective", "job objective",
+    "summary", "professional summary", "executive summary",
+    "profile", "professional profile",
+    "about", "about me", "about the candidate", "overview",
+    "references", "reference",
+    "personal information", "personal details", "personal data",
+    "目的", "要約", "職務要約", "自己pr", "自己ｐｒ",
+    "自己紹介", "自己概要", "概要",
+    "照会先", "個人情報", "パーソナル情報",
+}
+
+# 保持対象セクション（これが出たら削除モードを解除）
+_KEEP_HEADINGS = {
+    "experience", "work experience", "professional experience",
+    "employment", "employment history", "work history",
+    "career", "career history",
+    "skills", "technical skills", "skill", "core competencies", "key skills",
+    "education", "academic background", "educational background",
+    "certifications", "certification", "licenses", "licenses and certifications",
+    "languages", "language", "language proficiency", "language skills",
+    "visa", "visa status",
+    "projects", "project", "key projects", "selected projects", "notable projects",
+    "publications", "awards", "achievements", "accomplishments",
+    "interests", "hobbies",
+    "contact", "contact information",
+    "職歴", "業務経歴", "職務経歴", "経歴",
+    "学歴", "スキル", "技術スキル",
+    "資格", "受賞", "資格・受賞", "保有資格",
+    "言語", "語学", "ビザ",
+    "プロジェクト", "代表プロジェクト", "業務内容", "業績",
+}
+
+
+def _norm_heading(line: str) -> str:
+    s = line.strip()
+    if not s:
+        return ""
+    s = re.sub(r"^#{1,6}\s+", "", s)
+    s = s.rstrip(":：").rstrip()
+    return s.lower()
+
+
+def _looks_like_generic_heading(line: str) -> bool:
+    s = line.strip()
+    if not s:
+        return False
+    if re.match(r"^#{1,6}\s+\S", s):
+        return True
+    core = re.sub(r"^#{1,6}\s+", "", s).rstrip(":：").rstrip()
+    if re.fullmatch(r"[A-Z][A-Z0-9\s&/\-\.]{2,40}", core) and not re.search(r"\d{4,}", core):
+        return True
+    return False
+
+
+def _is_personal_url_line(stripped: str) -> bool:
+    """個人系URLのみで構成された行（bullet/dash付き含む）"""
+    s = re.sub(r"^[\-\*\•・]\s*", "", stripped).strip()
+    known = re.compile(
+        r"^(?:https?://)?(?:www\.)?(?:linkedin\.com|github\.com|twitter\.com|x\.com|"
+        r"qiita\.com|medium\.com|zenn\.dev|dev\.to|stackoverflow\.com|note\.com)"
+        r"/[\w\-_/\.]+/?$",
+        re.I,
+    )
+    if known.match(s):
+        return True
+    if re.fullmatch(r"https?://[^\s]+", s):
+        return True
+    # 裸のドメイン+パス（blog/me/io/dev 等）。企業URLは誤爆しうるので保守的に個人TLDのみ
+    if re.fullmatch(r"[\w\-]+\.(?:me|blog|dev|io|page|work|tech)(?:/[\w\-_/\.]+)?", s, re.I):
+        return True
+    return False
+
+
+def _reduce_to_first_name(lines: list[str]) -> list[str]:
+    """先頭付近のフルネーム行を「名のみ」に短縮する。最初の該当行のみ変換して停止する。
+
+    対応: "John Smith", "Wei-Lin Chen", "John A. Smith", "Mary-Jane Watson"
+    未対応: 連続漢字の姓名（山田太郎）— 区切りが不定のため。
+    """
+    out = list(lines)
+    scanned = 0
+    name_re = re.compile(
+        r"^([A-Z][a-z]+(?:[\-'][A-Z][a-z]+)?)"       # First
+        r"(?:\s+[A-Z]\.?)*"                           # optional middle initials
+        r"\s+[A-Z][a-z]+(?:[\-'][A-Z][a-z]+)?"        # Last
+        r"(?:\s+[A-Z][a-z]+(?:[\-'][A-Z][a-z]+)?)*$"  # optional extra last names
+    )
+    # 和名: 「姓 名」(半角/全角スペース区切り) の 2-4 漢字 + 2-4 漢字
+    # 区切りが無い「山田太郎」型は辞書なしで分割不能なので対象外
+    jp_name_re = re.compile(
+        r"^([\u4E00-\u9FFF]{1,4})[\s　]+([\u4E00-\u9FFF]{1,4})$"
+    )
+    for i, line in enumerate(out):
+        if scanned >= 6:
+            break
+        s = line.strip()
+        if not s:
+            continue
+        scanned += 1
+        core = re.sub(r"^#+\s+", "", s).strip()
+        # 既知の見出しやセクション名は触らない
+        h = core.rstrip(":：").lower()
+        if h in _KEEP_HEADINGS or h in _DELETE_HEADINGS:
+            continue
+        m = name_re.match(core)
+        if m:
+            first = m.group(1)
+            out[i] = line.replace(core, first, 1)
+            return out
+        jm = jp_name_re.match(core)
+        if jm:
+            # 姓を削除して名のみ残す（日本の履歴書慣行: 姓が先）
+            given = jm.group(2)
+            out[i] = line.replace(core, given, 1)
+            return out
+    return out
+
+
+def redact_pii_deterministic(text: str) -> str:
+    """LLM を使わず正規表現とヒューリスティックだけで PII を削除する。
+
+    高速（<1秒）・幻覚ゼロ・再現性100%。原文の文章は一切書き換えず、
+    PII に該当する箇所のみ削除する。
+
+    削除対象:
+    - Email / 電話番号 / 各種SNS URL / 郵便番号（_PII_REGEX_PATTERNS）
+    - 個人属性行: 生年月日・年齢・国籍・性別・婚姻・宗教・写真
+    - 住所行: 「Address:」「住所:」ラベル行、JP/US詳細住所
+    - 注釈行: "Resume (PII Removed)" 等のバナー、Generated timestamp
+    - 個人URL専用行: LinkedIn/GitHub/Twitter/個人ブログ
+    - セクション削除: Objective / Summary / Profile / About Me / References / Personal Information
+    - 先頭のフルネーム → 名のみ（Latin限定のヒューリスティック）
+    """
+    if not text:
+        return text
+
+    lines = text.split("\n")
+
+    # Stage 1: 行単位の削除
+    filtered: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and _is_personal_url_line(stripped):
+            continue
+        if any(p.match(line) for p in _PII_LINE_PATTERNS):
+            continue
+        if (_JP_ADDRESS_NUMBER_RE.search(line) and _JP_ADDRESS_LOCALITY_RE.search(line)) \
+                or _US_ADDRESS_LINE_RE.match(line):
+            continue
+        filtered.append(line)
+
+    # Stage 2: 先頭フルネーム → 名のみ
+    filtered = _reduce_to_first_name(filtered)
+
+    # Stage 3: インライントークン削除（email / 電話 / URL / 郵便番号）
+    inline: list[str] = []
+    for line in filtered:
+        new_line = line
+        for pat in _PII_REGEX_PATTERNS.values():
+            new_line = pat.sub("", new_line)
+        # 削除で残った余分な空白・区切り記号を整理（行頭行末のみ）
+        new_line = re.sub(r"[ \t]+", " ", new_line)
+        # 行頭末の「| 」「, 」等を掃除
+        new_line = re.sub(r"^[\s|,・•]+", "", new_line)
+        new_line = re.sub(r"[\s|,・•]+$", "", new_line)
+        inline.append(new_line)
+
+    # Stage 4: セクション単位削除（Objective / References 等）
+    section_cleaned: list[str] = []
+    in_delete = False
+    for line in inline:
+        h = _norm_heading(line)
+        if h and h in _DELETE_HEADINGS:
+            in_delete = True
+            continue
+        if h and h in _KEEP_HEADINGS:
+            in_delete = False
+            section_cleaned.append(line)
+            continue
+        # 未知の見出しが現れたら削除モードを解除（暴走防止）
+        if in_delete and _looks_like_generic_heading(line):
+            in_delete = False
+            section_cleaned.append(line)
+            continue
+        if in_delete:
+            continue
+        section_cleaned.append(line)
+
+    # Stage 5: 連続空行の圧縮
+    collapsed: list[str] = []
+    prev_blank = False
+    for line in section_cleaned:
+        is_blank = not line.strip()
+        if is_blank and prev_blank:
+            continue
+        collapsed.append(line)
+        prev_blank = is_blank
+
+    return "\n".join(collapsed).strip() + "\n"
+
+
+# ---------------------------------------------------------------------------
 # 決定論的エンティティ比較 (PII 幻覚検出補助)
 # ---------------------------------------------------------------------------
 
@@ -3352,24 +3590,43 @@ def main():
             elif char_count > 0:
                 st.caption(t("char_count").format(count=f"{char_count:,}", max=f"{MAX_INPUT_CHARS:,}"))
 
-            anonymize = st.radio(
-                t("anon_label"),
-                options=["full", "light", "none"],
+            processing_mode = st.radio(
+                t("mode_label"),
+                options=["deterministic", "llm_optimize"],
                 format_func=lambda x: {
-                    "full": t("anon_full"),
-                    "light": t("anon_light"),
-                    "none": t("anon_none")
+                    "deterministic": t("mode_deterministic"),
+                    "llm_optimize": t("mode_llm_optimize"),
                 }[x],
                 index=0,
-                help=t("anon_help")
+                help=t("mode_help"),
+                key="resume_processing_mode",
             )
 
-            _show_btn_hint(api_key, bool(resume_input))
+            if processing_mode == "llm_optimize":
+                anonymize = st.radio(
+                    t("anon_label"),
+                    options=["full", "light", "none"],
+                    format_func=lambda x: {
+                        "full": t("anon_full"),
+                        "light": t("anon_light"),
+                        "none": t("anon_none")
+                    }[x],
+                    index=0,
+                    help=t("anon_help")
+                )
+            else:
+                # 決定論モードでは匿名化オプション不要（常に PII 全削除）
+                anonymize = "light"
+
+            # 決定論モードは API キー不要
+            _needs_api_key = processing_mode == "llm_optimize"
+            if _needs_api_key:
+                _show_btn_hint(api_key, bool(resume_input))
             process_btn = st.button(
                 t("transform_btn"),
                 type="primary",
                 use_container_width=True,
-                disabled=not api_key or not resume_input
+                disabled=(_needs_api_key and not api_key) or not resume_input,
             )
 
         with col2:
@@ -3379,7 +3636,27 @@ def main():
                 st.info(t("output_placeholder"))
 
             if process_btn:
-                if not api_key:
+                # 決定論モード: LLM 不使用・即座に PII 削除
+                if processing_mode == "deterministic":
+                    is_valid, error_msg = validate_input(resume_input, "resume")
+                    if not is_valid:
+                        st.warning(f"⚠️ {error_msg}")
+                    else:
+                        start_time = time.time()
+                        result = redact_pii_deterministic(resume_input)
+                        elapsed_time = time.time() - start_time
+                        st.session_state['resume_result'] = result
+                        st.session_state['resume_time'] = elapsed_time
+                        st.session_state['resume_iterations'] = []
+
+                        residuals = regex_pii_scan(result)
+                        if residuals:
+                            st.warning(t("mode_det_residual"))
+                            for r in residuals:
+                                st.code(f"[{r['type']}] {r['text']}")
+                        else:
+                            st.success(t("mode_det_done").format(time=f"{elapsed_time:.2f}"))
+                elif not api_key:
                     st.error(t("no_api_key"))
                 else:
                     # 入力バリデーション
