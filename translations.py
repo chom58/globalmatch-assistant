@@ -383,7 +383,7 @@ TRANSLATIONS = {
         "cv_output": "##### 出力：提案コメント（5セクション・スライド貼付用）",
         "cv_ai": "🤖 AIがCVからコメントを抽出しています...",
         "cv_done": "✅ 抽出完了！（{time}秒）",
-        "cv_length_slider": "各セクションの目安文字数（スライド貼付は100前後）",
+        "cv_length_slider": "各セクションの目安文字数（スライド貼付は150前後）",
         "cv_adjust_btn": "文章量を調整",
         "cv_adjusting": "調整中...",
         "cv_adjusted": "✅ 調整完了！",
@@ -391,6 +391,9 @@ TRANSLATIONS = {
         "cv_lang_ja": "日本語",
         "cv_lang_en": "English",
         "cv_section_copy_hint": "💡 セクションごとにコピーしてスライドの各ボックスに貼り付けてください",
+        "cv_download_pptx": "📊 スライド (.pptx)",
+        "cv_download_pptx_batch": "📊 スライド一括 (.pptx)",
+        "cv_pptx_hint": "💡 ダウンロードしたpptxをGoogleスライドで「ファイル > 開く」から開くと、そのまま編集できます",
 
         # CV Batch
         "cv_batch_hint": "💡 **区切り方法**: `---NEXT---` を各CVの間に入れてください",
@@ -882,7 +885,7 @@ TRANSLATIONS = {
         "cv_output": "##### Output: Proposal Comments (5 sections, slide-ready)",
         "cv_ai": "🤖 AI is extracting comments from the CV...",
         "cv_done": "✅ Extraction complete! ({time}s)",
-        "cv_length_slider": "Target chars per section (≈100 for slide fit)",
+        "cv_length_slider": "Target chars per section (≈150 for slide fit)",
         "cv_adjust_btn": "Adjust Length",
         "cv_adjusting": "Adjusting...",
         "cv_adjusted": "✅ Adjustment complete!",
@@ -890,6 +893,9 @@ TRANSLATIONS = {
         "cv_lang_ja": "Japanese",
         "cv_lang_en": "English",
         "cv_section_copy_hint": "💡 Copy each section and paste into the corresponding slide box",
+        "cv_download_pptx": "📊 Slides (.pptx)",
+        "cv_download_pptx_batch": "📊 Batch Slides (.pptx)",
+        "cv_pptx_hint": "💡 Open the downloaded pptx in Google Slides via File > Open to edit directly",
 
         # CV Batch
         "cv_batch_hint": "💡 **Separator**: Insert `---NEXT---` between each CV",

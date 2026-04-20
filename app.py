@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 import ipaddress
 from translations import TRANSLATIONS, FEATURE_KEYS
+from slides_export import build_cv_proposal_pptx
 
 # Supabase設定（オプション）
 try:
@@ -6436,9 +6437,9 @@ def main():
                     with col_slider:
                         target_chars = st.slider(
                             f"📏 {t('cv_length_slider')}",
-                            min_value=60, max_value=200, value=100, step=20,
+                            min_value=60, max_value=200, value=150, step=20,
                             key="cv_extract_length_slider",
-                            help="スライド貼付は100前後が目安。60=極短 / 100=標準 / 150-200=詳細"
+                            help="スライド貼付は150前後が目安。60=極短 / 100=コンパクト / 150=標準 / 200=詳細"
                         )
                     with col_adjust:
                         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
@@ -6482,7 +6483,7 @@ def main():
                         st.session_state['cv_extract_result'] = edited_cv_result
 
                     # ダウンロードボタン
-                    col_dl1, col_dl2 = st.columns(2)
+                    col_dl1, col_dl2, col_dl3 = st.columns(3)
                     with col_dl1:
                         st.download_button(
                             "📄 Markdown",
@@ -6499,6 +6500,23 @@ def main():
                             mime="text/plain",
                             key="cv_extract_txt"
                         )
+                    with col_dl3:
+                        # スライド貼付用の.pptxを1枚生成
+                        try:
+                            _pptx_bytes = build_cv_proposal_pptx(
+                                [_parse_cv_sections(st.session_state['cv_extract_result'])],
+                                language=cv_output_lang,
+                            )
+                            st.download_button(
+                                t("cv_download_pptx"),
+                                data=_pptx_bytes,
+                                file_name=f"cv_proposal_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx",
+                                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                key="cv_extract_pptx"
+                            )
+                        except Exception as _pptx_err:
+                            st.caption(f"⚠️ スライド生成に失敗しました: {_pptx_err}")
+                    st.caption(t("cv_pptx_hint"))
 
         else:  # batch mode
             batch_input_tab1, batch_input_tab2 = st.tabs(["📝 テキスト入力", "📄 複数PDF読み込み"])
@@ -6664,9 +6682,9 @@ Full-stack Developer...
                             with col_slider_b:
                                 batch_target = st.slider(
                                     f"📏 {t('cv_length_slider')}",
-                                    min_value=60, max_value=200, value=100, step=20,
+                                    min_value=60, max_value=200, value=150, step=20,
                                     key=f"batch_cv_length_{cv_r['index']}",
-                                    help="スライド貼付は100前後が目安"
+                                    help="スライド貼付は150前後が目安"
                                 )
                             with col_adjust_b:
                                 st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
@@ -6691,19 +6709,49 @@ Full-stack Developer...
                 # 全件まとめてダウンロード
                 if success_count > 0:
                     st.divider()
+                    _success_results = [
+                        r for r in st.session_state['batch_cv_extract_results']
+                        if r['status'] == 'success'
+                    ]
                     all_cv_content = "\n\n---\n\n".join([
                         f"# {r.get('name') or 'CV #' + str(r['index'])}\n\n{r['output']}"
-                        for r in st.session_state['batch_cv_extract_results']
-                        if r['status'] == 'success'
+                        for r in _success_results
                     ])
-                    st.download_button(
-                        "📦 全件ダウンロード（Markdown）",
-                        data=all_cv_content,
-                        file_name=f"cv_proposals_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
-                        mime="text/markdown",
-                        use_container_width=True,
-                        key="batch_cv_extract_download"
-                    )
+                    col_batch_md, col_batch_pptx = st.columns(2)
+                    with col_batch_md:
+                        st.download_button(
+                            "📦 全件ダウンロード（Markdown）",
+                            data=all_cv_content,
+                            file_name=f"cv_proposals_{datetime.now().strftime('%Y%m%d_%H%M')}.md",
+                            mime="text/markdown",
+                            use_container_width=True,
+                            key="batch_cv_extract_download"
+                        )
+                    with col_batch_pptx:
+                        # 1名1スライドの連結pptxを生成
+                        try:
+                            _batch_candidates = [
+                                _parse_cv_sections(r['output']) for r in _success_results
+                            ]
+                            _batch_labels = [
+                                r.get('name') or f"CV #{r['index']}" for r in _success_results
+                            ]
+                            _batch_pptx_bytes = build_cv_proposal_pptx(
+                                _batch_candidates,
+                                language=cv_output_lang,
+                                labels=_batch_labels,
+                            )
+                            st.download_button(
+                                t("cv_download_pptx_batch"),
+                                data=_batch_pptx_bytes,
+                                file_name=f"cv_proposals_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx",
+                                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                use_container_width=True,
+                                key="batch_cv_extract_pptx"
+                            )
+                        except Exception as _batch_pptx_err:
+                            st.caption(f"⚠️ スライド一括生成に失敗しました: {_batch_pptx_err}")
+                    st.caption(t("cv_pptx_hint"))
 
     elif feature == "email":
         st.subheader(t("email_title"))
