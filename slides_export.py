@@ -26,13 +26,15 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
-# === デザイントークン（「企業の価値をデザインする。」content-site 準拠） ===
-# Colors
+# === デザイントークン（「企業の価値をデザインする。」準拠のライトテーマ） ===
+# 暗い背景は商談資料で読みづらい指摘があったため、ベースを白に反転。
+# イエローアクセント + Noto Sans Japanese はブランド要素として維持。
 BRAND_YELLOW = RGBColor(0xF7, 0xCA, 0x45)           # accent (ブランドイエロー)
-SURFACE_BASE = RGBColor(0x00, 0x00, 0x00)           # color.surface.base
-SURFACE_RAISED = RGBColor(0x31, 0x31, 0x31)         # color.surface.raised
-TEXT_PRIMARY = RGBColor(0xFF, 0xFF, 0xFF)           # color.text.secondary (white)
-TEXT_MUTED = RGBColor(0xCC, 0xCC, 0xCC)             # color.border.muted をテキスト控えめ色にも流用
+SURFACE_BASE = RGBColor(0xFF, 0xFF, 0xFF)           # 背景: 純白
+SURFACE_RAISED = RGBColor(0xFA, 0xFA, 0xFA)         # カード: ごく薄いグレー
+SURFACE_HEADER = RGBColor(0xF5, 0xF5, 0xF5)         # ヘッダー帯: やや濃いめの薄グレー
+TEXT_PRIMARY = RGBColor(0x1A, 0x1A, 0x1A)           # 本文・見出し
+TEXT_MUTED = RGBColor(0x55, 0x55, 0x55)             # フッター等の補助テキスト
 BORDER_MUTED = RGBColor(0xCC, 0xCC, 0xCC)           # color.border.muted
 
 # Font family: Noto Sans Japanese（実行環境に無ければ PowerPoint 既定和文フォントへ fallback）
@@ -164,23 +166,20 @@ def _render_slide(
     total: int,
 ) -> None:
     # --- 0. スライド全体の背景（黒） ---
-    bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SLIDE_W, SLIDE_H)
-    bg.line.fill.background()
-    bg.fill.solid()
-    bg.fill.fore_color.rgb = SURFACE_BASE
-    # zorderを最背面に（shape 追加順で最前なので、 xml を並べ替え）
-    spTree = bg._element.getparent()
-    spTree.remove(bg._element)
-    spTree.insert(2, bg._element)
+    # slide.background.fill を solid black に設定することで、Keynote/PowerPoint 両方で
+    # 確実にダーク基調を適用する（add_shape で敷くと Keynote 描画で無視される環境があるため）
+    bg_fill = slide.background.fill
+    bg_fill.solid()
+    bg_fill.fore_color.rgb = SURFACE_BASE
 
-    # --- 1. 上部ヘッダー帯（ダークグレー + 下端イエローライン） ---
+    # --- 1. 上部ヘッダー帯（薄グレー + 下端イエローライン） ---
     header_h = Inches(0.55)
     header = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, 0, 0, SLIDE_W, header_h
     )
     header.line.fill.background()
     header.fill.solid()
-    header.fill.fore_color.rgb = SURFACE_RAISED
+    header.fill.fore_color.rgb = SURFACE_HEADER
     title_text = "Candidate Pitch" if language == "en" else "候補者プロフィール"
     _set_shape_text(
         header,
