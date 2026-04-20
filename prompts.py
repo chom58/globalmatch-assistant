@@ -2149,15 +2149,32 @@ Based on facts stated in the resume, address the following angles:
 """
 
 
-def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "full") -> str:
-    """CV提案用コメント抽出プロンプトを生成（英語・各300文字以内・採用企業訴求型）"""
+def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "full", language: str = "ja") -> str:
+    """CV提案用コメント抽出プロンプト生成（5セクション・日英切替・スライド貼付最適化）"""
 
     if anonymize_level == "light":
         anonymize_rules = """1. **Light Anonymization**: Anonymize personal names and contact info (email, phone, address) only. **Company names, university names, project names, and product names may be kept as-is.** Use actual company/university names from the CV to add credibility."""
     else:
         anonymize_rules = """1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university")."""
 
-    return f"""You are a high-end talent agent specializing in IT and technical professionals, creating a candidate proposal document.
+    if language == "ja":
+        lang_directive = "All section body text MUST be written in natural Japanese. Section headers (## 1. Headline etc.) stay in English."
+        headline_example = "東京のフィンテック業界で豊富な実績を持つ、エキスパート・システム & ML エンジニア"
+        career_example = "10年以上のソフトウェアエンジニアリング経験。Bloomberg 東京オフィスにて、グローバルな市場データシステム管理に従事。直近では、日本の国民健康保険向けに顧客認証プロジェクトをリードしました。"
+        strengths_example = "Python, C++, および TensorFlow/ONNX のような ML フレームワークのエキスパート。AWS インフラストラクチャ (Terraform) と高性能分散データベースに特化しています。"
+        education_example = "東京大学にてコンピューターサイエンスと電子工学の二重学位を最優秀の成績で取得。現在は LLM およびプロンプトエンジニアリングについて研究中。"
+        assessment_example = "金融データ取り込みとエッジケース処理において10年以上の実績を持つニッチな Python スペシャリスト。クラウドに関するエキスパートレベルの熟練度。"
+        not_stated_phrase = "記載なし"
+    else:
+        lang_directive = "All section body text MUST be written in natural English."
+        headline_example = "Senior ML Engineer with deep fintech track record in Tokyo — LLM pipelines and production ML"
+        career_example = "10+ years of software engineering. Worked at Bloomberg Tokyo managing global market data systems. Recently led a citizen-authentication project for Japan's national health insurance."
+        strengths_example = "Expert in Python, C++, and ML frameworks like TensorFlow/ONNX. Specialized in AWS infrastructure (Terraform) and high-performance distributed databases."
+        education_example = "Dual degree in Computer Science and Electronic Engineering from the University of Tokyo with highest honors. Currently researching LLMs and prompt engineering."
+        assessment_example = "Niche Python specialist with 10+ years in financial data ingestion and edge-case handling. Expert-level cloud proficiency."
+        not_stated_phrase = "Not stated in CV"
+
+    return f"""You are a high-end talent agent specializing in IT and technical professionals. You are preparing an anonymized candidate pitch for a Google Slides deck that is shown to client companies during sales meetings.
 
 Your goal: Extract and organize facts from the CV to maximize the candidate's market value. Use specific numbers, technology names, and achievements for persuasiveness. Do NOT use vague adjectives like "seasoned", "exceptional", "passionate", "driven". Interpret language proficiency beyond just certification names — describe practical usage from context. Highlight AI tools and modern development practices (Agile/DevOps) if present.
 
@@ -2171,58 +2188,47 @@ Your goal: Extract and organize facts from the CV to maximize the candidate's ma
 - **Preserve numbers**: Include all metrics exactly as stated (team sizes, percentages, revenue, user counts)
 - **No embellishment**: Do not rephrase achievements to sound more impressive
 - **No inference**: Do not infer skills or achievements not explicitly mentioned
-- **If information is missing**: Write "Not stated in CV" — do NOT fill gaps with assumptions
+- **If information is missing**: Write "{not_stated_phrase}" — do NOT fill gaps with assumptions
 
 ---
 
-【Output Format】※ Strictly follow this format. Each item MUST be within 300 characters (2-4 sentences). Output in English only.
+【Output Format】※ Strictly follow this format. Each section has its own character target so the text fits the slide box. {lang_directive}
 
 ## 1. Headline
-State the candidate's most recent job title (verbatim from the CV) and primary technical domain. No marketing language.
-Format: "[Most recent title, copied verbatim] | [Primary domain]"
-Example 1: "Senior ML Engineer | LLM pipelines and production ML systems"
-Example 2: "DevOps Lead | Cloud infrastructure and CI/CD"
-※ 60-100 characters. No names or company names. No subjective adjectives.
-※ **Do NOT state total years of experience** — totals often include student periods and become fabrications.
+Short subtitle-style catch phrase combining the candidate's most recent role and primary technical domain. Reads well as a slide subtitle.
+Example: "{headline_example}"
+※ **40-60 characters**. One line. No subjective adjectives. Do NOT state total years of experience.
 
-## 2. Professional Summary
-Highlight the candidate's key selling points through the combination of role × technology × strengths. Include job titles held (verbatim), industries worked in, key quantified achievements, and language proficiency (interpret practical usage, not just certification names).
-Example: "Senior ML Engineer. Worked at Company A and Company B. Built a search platform processing 500K+ daily queries. Led a 12-person team. JLPT N2 — writes technical specs in Japanese."
-※ 200-300 characters. Facts from the CV.
-※ **Do NOT state total years of experience.** Only include a "X years of experience" phrase if the exact phrase appears verbatim in the CV.
+## 2. Career
+Career highlights: recent company (anonymized per rule), role, main project(s) with scope. 2-3 sentences, narrative style.
+Example: "{career_example}"
+※ **80-120 characters**. Facts from the CV only. Do NOT state total years of experience unless the exact phrase appears verbatim in the CV.
 
-## 3. Technical Skills
-List the candidate's technical skills as stated in the CV, grouped by category. Include years of experience only if explicitly mentioned. Do not infer proficiency levels.
-Example: "Languages: Python (8 years), Go (3 years). ML: PyTorch, TensorFlow, Hugging Face. Infrastructure: AWS, Kubernetes, Docker. Data: PostgreSQL, BigQuery."
-※ 200-300 characters. Only skills mentioned in the CV.
+## 3. Strengths
+Core technical strengths. One sentence listing key skills (languages, frameworks, cloud, ML). A second sentence describing the area of specialization or a representative quantified achievement.
+Example: "{strengths_example}"
+※ **80-120 characters**. 2 sentences. Only skills and achievements stated in the CV.
 
 ## 4. Education / Research
-List academic degrees, certifications, publications, and competition results exactly as stated in the CV. Do not interpret or embellish.
-Example: "M.Sc. in Computer Science from University X. Published 2 papers at NeurIPS. AWS Solutions Architect Professional certified."
-※ 200-300 characters. Only facts from the CV. Write "Not stated in CV" for missing sections.
+Academic degrees, certifications, publications, or ongoing research from the CV.
+Example: "{education_example}"
+※ **60-100 characters**. 1-2 sentences. Write "{not_stated_phrase}" if missing.
 
-## 5. Key Achievements
-List the 2-3 most notable quantified achievements from the CV. Include only achievements with specific metrics or outcomes stated in the CV.
-Example: "Reduced inference latency from 200ms to 50ms. Migrated monolith to microservices serving 2M daily users. Cut infrastructure costs by $240K annually."
-※ 200-300 characters. Only achievements with metrics from the CV. If no quantified achievements, write "No quantified achievements stated in CV."
-
-## 6. Consultant's View (Key Recommendation Points)
-From the agent's perspective, list 3 noteworthy points about this candidate based on facts from the CV:
-- **Rare combination of experience**: What makes this candidate's experience profile distinctive (e.g., "Spans ML engineering × production systems × team leadership")
-- **Added value**: Practical advantages such as bilingual ability, Agile/DevOps culture experience, AI tool proficiency, cross-functional collaboration
-- **Standout achievement**: The single most impressive concrete achievement from the CV, with numbers
-Example: "1. Combines 8 years of ML engineering with production-scale deployment (500K+ daily queries) and team leadership (12 engineers). 2. Bilingual (EN/JP) with JLPT N2, writes technical specs in Japanese. 3. Reduced model inference latency by 75% (200ms → 50ms) in production."
-※ 200-300 characters. Support each point with specific facts and numbers from the CV. Do NOT use vague adjectives.
+## 5. Assessment
+Agent's evaluation of the candidate's standout value in 1-2 sentences: rarity of experience combination × depth of specialization × notable achievement. Grounded in CV facts, no vague praise.
+Example: "{assessment_example}"
+※ **60-100 characters**. 1-2 sentences. Support with specific facts from the CV. Do NOT use vague adjectives.
 
 ---
 
 【Important Rules】
 {anonymize_rules}
-2. **Character Targets**: Each section (except Headline) should be 200-300 characters (2-4 sentences). Headline MUST be 60-100 characters.
-3. **English Only**: All output must be in English.
-4. **Fact-based**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences. Use specific numbers and technology names instead of vague adjectives.
-5. **No Markdown Headers in Values**: Output the value text directly after each header.
-6. **Specificity over vagueness**: Express value through concrete facts, not marketing language.
+2. **Character Targets (strict)**: Headline 40-60 / Career 80-120 / Strengths 80-120 / Education 60-100 / Assessment 60-100 characters. Stay within the range. Shorter is acceptable if the CV is light, but never exceed the upper bound.
+3. **Language**: {lang_directive}
+4. **Section headers in English**: The 5 headers (## 1. Headline, ## 2. Career, ## 3. Strengths, ## 4. Education / Research, ## 5. Assessment) MUST stay in English exactly as shown. Only the body text is localized.
+5. **Fact-based**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences. Use specific numbers and technology names instead of vague adjectives.
+6. **No Markdown Headers in Values**: Output the value text directly after each header, no sub-headings inside a section body.
+7. **Specificity over vagueness**: Express value through concrete facts, not marketing language.
 """
 
 
@@ -2264,24 +2270,26 @@ def extract_first_name(content: str) -> str:
     return ""
 
 
-def get_adjust_length_prompt(proposal_text: str, target_chars: int) -> str:
-    """CV提案コメントの文章量を調整するプロンプトを生成"""
+def get_adjust_length_prompt(proposal_text: str, target_chars: int, language: str = "ja") -> str:
+    """CV提案コメントの文章量を調整するプロンプト生成（5セクション・日英切替・スライド貼付最適化）"""
 
-    if target_chars <= 150:
-        style = "Very concise — keep only the single most impactful fact per section. 1-2 sentences max."
-        catch_copy_range = "50-70"
-    elif target_chars <= 200:
-        style = "Concise — keep the strongest 2 facts per section. 2 sentences."
-        catch_copy_range = "60-80"
-    elif target_chars <= 250:
-        style = "Moderately concise — keep key facts and brief context. 2-3 sentences."
-        catch_copy_range = "60-90"
-    elif target_chars <= 300:
-        style = "Standard length — provide good detail with context. 3-4 sentences."
-        catch_copy_range = "60-100"
+    if target_chars <= 60:
+        style = "Very concise — keep only the single most impactful fact per section. 1 sentence."
+        headline_range = "30-50"
+    elif target_chars <= 100:
+        style = "Slide-standard — fit cleanly into a slide box. 1-2 sentences per section."
+        headline_range = "40-60"
+    elif target_chars <= 150:
+        style = "Slightly detailed — add brief context to the main facts. 2-3 sentences per section."
+        headline_range = "50-70"
     else:
-        style = "Detailed — expand with additional context, examples, and qualitative descriptions. 4-5 sentences."
-        catch_copy_range = "80-120"
+        style = "Detailed — expand with context and examples. 2-3 sentences per section."
+        headline_range = "60-100"
+
+    if language == "ja":
+        lang_directive = "Output body text in natural Japanese. Keep section headers in English."
+    else:
+        lang_directive = "Output body text in natural English."
 
     return f"""You are an elite recruitment consultant. Adjust the length of the following candidate proposal to match the target.
 
@@ -2291,14 +2299,14 @@ def get_adjust_length_prompt(proposal_text: str, target_chars: int) -> str:
 ---
 
 【Instructions】
-- **Target**: Each section (except Catch Copy) should be approximately {target_chars} characters.
+- **Target**: Each section (except Headline) should be approximately {target_chars} characters.
 - **Style**: {style}
-- **Catch Copy**: Keep within {catch_copy_range} characters.
-- Keep the same section headers (## 1. Catch Copy, ## 2. Summary, etc.)
+- **Headline**: Keep within {headline_range} characters.
+- **Section headers (MUST keep exactly)**: ## 1. Headline, ## 2. Career, ## 3. Strengths, ## 4. Education / Research, ## 5. Assessment
 - Maintain the same language and anonymization level as the original
 - Prioritize: quantified achievements > rare skills > general descriptions
 - The result must read naturally — do not sacrifice readability for length
-- **Sentence Length (50-80 characters)**: Each sentence MUST be 50-80 characters. Break long sentences into shorter ones, but never shorter than 50 characters. Add specific context (numbers, scope, domain) to short sentences to reach the minimum. One idea per sentence. Do not chain clauses with commas or dashes.
-- Output in English only
+- One idea per sentence. Do not chain clauses with commas or dashes.
+- {lang_directive}
 - Do NOT add any new information not present in the original. When expanding, elaborate on existing facts with more context, do not fabricate.
 """
