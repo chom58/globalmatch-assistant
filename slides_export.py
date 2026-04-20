@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -270,15 +271,16 @@ def _render_slide(
         title = section_labels.get(key, key)
         _draw_cell(slide, x, y, cell_w, cell_h, title, body or "—")
 
-    # --- 4. フッター（右下：Value Create） ---
+    # --- 4. フッター（右下：著作権表示） ---
+    copyright_text = f"© {datetime.now().year} Value Create, Inc. All rights reserved."
     footer_box = slide.shapes.add_textbox(
-        SLIDE_W - Inches(3.0), SLIDE_H - Inches(0.45), Inches(2.7), Inches(0.3)
+        SLIDE_W - Inches(5.0), SLIDE_H - Inches(0.45), Inches(4.7), Inches(0.3)
     )
     _set_textbox_text(
         footer_box,
-        "Value Create",
-        font_size=10,
-        bold=True,
+        copyright_text,
+        font_size=9,
+        bold=False,
         color=TEXT_MUTED,
         align=PP_ALIGN.RIGHT,
     )
