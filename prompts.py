@@ -2200,30 +2200,30 @@ Example: "{headline_example}"
 ※ **40-60 characters**. One line. No subjective adjectives. Do NOT state total years of experience.
 
 ## 2. Career
-Career highlights: recent company (anonymized per rule), role, main project(s) with scope. 2-3 sentences, narrative style.
+Career highlights: recent company (anonymized per rule), role, main project(s) with scope, and include scale/metrics (team size, duration, region) of one representative project. 3-4 sentences, narrative style.
 Example: "{career_example}"
-※ **80-120 characters**. Facts from the CV only. Do NOT state total years of experience unless the exact phrase appears verbatim in the CV.
+※ **150-200 characters**. Facts from the CV only. Do NOT state total years of experience unless the exact phrase appears verbatim in the CV.
 
 ## 3. Strengths
-Core technical strengths. One sentence listing key skills (languages, frameworks, cloud, ML). A second sentence describing the area of specialization or a representative quantified achievement.
+Core technical strengths. First sentence lists key skills (languages, frameworks, cloud, ML). Second sentence describes area of specialization. Third sentence gives a representative quantified achievement (percentage, user count, revenue, performance metric) if available in the CV.
 Example: "{strengths_example}"
-※ **80-120 characters**. 2 sentences. Only skills and achievements stated in the CV.
+※ **150-200 characters**. 2-3 sentences. Only skills and achievements stated in the CV.
 
 ## 4. Education / Research
-Academic degrees, certifications, publications, or ongoing research from the CV.
+Academic degrees (school type + field), relevant certifications, publications, and any ongoing research theme. Include thesis topic or research focus when stated in the CV.
 Example: "{education_example}"
-※ **60-100 characters**. 1-2 sentences. Write "{not_stated_phrase}" if missing.
+※ **100-150 characters**. 2-3 sentences. Write "{not_stated_phrase}" if missing.
 
 ## 5. Assessment
-Agent's evaluation of the candidate's standout value in 1-2 sentences: rarity of experience combination × depth of specialization × notable achievement. Grounded in CV facts, no vague praise.
+Agent's evaluation of the candidate's standout value: break it into (a) rarity of experience combination, (b) depth of specialization, (c) one concrete supporting fact from the CV. 2-3 sentences, grounded in CV facts, no vague praise.
 Example: "{assessment_example}"
-※ **60-100 characters**. 1-2 sentences. Support with specific facts from the CV. Do NOT use vague adjectives.
+※ **120-170 characters**. 2-3 sentences. Support with specific facts from the CV. Do NOT use vague adjectives.
 
 ---
 
 【Important Rules】
 {anonymize_rules}
-2. **Character Targets (strict)**: Headline 40-60 / Career 80-120 / Strengths 80-120 / Education 60-100 / Assessment 60-100 characters. Stay within the range. Shorter is acceptable if the CV is light, but never exceed the upper bound.
+2. **Character Targets (strict)**: Headline 40-60 / Career 150-200 / Strengths 150-200 / Education 100-150 / Assessment 120-170 characters. Stay within the range. Shorter is acceptable if the CV is light, but never exceed the upper bound.
 3. **Language**: {lang_directive}
 4. **Section headers in English**: The 5 headers (## 1. Headline, ## 2. Career, ## 3. Strengths, ## 4. Education / Research, ## 5. Assessment) MUST stay in English exactly as shown. Only the body text is localized.
 5. **Fact-based**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences. Use specific numbers and technology names instead of vague adjectives.
