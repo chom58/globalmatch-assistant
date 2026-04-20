@@ -6437,9 +6437,9 @@ def main():
                     with col_slider:
                         target_chars = st.slider(
                             f"📏 {t('cv_length_slider')}",
-                            min_value=60, max_value=200, value=150, step=20,
+                            min_value=60, max_value=200, value=200, step=20,
                             key="cv_extract_length_slider",
-                            help="スライド貼付は150前後が目安。60=極短 / 100=コンパクト / 150=標準 / 200=詳細"
+                            help="スライド貼付は200前後が目安。60=極短 / 100=コンパクト / 150=標準 / 200=詳細"
                         )
                     with col_adjust:
                         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
@@ -6682,9 +6682,9 @@ Full-stack Developer...
                             with col_slider_b:
                                 batch_target = st.slider(
                                     f"📏 {t('cv_length_slider')}",
-                                    min_value=60, max_value=200, value=150, step=20,
+                                    min_value=60, max_value=200, value=200, step=20,
                                     key=f"batch_cv_length_{cv_r['index']}",
-                                    help="スライド貼付は150前後が目安"
+                                    help="スライド貼付は200前後が目安"
                                 )
                             with col_adjust_b:
                                 st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
