@@ -3300,6 +3300,27 @@ def _copy_to_clipboard(text: str) -> None:
     """, height=0)
 
 
+_CV_SECTION_PATTERN = re.compile(r'^##\s*(\d+\.\s*[^\n]+)', re.MULTILINE)
+
+
+def _parse_cv_sections(text: str) -> list:
+    """CV提案コメントを ## 見出し単位で [(name, body), ...] に分割する。
+    見出しが無いテキストは空リストを返す。"""
+    if not text:
+        return []
+    matches = list(_CV_SECTION_PATTERN.finditer(text))
+    if not matches:
+        return []
+    result = []
+    for i, m in enumerate(matches):
+        name = m.group(1).strip()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        body = text[start:end].strip()
+        result.append((name, body))
+    return result
+
+
 def _show_btn_hint(api_key: str, has_input: bool, has_input2: bool | None = None):
     """disabledボタンの理由をヒントとして表示"""
     if not api_key:
@@ -6280,8 +6301,8 @@ def main():
         st.subheader(t("cv_title"))
         st.caption(t("cv_desc"))
 
-        # 匿名化レベル選択
-        col_mode, col_anon = st.columns(2)
+        # 匿名化レベル・出力言語選択
+        col_mode, col_anon, col_lang = st.columns(3)
         with col_mode:
             # 入力モード選択
             cv_extract_mode = st.radio(
@@ -6305,6 +6326,15 @@ def main():
                 horizontal=True,
                 key="cv_extract_anon_level",
                 help="完全：企業名を「a major IT firm」等に置換 / 軽度：企業名・大学名をそのまま表示"
+            )
+        with col_lang:
+            cv_output_lang = st.radio(
+                t("cv_lang_label"),
+                options=["ja", "en"],
+                format_func=lambda x: {"ja": t("cv_lang_ja"), "en": t("cv_lang_en")}[x],
+                horizontal=True,
+                key="cv_extract_lang",
+                help="スライドテンプレートが日本語なら「日本語」を選択"
             )
 
         if cv_extract_mode == "single":
@@ -6375,7 +6405,7 @@ def main():
                         else:
                             try:
                                 start_time = time.time()
-                                prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level)
+                                prompt = get_cv_proposal_extract_prompt(cv_extract_input, anonymize_level=cv_anon_level, language=cv_output_lang)
                                 st.caption(t("cv_ai"))
                                 stream_container = st.empty()
                                 result = stream_to_container(api_key, prompt, stream_container)
@@ -6405,17 +6435,17 @@ def main():
                     col_slider, col_adjust = st.columns([3, 1])
                     with col_slider:
                         target_chars = st.slider(
-                            "📏 文章量（各セクションの目安文字数）",
-                            min_value=100, max_value=400, value=250, step=50,
+                            f"📏 {t('cv_length_slider')}",
+                            min_value=60, max_value=200, value=100, step=20,
                             key="cv_extract_length_slider",
-                            help="小さい値＝簡潔、大きい値＝詳細"
+                            help="スライド貼付は100前後が目安。60=極短 / 100=標準 / 150-200=詳細"
                         )
                     with col_adjust:
                         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
                         if st.button("✏️ 文章量を調整", key="adjust_cv_extract", use_container_width=True):
                             with st.spinner("🤖 調整中..."):
                                 try:
-                                    prompt = get_adjust_length_prompt(st.session_state['cv_extract_result'], target_chars)
+                                    prompt = get_adjust_length_prompt(st.session_state['cv_extract_result'], target_chars, language=cv_output_lang)
                                     adjusted = call_groq_api(api_key, prompt)
                                     st.session_state['cv_extract_result'] = adjusted
                                     st.success("✅ 調整完了！")
@@ -6424,7 +6454,24 @@ def main():
                                     st.error("❌ 調整エラーが発生しました。しばらく待ってから再試行してください")
 
                     if show_formatted_cv:
-                        st.markdown(st.session_state['cv_extract_result'])
+                        # セクション単位で本文コピーしやすい表示（スライド貼付用）
+                        sections = _parse_cv_sections(st.session_state['cv_extract_result'])
+                        if sections:
+                            st.caption(t("cv_section_copy_hint"))
+                            for sec_name, sec_body in sections:
+                                col_sec_title, col_sec_count, col_sec_copy = st.columns([5, 1, 1])
+                                with col_sec_title:
+                                    st.markdown(f"**{sec_name}**")
+                                with col_sec_count:
+                                    st.caption(f"{len(sec_body)}字")
+                                with col_sec_copy:
+                                    if st.button("📋", key=f"copy_cv_sec_{sec_name}", help="本文のみコピー"):
+                                        _copy_to_clipboard(sec_body)
+                                        st.toast(f"✅ {sec_name} をコピーしました")
+                                st.markdown(sec_body)
+                                st.markdown("")
+                        else:
+                            st.markdown(st.session_state['cv_extract_result'])
                     else:
                         edited_cv_result = st.text_area(
                             "Output (Editable)",
@@ -6552,7 +6599,7 @@ Full-stack Developer...
                         else:
                             try:
                                 item_start = time.time()
-                                prompt = get_cv_proposal_extract_prompt(cv_text, anonymize_level=cv_anon_level)
+                                prompt = get_cv_proposal_extract_prompt(cv_text, anonymize_level=cv_anon_level, language=cv_output_lang)
                                 output = call_groq_api(api_key, prompt)
                                 cv_result["status"] = "success"
                                 cv_result["output"] = output
@@ -6616,17 +6663,17 @@ Full-stack Developer...
                             col_slider_b, col_adjust_b = st.columns([3, 1])
                             with col_slider_b:
                                 batch_target = st.slider(
-                                    "📏 文章量（各セクションの目安文字数）",
-                                    min_value=100, max_value=400, value=250, step=50,
+                                    f"📏 {t('cv_length_slider')}",
+                                    min_value=60, max_value=200, value=100, step=20,
                                     key=f"batch_cv_length_{cv_r['index']}",
-                                    help="小さい値＝簡潔、大きい値＝詳細"
+                                    help="スライド貼付は100前後が目安"
                                 )
                             with col_adjust_b:
                                 st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)
                                 if st.button("✏️ 文章量を調整", key=f"adjust_batch_cv_{cv_r['index']}", use_container_width=True):
                                     with st.spinner("🤖 調整中..."):
                                         try:
-                                            prompt = get_adjust_length_prompt(cv_r['output'], batch_target)
+                                            prompt = get_adjust_length_prompt(cv_r['output'], batch_target, language=cv_output_lang)
                                             adjusted = call_groq_api(api_key, prompt)
                                             cv_r['output'] = adjusted
                                             st.success("✅ 調整完了！")
