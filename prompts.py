@@ -2158,7 +2158,7 @@ def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "ful
         anonymize_rules = """1. **Complete Anonymization**: No real names, company names, university names, or identifiable proper nouns. Use generic terms (e.g., "a major global IT firm", "a top US university")."""
 
     if language == "ja":
-        lang_directive = "All section body text MUST be written in natural Japanese. Section headers (## 1. 👤 Headline etc.) stay in English."
+        lang_directive = "All section body text MUST be written in natural Japanese. Section headers (## 1. Headline etc.) stay in English."
         headline_example = "東京フィンテックのシニアMLエンジニア — LLM/本番ML実装とクラウド基盤の専門家"
         career_example_body = (
             "- **現職**: グローバル大手フィンテックの東京オフィス所属、シニアMLエンジニアとして10名チームを技術リード\n"
@@ -2236,30 +2236,30 @@ Your goal: Extract and organize facts from the CV to maximize the candidate's ma
 
 Each body section (Career / Strengths / Education / Assessment) is a **bullet list**. Each bullet starts with `- ` then a bolded keyword in `**...**`, then a colon, then the descriptive fact. Headline alone is a single catch-phrase line (no bullets). The bold keyword is the scannable anchor — keep it short (3-8 chars in JA, 1-3 words in EN) and concrete. Use generous detail: each bullet should pack 2-3 concrete facts (role + scope + metric / stack + years + project), not a single short noun.
 
-## 1. 👤 Headline
+## 1. Headline
 Short subtitle-style catch phrase combining the candidate's most recent role, primary technical domain, and one distinguishing strength. Reads well as a slide subtitle. One line, no bullets.
 Example: "{headline_example}"
 ※ **50-80 characters**. One line. No subjective adjectives. Do NOT state total years of experience unless the CV explicitly states it.
 
-## 2. 👔 Career
+## 2. Career
 Career highlights as **4 bullet points** (3 minimum if the CV is sparse). Use these angles in order: (1) current/most recent company (anonymized) + role + team/leadership context, (2) career arc — how the candidate reached the current role (companies, domains, pivot moments, derivable years of experience), (3) flagship project scope with scale metric (team size / duration / region / SLA / cost), (4) notable recent impact with a measurable outcome.
 Example:
 {career_example_body}
 ※ **4 bullets (3 if CV is sparse), each 60-90 characters, total 240-360 characters**. Each bullet MUST carry concrete facts from the CV. Do not trail off at 40 chars; use the full range.
 
-## 3. 🛠 Strengths
+## 3. Strengths
 Core technical strengths as **4 bullet points** (3 minimum if sparse). Angles in order: (1) primary tech stack with years of hands-on experience per tech (if derivable), (2) adjacent/secondary skills and tools, (3) area of specialization with concrete scope (what systems, what scale), (4) representative quantified achievement (percentage, user count, revenue, performance metric, time-to-ship).
 Example:
 {strengths_example_body}
 ※ **4 bullets (3 if sparse), each 60-90 characters, total 240-360 characters**. Every bullet must anchor on technology names or metrics, not generic descriptors.
 
-## 4. 🎓 Education / Research
+## 4. Education / Research
 Academic and research as **2-3 bullet points**. Angles: (1) degree(s) with school type, field, graduation year or honors, (2) thesis / ongoing research focus / publications with venue, (3) certifications / external recognition / notable community contributions. Omit a bullet entirely if no concrete information is in the CV — do not pad with placeholders.
 Example:
 {education_example_body}
 ※ **2-3 bullets, each 50-80 characters, total 120-240 characters**. If the CV has no academic information at all, output the single line `- **{not_stated_phrase}**: —` as a fallback.
 
-## 5. ⭐ Assessment
+## 5. Assessment
 Agent's evaluation as **3-4 bullet points**. Angles in order: (1) rarity of the candidate's experience combination (what makes this profile hard to find), (2) depth of specialization with years/projects, (3) representative concrete fact from the CV that supports the above, (4) fit — one-sentence pitch on what type of organization benefits most from hiring this candidate.
 Example:
 {assessment_example_body}
@@ -2272,7 +2272,7 @@ Example:
 2. **Character Targets (strict)**: Headline 50-80 / Career 240-360 total / Strengths 240-360 total / Education 120-240 total / Assessment 180-360 total characters. Stay within the range. Shorter is acceptable ONLY if the CV is genuinely sparse, but always aim for the upper half of the range.
 3. **Use the full bullet width**: Do not stop at 40 chars when the range allows 90. Add concrete context — stack / scope / scale / outcome — until each bullet is in the 60-90 char range.
 4. **Language**: {lang_directive}
-5. **Section headers (MUST keep exactly as shown)**: `## 1. 👤 Headline`, `## 2. 👔 Career`, `## 3. 🛠 Strengths`, `## 4. 🎓 Education / Research`, `## 5. ⭐ Assessment`. The emoji and the English label MUST stay exactly. Only the body text is localized.
+5. **Section headers (MUST keep exactly as shown)**: `## 1. Headline`, `## 2. Career`, `## 3. Strengths`, `## 4. Education / Research`, `## 5. Assessment`. The English label MUST stay exactly. Only the body text is localized.
 6. **Bullet format (strict)**: Every body section except Headline uses bullets in the form `- **Keyword**: description...`. One bullet per line. Do NOT merge bullets into prose.
 7. **Bold keywords**: The `**...**` keyword at the start of each bullet MUST be concrete (skill name / role name / metric label / project name), not a vague adjective. Do NOT bold anything else in the line.
 8. **Fact-based with derivable facts allowed**: Every claim must be grounded in the CV. You MAY compute derivable facts (years of experience from date ranges, number of companies from job history, languages from skills list). You MUST NOT fabricate metrics, achievements, or experiences.
@@ -2368,7 +2368,7 @@ def get_adjust_length_prompt(proposal_text: str, target_chars: int, language: st
 - **Style**: {style}
 - **Bullet count per section**: Career {career_bullets} / Strengths {strengths_bullets} / Education {education_bullets} / Assessment {assessment_bullets}. Drop empty bullets entirely rather than filling them with "記載なし" / "Not stated".
 - **Headline**: Keep within {headline_range} characters, single line, no bullets.
-- **Section headers (MUST keep exactly)**: `## 1. 👤 Headline`, `## 2. 👔 Career`, `## 3. 🛠 Strengths`, `## 4. 🎓 Education / Research`, `## 5. ⭐ Assessment`. Do not drop the emoji.
+- **Section headers (MUST keep exactly)**: `## 1. Headline`, `## 2. Career`, `## 3. Strengths`, `## 4. Education / Research`, `## 5. Assessment`.
 - **Bullet format (MUST preserve)**: Each body section stays as a bullet list in the form `- **Keyword**: description...`. Adjust lengths by rephrasing each bullet, not by merging bullets into prose.
 - **Concrete anchor per bullet**: Every bullet MUST contain at least one number, proper noun, or specific technology name.
 - **Bold keywords**: Keep the `**...**` keyword anchor on every bullet. If rephrasing, choose a concrete keyword (skill / role / metric / project), not a vague adjective.

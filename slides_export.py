@@ -46,18 +46,18 @@ SLIDE_H = Inches(7.5)
 
 # セクションタイトルの日英表示（ヘッダー内部で用いる）
 SECTION_LABELS_JA = {
-    "Headline": "👤 Headline",
-    "Career": "👔 Career / 経歴",
-    "Strengths": "🛠 Strengths / 強み",
-    "Education / Research": "🎓 Education / Research",
-    "Assessment": "⭐ Assessment / 評価",
+    "Headline": "Headline",
+    "Career": "Career / 経歴",
+    "Strengths": "Strengths / 強み",
+    "Education / Research": "Education / Research",
+    "Assessment": "Assessment / 評価",
 }
 SECTION_LABELS_EN = {
-    "Headline": "👤 Headline",
-    "Career": "👔 Career",
-    "Strengths": "🛠 Strengths",
-    "Education / Research": "🎓 Education / Research",
-    "Assessment": "⭐ Assessment",
+    "Headline": "Headline",
+    "Career": "Career",
+    "Strengths": "Strengths",
+    "Education / Research": "Education / Research",
+    "Assessment": "Assessment",
 }
 
 
