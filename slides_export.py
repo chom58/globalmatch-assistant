@@ -34,18 +34,18 @@ SLIDE_H = Inches(7.5)
 
 # セクションタイトルの日英表示（ヘッダー内部で用いる）
 SECTION_LABELS_JA = {
-    "Headline": "Headline",
-    "Career": "Career / 経歴",
-    "Strengths": "Strengths / 強み",
-    "Education / Research": "Education / Research",
-    "Assessment": "Assessment / 評価",
+    "Headline": "👤 Headline",
+    "Career": "👔 Career / 経歴",
+    "Strengths": "🛠 Strengths / 強み",
+    "Education / Research": "🎓 Education / Research",
+    "Assessment": "⭐ Assessment / 評価",
 }
 SECTION_LABELS_EN = {
-    "Headline": "Headline",
-    "Career": "Career",
-    "Strengths": "Strengths",
-    "Education / Research": "Education / Research",
-    "Assessment": "Assessment",
+    "Headline": "👤 Headline",
+    "Career": "👔 Career",
+    "Strengths": "🛠 Strengths",
+    "Education / Research": "🎓 Education / Research",
+    "Assessment": "⭐ Assessment",
 }
 
 
@@ -91,9 +91,12 @@ _SECTION_NORMALIZE = {
 
 
 def _normalize_section_name(raw: str) -> str:
-    """'1. Headline' / 'Education / Research' などを正規化キーに変換する。"""
+    """'1. 👤 Headline' / '1. Headline' / 'Education / Research' などを正規化キーに変換する。
+    先頭の数字プレフィックス・絵文字・空白を除去してからキー照合する。"""
     # 先頭の数字とドット・空白を除去
-    cleaned = re.sub(r"^\s*\d+\.\s*", "", raw).strip().lower()
+    cleaned = re.sub(r"^\s*\d+\.\s*", "", raw).strip()
+    # 先頭の絵文字・記号（非ASCII英数字）を除去
+    cleaned = re.sub(r"^[^A-Za-z]+", "", cleaned).strip().lower()
     # キーとの部分一致
     for key, norm in _SECTION_NORMALIZE.items():
         if cleaned.startswith(key):
@@ -255,7 +258,7 @@ def _render_slide(
 
 
 def _draw_cell(slide, x, y, w, h, title: str, body: str) -> None:
-    """1つのセクションセルを描画する。"""
+    """1つのセクションセルを描画する。本文は箇条書き + **bold** インライン対応。"""
     # 背景（薄いクリーム色の角丸矩形）
     bg = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h)
     bg.adjustments[0] = 0.05  # 角丸を控えめに
@@ -278,23 +281,69 @@ def _draw_cell(slide, x, y, w, h, title: str, body: str) -> None:
         title_tb, title, font_size=13, bold=True, color=TEXT_DARK, align=PP_ALIGN.LEFT
     )
 
-    # 本文
+    # 本文（箇条書き + インライン太字）
     body_tb = slide.shapes.add_textbox(
         x + Inches(0.2),
         y + Inches(0.55),
         w - Inches(0.3),
         h - Inches(0.65),
     )
-    _set_textbox_text(
-        body_tb,
-        body,
-        font_size=12,
-        bold=False,
-        color=TEXT_DARK,
-        align=PP_ALIGN.LEFT,
-        anchor=MSO_ANCHOR.TOP,
-        word_wrap=True,
-    )
+    _write_body_bullets(body_tb, body, font_size=12, color=TEXT_DARK)
+
+
+_BOLD_SPLIT = re.compile(r"(\*\*[^*]+\*\*)")
+
+
+def _parse_bold_segments(line: str) -> list[tuple[str, bool]]:
+    """'- **Keyword**: desc' → [('Keyword', True), (': desc', False)] のように分解する。
+    先頭の箇条書きプレフィックス（`- ` / `* `）は呼び出し側で除去しておくこと。"""
+    segments: list[tuple[str, bool]] = []
+    for part in _BOLD_SPLIT.split(line):
+        if not part:
+            continue
+        if part.startswith("**") and part.endswith("**") and len(part) >= 4:
+            segments.append((part[2:-2], True))
+        else:
+            segments.append((part, False))
+    return segments
+
+
+def _write_body_bullets(textbox, body: str, *, font_size: int, color: RGBColor) -> None:
+    """本文テキストを箇条書き + インライン太字で描画する。
+    - 行頭 `- ` または `* ` は視覚的な `• ` に置換
+    - `**text**` は太字 run として分割
+    - 空行はスキップ"""
+    tf = textbox.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = MSO_ANCHOR.TOP
+    tf.margin_left = Inches(0.0)
+    tf.margin_right = Inches(0.0)
+    tf.margin_top = Inches(0.0)
+    tf.margin_bottom = Inches(0.0)
+    tf.clear()
+
+    lines = [ln for ln in (body or "").split("\n") if ln.strip()]
+    if not lines:
+        lines = ["—"]
+
+    for i, raw in enumerate(lines):
+        stripped = raw.strip()
+        # 箇条書きプレフィックスを視覚的な `• ` に置換
+        if stripped.startswith("- "):
+            stripped = "• " + stripped[2:]
+        elif stripped.startswith("* "):
+            stripped = "• " + stripped[2:]
+
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = PP_ALIGN.LEFT
+        p.space_after = Pt(3)
+
+        for seg_text, is_bold in _parse_bold_segments(stripped):
+            run = p.add_run()
+            run.text = seg_text
+            run.font.size = Pt(font_size)
+            run.font.bold = is_bold
+            run.font.color.rgb = color
 
 
 def _set_shape_text(
