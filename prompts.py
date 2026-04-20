@@ -2159,50 +2159,56 @@ def get_cv_proposal_extract_prompt(resume_text: str, anonymize_level: str = "ful
 
     if language == "ja":
         lang_directive = "All section body text MUST be written in natural Japanese. Section headers (## 1. 👤 Headline etc.) stay in English."
-        headline_example = "東京フィンテックのシニアMLエンジニア — LLM/本番ML実装"
+        headline_example = "東京フィンテックのシニアMLエンジニア — LLM/本番ML実装とクラウド基盤の専門家"
         career_example_body = (
-            "- **現職**: グローバル大手金融の東京オフィス所属、シニアMLエンジニア\n"
-            "- **主要案件**: 市場データ基盤を10拠点・100名規模で運用、SLA 99.9%維持\n"
-            "- **直近成果**: 国民健康保険向け認証基盤を半年でMVP公開、3自治体に展開"
+            "- **現職**: グローバル大手フィンテックの東京オフィス所属、シニアMLエンジニアとして10名チームを技術リード\n"
+            "- **経歴変遷**: 国内スタートアップ2社でバックエンドとML基盤を担当後、2020年に現職へ、累計12年のソフトウェア経験\n"
+            "- **代表プロジェクト**: 市場データ基盤を10拠点・100名規模で刷新、SLA 99.9%を3年維持、年間$2Mのインフラを運用\n"
+            "- **直近成果**: 国民健康保険向け認証基盤を半年でMVP公開、3自治体に展開、月間20万リクエストを安定処理"
         )
         strengths_example_body = (
-            "- **主要スタック**: Python / C++ / TensorFlow / ONNX\n"
-            "- **専門領域**: AWS (Terraform) による分散DB基盤の設計・運用\n"
-            "- **定量実績**: 推論レイテンシ40%削減、月間$50kのコスト最適化"
+            "- **主要スタック**: Python（10年以上）、C++（6年）、TensorFlow/ONNX（4年）、AWS Terraform（5年）\n"
+            "- **周辺スキル**: Go、Rust（PoC経験）、Kubernetes、gRPC、Kafka、LangChain と LLM オーケストレーション\n"
+            "- **専門領域**: 分散DB・ストリーミング基盤の設計運用、本番MLパイプライン、低レイテンシ推論の最適化\n"
+            "- **定量実績**: 推論レイテンシを40%削減、月間$50kのコスト最適化、LLM評価基盤を1週間でプロトタイプ構築"
         )
         education_example_body = (
-            "- **学歴**: 東京大学 情報工学・電気電子工学の二重学位（最優等）\n"
-            "- **研究テーマ**: LLMとプロンプトエンジニアリング\n"
-            "- **資格・論文**: AWS Certified Solutions Architect Professional"
+            "- **学歴**: 東京大学 情報工学・電気電子工学の二重学位（最優等）、修士はML方向で研究室配属\n"
+            "- **研究テーマ**: LLMのプロンプトエンジニアリングと evaluation harness、ICML 2024 に共著論文1本採択\n"
+            "- **資格・認定**: AWS Certified Solutions Architect Professional、Google Cloud Professional ML Engineer"
         )
         assessment_example_body = (
-            "- **希少性**: 金融データ処理 × 本番ML運用の両軸を持つスペシャリスト\n"
-            "- **専門深度**: エッジケース処理で10年以上、クラウド上級\n"
-            "- **根拠**: 東京拠点で大規模認証プロジェクトを半年で主導した実績"
+            "- **希少性**: 金融データ処理 × 本番ML × LLM オーケストレーションの三軸を実装レベルで持つ希少人材\n"
+            "- **専門深度**: エッジケース処理で10年以上、クラウド上級、直近はLLMのproduction実装経験が豊富\n"
+            "- **代表根拠**: フィンテック基盤刷新と国民健康保険 MVP を同時並行で主導、両方を本番稼働まで運用\n"
+            "- **推薦理由**: 金融×公共領域で実装経験があり、LLM導入を加速させたい技術組織に即戦力となる"
         )
         not_stated_phrase = "記載なし"
     else:
         lang_directive = "All section body text MUST be written in natural English."
-        headline_example = "Senior ML Engineer with deep fintech track record in Tokyo — LLM pipelines and production ML"
+        headline_example = "Senior ML Engineer — Tokyo fintech track record, LLM pipelines and production ML on cloud-native infrastructure"
         career_example_body = (
-            "- **Current role**: Senior ML Engineer at a major global financial firm (Tokyo)\n"
-            "- **Key project**: Operated market data platform across 10 regions and 100 engineers, 99.9% SLA\n"
-            "- **Recent impact**: Shipped authentication MVP for national health insurance in 6 months, adopted by 3 municipalities"
+            "- **Current role**: Senior ML Engineer at a major global fintech (Tokyo), tech-leading a team of 10\n"
+            "- **Career arc**: Shifted from backend to ML across 2 domestic startups, joined current role in 2020; 12 years of software experience total\n"
+            "- **Flagship project**: Rebuilt market data platform across 10 regions and 100 engineers, sustained 99.9% SLA for 3 years, $2M/yr infra\n"
+            "- **Recent impact**: Shipped national health insurance auth MVP in 6 months, rolled out to 3 municipalities, 200k req/month in steady state"
         )
         strengths_example_body = (
-            "- **Primary stack**: Python / C++ / TensorFlow / ONNX\n"
-            "- **Specialization**: AWS infrastructure (Terraform) and distributed DB design\n"
-            "- **Quantified impact**: Reduced inference latency 40%, saved $50k/month"
+            "- **Primary stack**: Python (10+ yrs), C++ (6 yrs), TensorFlow/ONNX (4 yrs), AWS Terraform (5 yrs)\n"
+            "- **Adjacent skills**: Go, Rust (PoC), Kubernetes, gRPC, Kafka, LangChain, LLM orchestration patterns\n"
+            "- **Specialization**: Distributed DB and streaming platform design/operation, production ML pipelines, low-latency inference tuning\n"
+            "- **Quantified impact**: Reduced inference latency by 40%, saved $50k/month, built an LLM evaluation harness prototype in 1 week"
         )
         education_example_body = (
-            "- **Degrees**: Dual degree in CS and EE from the University of Tokyo (highest honors)\n"
-            "- **Research focus**: LLMs and prompt engineering\n"
-            "- **Certifications**: AWS Certified Solutions Architect Professional"
+            "- **Degrees**: Dual degree in CS and EE from the University of Tokyo (highest honors), master's in ML lab\n"
+            "- **Research focus**: LLM prompt engineering and evaluation harnesses, co-authored paper accepted at ICML 2024\n"
+            "- **Certifications**: AWS Certified Solutions Architect Professional, Google Cloud Professional ML Engineer"
         )
         assessment_example_body = (
-            "- **Rarity**: Specialist combining financial data processing × production ML\n"
-            "- **Depth**: 10+ years in edge-case handling, expert-level cloud\n"
-            "- **Evidence**: Led a large-scale authentication project in Tokyo within 6 months"
+            "- **Rarity**: Engineer combining financial data processing × production ML × LLM orchestration at implementation level\n"
+            "- **Depth**: 10+ years in edge-case handling, expert-level cloud, recent strong production LLM track record\n"
+            "- **Evidence**: Led a fintech platform overhaul and a national insurance MVP simultaneously, both now in production\n"
+            "- **Fit**: Immediate value for tech orgs pushing LLM adoption in financial or public-sector domains"
         )
         not_stated_phrase = "Not stated in CV"
 
@@ -2218,57 +2224,60 @@ Your goal: Extract and organize facts from the CV to maximize the candidate's ma
 【Extraction Principles — Apply to ALL sections】
 - **Facts only**: Extract information that is explicitly stated in the CV
 - **Preserve numbers**: Include all metrics exactly as stated (team sizes, percentages, revenue, user counts)
+- **Derivable facts are allowed**: If the CV lists employment date ranges, computing "10+ years of experience" or "3 companies in total" from those dates is permitted and encouraged. Same for "led N projects" if the projects are listed, or "N languages used" if listed in skills.
 - **No embellishment**: Do not rephrase achievements to sound more impressive
-- **No inference**: Do not infer skills or achievements not explicitly mentioned
-- **If information is missing**: Write "{not_stated_phrase}" — do NOT fill gaps with assumptions
+- **No fabrication**: Do not invent metrics, technologies, or experiences that are not supported by the CV
+- **Concrete per bullet**: Every bullet MUST contain at least one concrete anchor — a number, a proper noun (company / product / university / conference), OR a specific technology name. Pure adjectives and generalities are not allowed.
+- **Drop empty bullets**: If you cannot fill a bullet with a concrete fact from the CV, omit that bullet entirely. Never write placeholder bullets like "記載なし" or "—" — write fewer bullets instead.
 
 ---
 
 【Output Format】※ Strictly follow this format. {lang_directive}
 
-Each body section (Career / Strengths / Education / Assessment) is a **bullet list**. Each bullet starts with `- ` then a bolded keyword in `**...**`, then a colon, then the descriptive fact. Headline alone is a single catch-phrase line (no bullets). The bold keyword is the scannable anchor — keep it short (2-8 chars in JA, 1-3 words in EN) and concrete.
+Each body section (Career / Strengths / Education / Assessment) is a **bullet list**. Each bullet starts with `- ` then a bolded keyword in `**...**`, then a colon, then the descriptive fact. Headline alone is a single catch-phrase line (no bullets). The bold keyword is the scannable anchor — keep it short (3-8 chars in JA, 1-3 words in EN) and concrete. Use generous detail: each bullet should pack 2-3 concrete facts (role + scope + metric / stack + years + project), not a single short noun.
 
 ## 1. 👤 Headline
-Short subtitle-style catch phrase combining the candidate's most recent role and primary technical domain. Reads well as a slide subtitle. One line, no bullets.
+Short subtitle-style catch phrase combining the candidate's most recent role, primary technical domain, and one distinguishing strength. Reads well as a slide subtitle. One line, no bullets.
 Example: "{headline_example}"
-※ **40-60 characters**. One line. No subjective adjectives. Do NOT state total years of experience.
+※ **50-80 characters**. One line. No subjective adjectives. Do NOT state total years of experience unless the CV explicitly states it.
 
 ## 2. 👔 Career
-Career highlights as **3 bullet points**. Use these three angles in order: (1) current/most recent company (anonymized) + role, (2) main project scope with scale metric (team size / duration / region), (3) notable recent impact or achievement.
+Career highlights as **4 bullet points** (3 minimum if the CV is sparse). Use these angles in order: (1) current/most recent company (anonymized) + role + team/leadership context, (2) career arc — how the candidate reached the current role (companies, domains, pivot moments, derivable years of experience), (3) flagship project scope with scale metric (team size / duration / region / SLA / cost), (4) notable recent impact with a measurable outcome.
 Example:
 {career_example_body}
-※ **3 bullets, each 30-70 characters, total 150-200 characters**. Facts from the CV only. Do NOT state total years of experience unless the exact phrase appears verbatim in the CV.
+※ **4 bullets (3 if CV is sparse), each 60-90 characters, total 240-360 characters**. Each bullet MUST carry concrete facts from the CV. Do not trail off at 40 chars; use the full range.
 
 ## 3. 🛠 Strengths
-Core technical strengths as **3 bullet points**: (1) primary tech stack (languages / frameworks / cloud / ML), (2) area of specialization, (3) representative quantified achievement (percentage, user count, revenue, performance metric).
+Core technical strengths as **4 bullet points** (3 minimum if sparse). Angles in order: (1) primary tech stack with years of hands-on experience per tech (if derivable), (2) adjacent/secondary skills and tools, (3) area of specialization with concrete scope (what systems, what scale), (4) representative quantified achievement (percentage, user count, revenue, performance metric, time-to-ship).
 Example:
 {strengths_example_body}
-※ **3 bullets, each 30-70 characters, total 150-200 characters**. Only skills and achievements stated in the CV.
+※ **4 bullets (3 if sparse), each 60-90 characters, total 240-360 characters**. Every bullet must anchor on technology names or metrics, not generic descriptors.
 
 ## 4. 🎓 Education / Research
-Academic and research as **2-3 bullet points**: (1) degree(s) with school type and field, (2) thesis or ongoing research focus, (3) certifications / publications (optional — omit the bullet if not in the CV).
+Academic and research as **2-3 bullet points**. Angles: (1) degree(s) with school type, field, graduation year or honors, (2) thesis / ongoing research focus / publications with venue, (3) certifications / external recognition / notable community contributions. Omit a bullet entirely if no concrete information is in the CV — do not pad with placeholders.
 Example:
 {education_example_body}
-※ **2-3 bullets, each 30-60 characters, total 100-150 characters**. Write a single bullet `- **{not_stated_phrase}**: —` if no academic info is in the CV.
+※ **2-3 bullets, each 50-80 characters, total 120-240 characters**. If the CV has no academic information at all, output the single line `- **{not_stated_phrase}**: —` as a fallback.
 
 ## 5. ⭐ Assessment
-Agent's evaluation as **2-3 bullet points**: (1) rarity of experience combination, (2) depth of specialization, (3) one concrete supporting fact from the CV.
+Agent's evaluation as **3-4 bullet points**. Angles in order: (1) rarity of the candidate's experience combination (what makes this profile hard to find), (2) depth of specialization with years/projects, (3) representative concrete fact from the CV that supports the above, (4) fit — one-sentence pitch on what type of organization benefits most from hiring this candidate.
 Example:
 {assessment_example_body}
-※ **2-3 bullets, each 30-70 characters, total 120-170 characters**. Support with specific facts from the CV. Do NOT use vague adjectives.
+※ **3-4 bullets, each 60-90 characters, total 180-360 characters**. Support every claim with specific CV facts. Do NOT use vague adjectives like "excellent", "passionate", "strong".
 
 ---
 
 【Important Rules】
 {anonymize_rules}
-2. **Character Targets (strict)**: Headline 40-60 / Career 150-200 total / Strengths 150-200 total / Education 100-150 total / Assessment 120-170 total characters. Stay within the range. Shorter is acceptable if the CV is light, but never exceed the upper bound.
-3. **Language**: {lang_directive}
-4. **Section headers (MUST keep exactly as shown)**: `## 1. 👤 Headline`, `## 2. 👔 Career`, `## 3. 🛠 Strengths`, `## 4. 🎓 Education / Research`, `## 5. ⭐ Assessment`. The emoji and the English label MUST stay exactly. Only the body text is localized.
-5. **Bullet format (strict)**: Every body section except Headline uses bullets in the form `- **Keyword**: description...`. One bullet per line. Do NOT merge bullets into prose.
-6. **Bold keywords**: The `**...**` keyword at the start of each bullet MUST be concrete (skill name / role name / metric label), not a vague adjective. Do NOT bold anything else in the line.
-7. **Fact-based**: Every claim must be grounded in the CV. Do NOT invent metrics, achievements, or experiences. Use specific numbers and technology names instead of vague adjectives.
-8. **No Markdown sub-headers**: Do not add `###` sub-headers inside a section. Only the 5 `##` section headers.
-9. **Specificity over vagueness**: Express value through concrete facts, not marketing language.
+2. **Character Targets (strict)**: Headline 50-80 / Career 240-360 total / Strengths 240-360 total / Education 120-240 total / Assessment 180-360 total characters. Stay within the range. Shorter is acceptable ONLY if the CV is genuinely sparse, but always aim for the upper half of the range.
+3. **Use the full bullet width**: Do not stop at 40 chars when the range allows 90. Add concrete context — stack / scope / scale / outcome — until each bullet is in the 60-90 char range.
+4. **Language**: {lang_directive}
+5. **Section headers (MUST keep exactly as shown)**: `## 1. 👤 Headline`, `## 2. 👔 Career`, `## 3. 🛠 Strengths`, `## 4. 🎓 Education / Research`, `## 5. ⭐ Assessment`. The emoji and the English label MUST stay exactly. Only the body text is localized.
+6. **Bullet format (strict)**: Every body section except Headline uses bullets in the form `- **Keyword**: description...`. One bullet per line. Do NOT merge bullets into prose.
+7. **Bold keywords**: The `**...**` keyword at the start of each bullet MUST be concrete (skill name / role name / metric label / project name), not a vague adjective. Do NOT bold anything else in the line.
+8. **Fact-based with derivable facts allowed**: Every claim must be grounded in the CV. You MAY compute derivable facts (years of experience from date ranges, number of companies from job history, languages from skills list). You MUST NOT fabricate metrics, achievements, or experiences.
+9. **No Markdown sub-headers**: Do not add `###` sub-headers inside a section. Only the 5 `##` section headers.
+10. **Specificity over vagueness**: Express value through concrete facts, not marketing language.
 """
 
 
@@ -2313,18 +2322,34 @@ def extract_first_name(content: str) -> str:
 def get_adjust_length_prompt(proposal_text: str, target_chars: int, language: str = "ja") -> str:
     """CV提案コメントの文章量を調整するプロンプト生成（5セクション・日英切替・スライド貼付最適化）"""
 
-    if target_chars <= 60:
-        style = "Very concise — keep only the single most impactful fact per section. 1 sentence."
-        headline_range = "30-50"
-    elif target_chars <= 100:
-        style = "Slide-standard — fit cleanly into a slide box. 1-2 sentences per section."
+    if target_chars <= 120:
+        style = "Very concise — keep 2 bullets per body section with only the most impactful fact each."
         headline_range = "40-60"
-    elif target_chars <= 150:
-        style = "Slightly detailed — add brief context to the main facts. 2-3 sentences per section."
+        career_bullets = "2"
+        strengths_bullets = "2"
+        education_bullets = "1-2"
+        assessment_bullets = "2"
+    elif target_chars <= 200:
+        style = "Compact — keep 3 bullets per body section (Education 2)."
         headline_range = "50-70"
+        career_bullets = "3"
+        strengths_bullets = "3"
+        education_bullets = "2"
+        assessment_bullets = "2-3"
+    elif target_chars <= 300:
+        style = "Slide-standard — keep 3-4 bullets per body section with a concrete fact on each."
+        headline_range = "50-80"
+        career_bullets = "3-4"
+        strengths_bullets = "3-4"
+        education_bullets = "2-3"
+        assessment_bullets = "3"
     else:
-        style = "Detailed — expand with context and examples. 2-3 sentences per section."
-        headline_range = "60-100"
+        style = "Detailed — keep 4 bullets per body section (Education 3) and pack each with 2-3 concrete facts."
+        headline_range = "60-80"
+        career_bullets = "4"
+        strengths_bullets = "4"
+        education_bullets = "2-3"
+        assessment_bullets = "3-4"
 
     if language == "ja":
         lang_directive = "Output body text in natural Japanese. Keep section headers in English."
@@ -2341,13 +2366,15 @@ def get_adjust_length_prompt(proposal_text: str, target_chars: int, language: st
 【Instructions】
 - **Target**: Each body section (Career / Strengths / Education / Assessment) should be approximately {target_chars} characters in total (sum of all bullets).
 - **Style**: {style}
+- **Bullet count per section**: Career {career_bullets} / Strengths {strengths_bullets} / Education {education_bullets} / Assessment {assessment_bullets}. Drop empty bullets entirely rather than filling them with "記載なし" / "Not stated".
 - **Headline**: Keep within {headline_range} characters, single line, no bullets.
 - **Section headers (MUST keep exactly)**: `## 1. 👤 Headline`, `## 2. 👔 Career`, `## 3. 🛠 Strengths`, `## 4. 🎓 Education / Research`, `## 5. ⭐ Assessment`. Do not drop the emoji.
-- **Bullet format (MUST preserve)**: Each body section stays as a bullet list in the form `- **Keyword**: description...`. Adjust lengths by rephrasing each bullet, not by merging bullets into prose. Career and Strengths keep 3 bullets; Education and Assessment keep 2-3 bullets.
-- **Bold keywords**: Keep the `**...**` keyword anchor on every bullet. If rephrasing, choose a concrete keyword (skill / role / metric), not a vague adjective.
+- **Bullet format (MUST preserve)**: Each body section stays as a bullet list in the form `- **Keyword**: description...`. Adjust lengths by rephrasing each bullet, not by merging bullets into prose.
+- **Concrete anchor per bullet**: Every bullet MUST contain at least one number, proper noun, or specific technology name.
+- **Bold keywords**: Keep the `**...**` keyword anchor on every bullet. If rephrasing, choose a concrete keyword (skill / role / metric / project), not a vague adjective.
 - Maintain the same language and anonymization level as the original.
 - Prioritize: quantified achievements > rare skills > general descriptions.
 - The result must read naturally — do not sacrifice readability for length.
 - {lang_directive}
-- Do NOT add any new information not present in the original. When expanding, elaborate on existing facts with more context, do not fabricate.
+- Do NOT add any new information not present in the original. When expanding, elaborate on existing facts with more context (team size, duration, scale, tech stack), do not fabricate.
 """

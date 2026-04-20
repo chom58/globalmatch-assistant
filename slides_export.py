@@ -281,14 +281,14 @@ def _draw_cell(slide, x, y, w, h, title: str, body: str) -> None:
         title_tb, title, font_size=13, bold=True, color=TEXT_DARK, align=PP_ALIGN.LEFT
     )
 
-    # 本文（箇条書き + インライン太字）
+    # 本文（箇条書き + インライン太字）。4 bullet まで収めるため 11pt に抑える。
     body_tb = slide.shapes.add_textbox(
         x + Inches(0.2),
-        y + Inches(0.55),
+        y + Inches(0.52),
         w - Inches(0.3),
-        h - Inches(0.65),
+        h - Inches(0.62),
     )
-    _write_body_bullets(body_tb, body, font_size=12, color=TEXT_DARK)
+    _write_body_bullets(body_tb, body, font_size=11, color=TEXT_DARK)
 
 
 _BOLD_SPLIT = re.compile(r"(\*\*[^*]+\*\*)")
@@ -336,7 +336,7 @@ def _write_body_bullets(textbox, body: str, *, font_size: int, color: RGBColor) 
 
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = PP_ALIGN.LEFT
-        p.space_after = Pt(3)
+        p.space_after = Pt(2)
 
         for seg_text, is_bold in _parse_bold_segments(stripped):
             run = p.add_run()
