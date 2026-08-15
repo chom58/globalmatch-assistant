@@ -10,6 +10,9 @@
  *  - 公開求人ボードのポーリング: Workable(AIRoA)・Ashby(ai&)は公開JSON API、
  *    Zookeep(Recursive)は公開採用ページの JSON-LD から全求人リストを毎日取得し、
  *    スナップショット差分で新規/クローズを検知する（メール通知が無いATSをカバー）。
+ *  - JD PDF自動取得（フェーズ2）: ボード経由で検知した新規求人はJD本文を取得してPDF化し、
+ *    共有ドライブの企業フォルダへ保存。Slack通知にDriveリンクを載せる。
+ *    HERPはログイン必須のため自動取得不可（通知に手動取得と明記）。
  *
  * 状態: Google Drive 上の ats_watch_state.json に保存。
  * 設定: スクリプトプロパティ SLACK_WEBHOOK_URL が必須。セットアップ手順は README.md 参照。
@@ -21,7 +24,9 @@ var CONFIG = {
   LOOKBACK: 'newer_than:14d',
   PROP_WEBHOOK: 'SLACK_WEBHOOK_URL',
   PROP_STATE_FILE_ID: 'ATS_WATCH_STATE_FILE_ID',
-  TIMEZONE: 'Asia/Tokyo'
+  TIMEZONE: 'Asia/Tokyo',
+  JD_ROOT_FOLDER_ID: '0ACk_5dIhVkGlUk9PVA', // 共有ドライブ「JD格納」ルート（直下に企業名フォルダ）
+  JD_MAX_ATTEMPTS: 3 // JD取得の失敗リトライ上限（日次実行ごとに1回）
 };
 
 /**
@@ -30,11 +35,11 @@ var CONFIG = {
  * 注意: 公開ボードに載らない非公開求人（エージェント限定案件）は検知できない。
  */
 var BOARDS = [
-  { ats: 'Workable', company: 'AI Robot Association', kind: 'workable',
-    url: 'https://www.workable.com/api/accounts/ai-robot-association?details=false' },
-  { ats: 'Ashby', company: 'ai&', kind: 'ashby',
+  { ats: 'Workable', company: 'AI Robot Association', kind: 'workable', folder: 'AIRoA',
+    url: 'https://www.workable.com/api/accounts/ai-robot-association?details=true' }, // details=true でJD本文込み
+  { ats: 'Ashby', company: 'ai&', kind: 'ashby', folder: 'ai&',
     url: 'https://api.ashbyhq.com/posting-api/job-board/aiand' },
-  { ats: 'Zookeep', company: 'Recursive', kind: 'zookeep',
+  { ats: 'Zookeep', company: 'Recursive', kind: 'zookeep', folder: 'Recursive',
     url: 'https://app.zookeep.com/career/Recursive/' }
 ];
 
@@ -91,16 +96,19 @@ function setupTrigger() {
 function runWatch(isDryRun) {
   try {
     var state = loadState();
-    var events = [];    // {ats, company, type: 'new'|'closed', position}
+    var events = [];    // {ats, company, type: 'new'|'closed', position, jdUrl?}
     var firstRuns = []; // {ats, company, count}
     var warnings = [];  // ボード取得失敗など、人間に見せるべき異常
+    var jdTasks = [];   // ボードで検知した新規求人のJD取得タスク
 
     var herpThreads = processHerp(state, events, firstRuns);
     var workableThreads = processWorkable(state, events, firstRuns);
-    processBoards(state, events, firstRuns, warnings);
+    processBoards(state, events, firstRuns, warnings, jdTasks);
     dedupeEvents(events); // メールとボードの両方で検知された同一求人を1件にまとめる
 
-    var message = buildMessage(events, firstRuns, state, warnings);
+    var recovered = fetchAndSaveJds(jdTasks, state, events, warnings, isDryRun);
+
+    var message = buildMessage(events, firstRuns, state, warnings, recovered);
 
     if (isDryRun) {
       Logger.log(message || '(通知イベントなし)');
@@ -287,21 +295,22 @@ function parseWorkableSubject(subject) {
 // 公開求人ボードのポーリング（Workable / Ashby / Zookeep）
 // ============================================================
 
-function processBoards(state, events, firstRuns, warnings) {
+function processBoards(state, events, firstRuns, warnings, jdTasks) {
   if (!state.boards) state.boards = {};
   BOARDS.forEach(function (board) {
-    var titles;
+    var jobs;
     try {
       var resp = UrlFetchApp.fetch(board.url, {
         muteHttpExceptions: true,
         headers: { 'User-Agent': 'Mozilla/5.0' }
       });
       if (resp.getResponseCode() !== 200) throw new Error('HTTP ' + resp.getResponseCode());
-      titles = parseBoard(board.kind, resp.getContentText());
+      jobs = parseBoard(board.kind, resp.getContentText());
     } catch (e) {
       warnings.push('[' + board.ats + '] ' + board.company + ' のボード取得に失敗: ' + e.message);
       return;
     }
+    var titles = jobs.map(function (j) { return j.title; });
     var key = board.ats + '|' + board.company;
     var entry = state.boards[key];
     if (titles.length === 0 && entry && entry.open.length > 0) {
@@ -317,6 +326,14 @@ function processBoards(state, events, firstRuns, warnings) {
     var diff = computeDiff(entry.open, titles);
     diff.added.forEach(function (pos) {
       events.push({ ats: board.ats, company: board.company, type: 'new', position: pos });
+      var job = null;
+      for (var i = 0; i < jobs.length; i++) {
+        if (jobs[i].title === pos) { job = jobs[i]; break; }
+      }
+      jdTasks.push({
+        ats: board.ats, company: board.company, folder: board.folder, kind: board.kind,
+        title: pos, url: job && job.url || '', descHtml: job && job.descHtml || '', attempts: 0
+      });
     });
     diff.removed.forEach(function (pos) {
       events.push({ ats: board.ats, company: board.company, type: 'closed', position: pos });
@@ -326,15 +343,22 @@ function processBoards(state, events, firstRuns, warnings) {
   });
 }
 
-/** ボードの生レスポンスから求人タイトル一覧を取り出す（純関数） */
+/**
+ * ボードの生レスポンスから求人一覧 {title, url, descHtml} を取り出す（純関数）。
+ * descHtml が空の求人は fetchAndSaveJds が url の詳細ページから本文を取りに行く（Zookeep）。
+ */
 function parseBoard(kind, content) {
   if (kind === 'workable') {
-    return (JSON.parse(content).jobs || []).map(function (j) { return j.title; });
+    return (JSON.parse(content).jobs || []).map(function (j) {
+      return { title: j.title, url: j.url || '', descHtml: j.description || '' };
+    });
   }
   if (kind === 'ashby') {
     return (JSON.parse(content).jobs || [])
       .filter(function (j) { return j.isListed !== false; })
-      .map(function (j) { return j.title; });
+      .map(function (j) {
+        return { title: j.title, url: j.jobUrl || '', descHtml: j.descriptionHtml || '' };
+      });
   }
   if (kind === 'zookeep') {
     return parseZookeepHtml(content);
@@ -342,7 +366,7 @@ function parseBoard(kind, content) {
   throw new Error('未知のボード種別: ' + kind);
 }
 
-/** Zookeep公開採用ページに埋め込まれた schema.org ItemList (JSON-LD) から求人名を抽出（純関数） */
+/** Zookeep公開採用ページに埋め込まれた schema.org ItemList (JSON-LD) から求人一覧を抽出（純関数） */
 function parseZookeepHtml(html) {
   var out = [];
   var re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
@@ -352,7 +376,7 @@ function parseZookeepHtml(html) {
       var data = JSON.parse(m[1]);
       if (data['@type'] === 'ItemList' && data.itemListElement) {
         data.itemListElement.forEach(function (item) {
-          if (item.name) out.push(item.name);
+          if (item.name) out.push({ title: item.name, url: item.url || '', descHtml: '' });
         });
       }
     } catch (e) {
@@ -362,16 +386,207 @@ function parseZookeepHtml(html) {
   return out;
 }
 
+/** Zookeep求人詳細ページの JSON-LD (schema.org JobPosting) からJD本文HTMLを抽出。無ければ null（純関数） */
+function parseZookeepJobPosting(html) {
+  var re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
+  var m;
+  while ((m = re.exec(html)) !== null) {
+    try {
+      var data = JSON.parse(m[1]);
+      if (data['@type'] === 'JobPosting' && data.description) return data.description;
+    } catch (e) {
+      // JSON-LDでないscriptブロックは無視
+    }
+  }
+  return null;
+}
+
+// ============================================================
+// JD PDF自動取得（フェーズ2）
+// ============================================================
+
+/**
+ * 新規検知した求人＋前回失敗して持ち越したタスク（state.jdPending）のJDをPDF化して
+ * 共有ドライブの企業フォルダへ保存する。成功した新規分は events に jdUrl を書き込み、
+ * 持ち越し分の成功は戻り値（recovered）として返して通知の別セクションに載せる。
+ * 失敗はJD取得だけを警告して検知通知自体は止めない（差分イベントは一度しか発火しないため、
+ * リトライキューが無いと取得失敗が恒久的な取り逃がしになる）。
+ */
+function fetchAndSaveJds(newTasks, state, events, warnings, isDryRun) {
+  var pending = state.jdPending || [];
+  var tasks = pending.concat(newTasks);
+  var recovered = []; // {ats, company, title, jdUrl}
+  if (tasks.length === 0) {
+    state.jdPending = [];
+    return recovered;
+  }
+  if (isDryRun) {
+    tasks.forEach(function (t) {
+      Logger.log('[dryRun] JD取得予定: [' + t.ats + '] ' + t.company + ': ' + t.title +
+        ' (url=' + (t.url || 'なし') + ', 本文' + (t.descHtml ? '取得済み' : '未取得') + ')');
+    });
+    return recovered;
+  }
+  var stillPending = [];
+  tasks.forEach(function (task) {
+    var isRetry = pending.indexOf(task) >= 0;
+    try {
+      var jdUrl = saveJdPdf(task, warnings);
+      if (isRetry) {
+        recovered.push({ ats: task.ats, company: task.company, title: task.title, jdUrl: jdUrl });
+      } else {
+        attachJdUrl(events, task, jdUrl);
+      }
+    } catch (e) {
+      task.attempts = (task.attempts || 0) + 1;
+      if (task.attempts >= CONFIG.JD_MAX_ATTEMPTS) {
+        warnings.push('[' + task.ats + '] ' + task.company + ': ' + task.title +
+          ' のJD取得を' + task.attempts + '回失敗したため打ち切りました（手動で取得してください）: ' + e.message);
+      } else {
+        warnings.push('[' + task.ats + '] ' + task.company + ': ' + task.title +
+          ' のJD取得に失敗（明日再試行 ' + task.attempts + '/' + CONFIG.JD_MAX_ATTEMPTS + '）: ' + e.message);
+        stillPending.push(task);
+      }
+    }
+  });
+  state.jdPending = stillPending;
+  return recovered;
+}
+
+/** JD本文を（必要なら詳細ページから取得して）PDF化し企業フォルダに保存、DriveのURLを返す */
+function saveJdPdf(task, warnings) {
+  var descHtml = task.descHtml;
+  if (!descHtml && task.kind === 'zookeep') {
+    if (!task.url) throw new Error('求人詳細ページのURLが不明です');
+    var resp = UrlFetchApp.fetch(task.url, {
+      muteHttpExceptions: true,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (resp.getResponseCode() !== 200) throw new Error('HTTP ' + resp.getResponseCode());
+    descHtml = parseZookeepJobPosting(resp.getContentText());
+  }
+  if (!descHtml) throw new Error('JD本文を取得できませんでした');
+
+  var dateStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+  var html = buildJdHtml(task.company, task.ats, task.title, task.url, descHtml, dateStr);
+  var baseName = sanitizeFileName(task.title);
+  var pdf = Utilities.newBlob(html, 'text/html', baseName + '.html').getAs('application/pdf');
+  var folder = getJdFolder(task.folder, warnings);
+  var name = baseName + '.pdf';
+  if (folder.getFilesByName(name).hasNext()) {
+    // 同名JDが既にある場合は上書きせず取得日時つきで別ファイルにする
+    name = baseName + '_' + Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyyMMdd_HHmmss') + '.pdf';
+  }
+  var file = folder.createFile(pdf.setName(name));
+  return file.getUrl();
+}
+
+/** 共有ドライブルート直下の企業フォルダを取得。無ければ作成して警告に載せる */
+function getJdFolder(folderName, warnings) {
+  var root = DriveApp.getFolderById(CONFIG.JD_ROOT_FOLDER_ID);
+  var it = root.getFoldersByName(folderName);
+  if (it.hasNext()) return it.next();
+  warnings.push('JDフォルダ「' + folderName + '」が見つからなかったため新規作成しました');
+  return root.createFolder(folderName);
+}
+
+/** 保存したPDFのURLを、対応する新規イベントに書き込む */
+function attachJdUrl(events, task, jdUrl) {
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i];
+    if (e.type === 'new' && e.ats === task.ats && e.company === task.company && e.position === task.title) {
+      e.jdUrl = jdUrl;
+      return;
+    }
+  }
+}
+
+/** JD PDFの中身になる完全なHTML文書を組み立てる（純関数・日本語のため charset 必須） */
+function buildJdHtml(company, ats, title, sourceUrl, descHtml, dateStr) {
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+    'body{font-family:"Helvetica Neue",Arial,sans-serif;margin:24px;color:#222;font-size:11px;line-height:1.6;}' +
+    'h1.jd-title{font-size:16px;border-bottom:2px solid #333;padding-bottom:6px;}' +
+    'table.jd-meta{border-collapse:collapse;margin:8px 0 16px;}' +
+    'table.jd-meta td{border:1px solid #ccc;padding:3px 8px;font-size:10px;}' +
+    '</style></head><body>' +
+    '<h1 class="jd-title">' + escapeHtml(title) + '</h1>' +
+    '<table class="jd-meta">' +
+    '<tr><td>企業</td><td>' + escapeHtml(company) + '</td></tr>' +
+    '<tr><td>ATS</td><td>' + escapeHtml(ats) + '</td></tr>' +
+    '<tr><td>取得日</td><td>' + escapeHtml(dateStr) + '（ATS求人ウォッチ自動取得）</td></tr>' +
+    (sourceUrl ? '<tr><td>元URL</td><td>' + escapeHtml(sourceUrl) + '</td></tr>' : '') +
+    '</table>' +
+    descHtml +
+    '</body></html>';
+}
+
+/** HTMLエスケープ（純関数） */
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Driveのファイル名に使えない・紛らわしい文字を置換する（純関数） */
+function sanitizeFileName(title) {
+  return String(title)
+    .replace(/[\/\\:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+/**
+ * 手動実行用: 各ボードの先頭1求人でJD取得→PDF生成を試し、マイドライブ直下に保存してURLをログに出す。
+ * デプロイ後のPDF品質確認用（企業フォルダは汚さない。確認後は手動で削除してよい）。
+ */
+function testJdPdf() {
+  var dateStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+  BOARDS.forEach(function (board) {
+    try {
+      var resp = UrlFetchApp.fetch(board.url, {
+        muteHttpExceptions: true,
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      var jobs = parseBoard(board.kind, resp.getContentText());
+      if (jobs.length === 0) {
+        Logger.log('[' + board.ats + '] 求人0件のためスキップ');
+        return;
+      }
+      var job = jobs[0];
+      var descHtml = job.descHtml;
+      if (!descHtml && job.url) {
+        var r2 = UrlFetchApp.fetch(job.url, {
+          muteHttpExceptions: true,
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        descHtml = parseZookeepJobPosting(r2.getContentText());
+      }
+      if (!descHtml) throw new Error('JD本文を取得できませんでした');
+      var html = buildJdHtml(board.company, board.ats, job.title, job.url, descHtml, dateStr);
+      var pdf = Utilities.newBlob(html, 'text/html', 'test.html').getAs('application/pdf')
+        .setName('[test] ' + sanitizeFileName(job.title) + '.pdf');
+      var file = DriveApp.getRootFolder().createFile(pdf);
+      Logger.log('[' + board.ats + '] ' + job.title + ' → ' + file.getUrl());
+    } catch (e) {
+      Logger.log('[' + board.ats + '] 失敗: ' + e.message);
+    }
+  });
+}
+
 // ============================================================
 // 通知メッセージ
 // ============================================================
 
-function buildMessage(events, firstRuns, state, warnings) {
+function buildMessage(events, firstRuns, state, warnings, recovered) {
   warnings = warnings || [];
+  recovered = recovered || [];
   var newEvents = events.filter(function (e) { return e.type === 'new'; });
   var closedEvents = events.filter(function (e) { return e.type === 'closed'; });
   if (newEvents.length === 0 && closedEvents.length === 0 &&
-      firstRuns.length === 0 && warnings.length === 0) return '';
+      firstRuns.length === 0 && warnings.length === 0 && recovered.length === 0) return '';
 
   var today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
   var lines = ['📋 *ATS求人ウォッチ* (' + today + ')'];
@@ -380,7 +595,17 @@ function buildMessage(events, firstRuns, state, warnings) {
     lines.push('');
     lines.push('🆕 *新規求人 ' + newEvents.length + '件 → Recruitline へ登録*');
     newEvents.forEach(function (e) {
-      lines.push('• [' + e.ats + '] ' + e.company + ': ' + e.position);
+      var line = '• [' + e.ats + '] ' + e.company + ': ' + e.position;
+      if (e.jdUrl) line += ' → <' + e.jdUrl + '|JD PDF>';
+      if (e.ats === 'HERP') line += '（JDはHERPポータルから手動取得）';
+      lines.push(line);
+    });
+  }
+  if (recovered.length > 0) {
+    lines.push('');
+    lines.push('📎 *JD取得リトライ成功*（検知済み求人のPDFを保存しました）');
+    recovered.forEach(function (r) {
+      lines.push('• [' + r.ats + '] ' + r.company + ': ' + r.title + ' → <' + r.jdUrl + '|JD PDF>');
     });
   }
   if (closedEvents.length > 0) {

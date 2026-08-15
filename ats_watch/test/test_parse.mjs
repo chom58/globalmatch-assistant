@@ -7,7 +7,8 @@ import { dirname, join } from 'path';
 const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'ats_watch.gs'), 'utf8');
 (0, eval)(src); // 間接eval: グローバルスコープで評価し関数宣言を globalThis に載せる
 const { parseHerpEmail, parseWorkableSubject, computeDiff, dedupeEvents, normalizePosition,
-  parseBoard, parseZookeepHtml } = globalThis;
+  parseBoard, parseZookeepHtml, parseZookeepJobPosting, buildJdHtml, escapeHtml,
+  sanitizeFileName } = globalThis;
 
 let failed = 0;
 function assertEq(actual, expected, label) {
@@ -163,28 +164,38 @@ assertEq(
 assertEq(parseWorkableSubject('New candidates since July 22, 2026'), null, '日次ダイジェストは null');
 assertEq(parseWorkableSubject('New comment about candidate Sahal Hashim'), null, 'コメント通知は null');
 
-console.log('parseBoard (Workable公開API・実レスポンスのフィールド構成):');
+console.log('parseBoard (Workable公開API・details=true の実レスポンスのフィールド構成):');
 const workableJson = JSON.stringify({
   name: 'AI Robot Association',
   jobs: [
-    { title: 'COM-102 Government Relations/政府渉外', shortcode: 'ABC123', published_on: '2026-07-01' },
+    { title: 'COM-102 Government Relations/政府渉外', shortcode: 'ABC123', published_on: '2026-07-01',
+      url: 'https://apply.workable.com/j/ABC123', description: '<h3>Position Overview</h3><p>...</p>' },
     { title: 'R&D-037 Robotics Engineer (Teleoperation / UMI)', shortcode: 'DEF456', published_on: '2026-08-03' }
   ]
 });
 assertEq(parseBoard('workable', workableJson),
-  ['COM-102 Government Relations/政府渉外', 'R&D-037 Robotics Engineer (Teleoperation / UMI)'],
-  'タイトル一覧を抽出');
+  [
+    { title: 'COM-102 Government Relations/政府渉外', url: 'https://apply.workable.com/j/ABC123',
+      descHtml: '<h3>Position Overview</h3><p>...</p>' },
+    { title: 'R&D-037 Robotics Engineer (Teleoperation / UMI)', url: '', descHtml: '' }
+  ],
+  'タイトル・URL・JD本文を抽出（欠落フィールドは空文字）');
 
 console.log('parseBoard (Ashby公開API):');
 const ashbyJson = JSON.stringify({
   jobs: [
-    { id: '1', title: 'Member of Technical Staff - Inference Serving', isListed: true },
+    { id: '1', title: 'Member of Technical Staff - Inference Serving', isListed: true,
+      jobUrl: 'https://jobs.ashbyhq.com/aiand/1', descriptionHtml: '<h2>About ai&amp;</h2>' },
     { id: '2', title: 'Hidden Role', isListed: false },
     { id: '3', title: 'Member of Technical Staff - Post Training' }
   ]
 });
 assertEq(parseBoard('ashby', ashbyJson),
-  ['Member of Technical Staff - Inference Serving', 'Member of Technical Staff - Post Training'],
+  [
+    { title: 'Member of Technical Staff - Inference Serving',
+      url: 'https://jobs.ashbyhq.com/aiand/1', descHtml: '<h2>About ai&amp;</h2>' },
+    { title: 'Member of Technical Staff - Post Training', url: '', descHtml: '' }
+  ],
   'isListed=false を除外して抽出');
 
 console.log('parseZookeepHtml (実ページのJSON-LD構造):');
@@ -197,9 +208,44 @@ const zookeepHtml = `<html><head>
 ]}</script>
 </head><body>...</body></html>`;
 assertEq(parseZookeepHtml(zookeepHtml),
-  ['Senior Talent Acquisition', 'Engineering Lead', 'Pre-Sales Solutions Architect'],
-  'ItemListから求人名を抽出（Organization等の他のJSON-LDは無視）');
+  [
+    { title: 'Senior Talent Acquisition', url: 'https://app.zookeep.com/career/Recursive/senior-talent-acquisition-10028', descHtml: '' },
+    { title: 'Engineering Lead', url: 'https://app.zookeep.com/career/Recursive/engineering-lead-10064', descHtml: '' },
+    { title: 'Pre-Sales Solutions Architect', url: 'https://app.zookeep.com/career/Recursive/pre-sales-solutions-architect-10061', descHtml: '' }
+  ],
+  'ItemListから求人名とURLを抽出（Organization等の他のJSON-LDは無視）');
 assertEq(parseZookeepHtml('<html><body>no jobs here</body></html>'), [], 'JSON-LDなしは空配列');
+
+console.log('parseZookeepJobPosting (求人詳細ページのJSON-LD・実ページの構造):');
+const zookeepJobHtml = `<html><head>
+<script type="application/ld+json">{"@context": "https://schema.org/", "@type": "Organization", "name": "Recursive"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org/", "@type": "JobPosting", "title": "Senior Talent Acquisition",
+  "description": "<h2>Mission</h2><p><strong>About Recursive</strong></p><p>環境保全と社会的公平...</p>",
+  "url": "https://app.zookeep.com/career/Recursive/senior-talent-acquisition-10028"}</script>
+</head><body>...</body></html>`;
+assertEq(parseZookeepJobPosting(zookeepJobHtml),
+  '<h2>Mission</h2><p><strong>About Recursive</strong></p><p>環境保全と社会的公平...</p>',
+  'JobPostingのdescriptionを抽出');
+assertEq(parseZookeepJobPosting('<html><body>404</body></html>'), null, 'JobPostingなしは null');
+
+console.log('buildJdHtml:');
+const jdHtml = buildJdHtml('Recursive', 'Zookeep', 'AI Engineer <Tokyo>',
+  'https://app.zookeep.com/career/Recursive/ai-engineer-1', '<h2>Mission</h2><p>本文</p>', '2026-08-16');
+assertEq(jdHtml.includes('<meta charset="utf-8">'), true, '日本語のためcharset指定あり');
+assertEq(jdHtml.includes('AI Engineer &lt;Tokyo&gt;'), true, 'タイトルはHTMLエスケープされる');
+assertEq(jdHtml.includes('<h2>Mission</h2><p>本文</p>'), true, 'JD本文HTMLはそのまま埋め込む');
+assertEq(jdHtml.includes('https://app.zookeep.com/career/Recursive/ai-engineer-1'), true, '元URLを明記');
+assertEq(jdHtml.includes('Recursive'), true, '企業名を明記');
+const jdHtmlNoUrl = buildJdHtml('X', 'Ashby', 'T', '', '<p>b</p>', '2026-08-16');
+assertEq(jdHtmlNoUrl.includes('元URL'), false, 'URL不明なら元URL行を出さない');
+
+console.log('sanitizeFileName:');
+assertEq(sanitizeFileName('AI R&D - 07. Research Engineer - Applied / 顧客協業'),
+  'AI R&D - 07. Research Engineer - Applied - 顧客協業', 'スラッシュを置換');
+assertEq(sanitizeFileName('  a  b:c*d  '), 'a b-c-d', '禁止文字の置換と空白の正規化');
+
+console.log('escapeHtml:');
+assertEq(escapeHtml('<a href="x">&'), '&lt;a href=&quot;x&quot;&gt;&amp;', '主要4文字をエスケープ');
 
 console.log('dedupeEvents:');
 const events = [
