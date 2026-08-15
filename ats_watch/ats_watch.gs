@@ -52,6 +52,29 @@ function dryRun() {
   runWatch(true);
 }
 
+/** 手動実行用: 現在監視中の全求人一覧をSlackに送る */
+function sendSnapshot() {
+  var state = loadState();
+  var today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
+  var lines = ['📚 *現在の監視対象求人一覧* (' + today + ')'];
+  Object.keys(state.herp || {}).forEach(function (company) {
+    var entry = state.herp[company];
+    lines.push('');
+    lines.push('*[HERP] ' + company + '* (' + entry.open.length + '求人)');
+    entry.open.forEach(function (t) { lines.push('• ' + t); });
+  });
+  Object.keys(state.boards || {}).forEach(function (key) {
+    var entry = state.boards[key];
+    var parts = key.split('|'); // "ats|company"
+    lines.push('');
+    lines.push('*[' + parts[0] + '] ' + parts[1] + '* (' + entry.open.length + '求人)');
+    entry.open.forEach(function (t) { lines.push('• ' + t); });
+  });
+  lines.push('');
+  lines.push(summaryLine(state));
+  postSlack(lines.join('\n'));
+}
+
 /** 初回セットアップ用: 毎朝8時台の日次トリガーを作成する（多重登録は自動でスキップ） */
 function setupTrigger() {
   var exists = ScriptApp.getProjectTriggers().some(function (t) {
@@ -139,7 +162,7 @@ function processHerp(state, events, firstRuns) {
     if (!entry) {
       var latest = msgs[msgs.length - 1];
       state.herp[company] = { open: latest.snapshot, updatedAt: latest.date.toISOString() };
-      firstRuns.push({ ats: 'HERP', company: company, count: latest.snapshot.length });
+      firstRuns.push({ ats: 'HERP', company: company, count: latest.snapshot.length, titles: latest.snapshot });
       return;
     }
     msgs.forEach(function (p) {
@@ -230,7 +253,7 @@ function processWorkable(state, events, firstRuns) {
   );
   if (!state.workableSeen) state.workableSeen = {};
   var isFirstRun = Object.keys(state.workableSeen).length === 0;
-  var firstRunCount = 0;
+  var firstRunTitles = [];
 
   threads.forEach(function (thread) {
     thread.getMessages().forEach(function (msg) {
@@ -240,15 +263,15 @@ function processWorkable(state, events, firstRuns) {
       if (state.workableSeen[key]) return;
       state.workableSeen[key] = msg.getDate().toISOString();
       if (isFirstRun) {
-        firstRunCount++;
+        firstRunTitles.push(p.title);
       } else {
         events.push({ ats: 'Workable', company: p.company, type: 'new', position: p.title });
       }
     });
   });
 
-  if (isFirstRun && firstRunCount > 0) {
-    firstRuns.push({ ats: 'Workable', company: '(直近14日の打診メール)', count: firstRunCount });
+  if (isFirstRun && firstRunTitles.length > 0) {
+    firstRuns.push({ ats: 'Workable', company: '(直近14日の打診メール)', count: firstRunTitles.length, titles: firstRunTitles });
   }
   return threads;
 }
@@ -288,7 +311,7 @@ function processBoards(state, events, firstRuns, warnings) {
     }
     if (!entry) {
       state.boards[key] = { open: titles, updatedAt: new Date().toISOString() };
-      firstRuns.push({ ats: board.ats, company: board.company, count: titles.length });
+      firstRuns.push({ ats: board.ats, company: board.company, count: titles.length, titles: titles });
       return;
     }
     var diff = computeDiff(entry.open, titles);
@@ -372,6 +395,9 @@ function buildMessage(events, firstRuns, state, warnings) {
     lines.push('📥 *初回スナップショット登録*（差分監視を開始しました）');
     firstRuns.forEach(function (f) {
       lines.push('• [' + f.ats + '] ' + f.company + ': ' + f.count + '求人');
+      (f.titles || []).forEach(function (t) {
+        lines.push('    ◦ ' + t);
+      });
     });
   }
   if (warnings.length > 0) {
