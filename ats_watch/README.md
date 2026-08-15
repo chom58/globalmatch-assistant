@@ -13,10 +13,13 @@ HERP / Workable の通知メールから求人のオープン/クローズを検
 
 | ATS | 検知ソース | カバレッジ |
 |---|---|---|
-| HERP（大半の企業） | `noreply@v1.herp.cloud` の新規/クローズ通知。**毎回オープン求人の全リスト付き**なので、前回スナップショットとの差分で判定（メールを取りこぼしても次のメールで自己修復） | 新規＋クローズ |
-| Workable（AIRoA） | `@jobs.workablemail.com` の「invites you to submit candidates for the ... job」件名 | 新規のみ（クローズ通知が存在しない） |
-| Ashby（ai&） | — 候補者関連の通知しか来ない | 対象外（フェーズ2でポータル巡回） |
-| Zookeep（Recursive） | — 候補者関連の通知しか来ない | 対象外（フェーズ2でポータル巡回） |
+| HERP（大半の企業） | `noreply@v1.herp.cloud` の新規/クローズ通知。**毎回オープン求人の全リスト付き**なので、前回スナップショットとの差分で判定（メールを取りこぼしても次のメールで自己修復）。クローズ時の職種番号リナンバリングは番号除去キーで吸収 | 新規＋クローズ |
+| Workable（AIRoA） | ①打診メール件名 ②公開JSON API（`workable.com/api/accounts/ai-robot-association`）の日次ポーリング。両方で検知した場合は1件に重複排除 | 新規＋クローズ |
+| Ashby（ai&） | 公開JSON API（`api.ashbyhq.com/posting-api/job-board/aiand`）の日次ポーリング | 新規＋クローズ |
+| Zookeep（Recursive） | 公開採用ページ（`app.zookeep.com/career/Recursive/`）埋め込みの JSON-LD (schema.org ItemList) を日次ポーリング | 新規＋クローズ |
+
+ボードポーリングの対象はスクリプト冒頭の `BOARDS` 配列に1行追加すれば増やせる。
+ボード取得失敗・突然の0件化は「⚠️ 取得警告」として Slack に通知し、誤った全件クローズ判定はしない。
 
 処理済みメールには Gmail ラベル `ats-watch-processed` を付与して二重処理を防ぐ。
 状態は Google Drive の `ats_watch_state.json`（マイドライブ直下に自動作成）に保存。
@@ -52,6 +55,6 @@ node test/test_parse.mjs
 
 ## 既知の制約・今後（フェーズ2以降）
 
-- Ashby / Zookeep はメールでは検知不能 → エージェントポータルの定期巡回（ブラウザ自動化）で対応予定
+- 公開ボードに載らない**非公開求人**（エージェント限定案件）は Ashby / Zookeep では検知できない（Workable は打診メール、HERP は通知メールでカバーされる）
 - 検知後の JD PDF 取得 → Drive 保存 → Recruitline 一括アップロードの半自動化はフェーズ2
 - Recruitline への完全自動反映は Foundry Labs への依頼が必要（取り込みAPI or Drive フォルダ監視）

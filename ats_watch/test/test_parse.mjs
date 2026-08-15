@@ -6,7 +6,8 @@ import { dirname, join } from 'path';
 
 const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'ats_watch.gs'), 'utf8');
 (0, eval)(src); // 間接eval: グローバルスコープで評価し関数宣言を globalThis に載せる
-const { parseHerpEmail, parseWorkableSubject, computeDiff, dedupeEvents, normalizePosition } = globalThis;
+const { parseHerpEmail, parseWorkableSubject, computeDiff, dedupeEvents, normalizePosition,
+  parseBoard, parseZookeepHtml } = globalThis;
 
 let failed = 0;
 function assertEq(actual, expected, label) {
@@ -161,6 +162,44 @@ assertEq(
 );
 assertEq(parseWorkableSubject('New candidates since July 22, 2026'), null, '日次ダイジェストは null');
 assertEq(parseWorkableSubject('New comment about candidate Sahal Hashim'), null, 'コメント通知は null');
+
+console.log('parseBoard (Workable公開API・実レスポンスのフィールド構成):');
+const workableJson = JSON.stringify({
+  name: 'AI Robot Association',
+  jobs: [
+    { title: 'COM-102 Government Relations/政府渉外', shortcode: 'ABC123', published_on: '2026-07-01' },
+    { title: 'R&D-037 Robotics Engineer (Teleoperation / UMI)', shortcode: 'DEF456', published_on: '2026-08-03' }
+  ]
+});
+assertEq(parseBoard('workable', workableJson),
+  ['COM-102 Government Relations/政府渉外', 'R&D-037 Robotics Engineer (Teleoperation / UMI)'],
+  'タイトル一覧を抽出');
+
+console.log('parseBoard (Ashby公開API):');
+const ashbyJson = JSON.stringify({
+  jobs: [
+    { id: '1', title: 'Member of Technical Staff - Inference Serving', isListed: true },
+    { id: '2', title: 'Hidden Role', isListed: false },
+    { id: '3', title: 'Member of Technical Staff - Post Training' }
+  ]
+});
+assertEq(parseBoard('ashby', ashbyJson),
+  ['Member of Technical Staff - Inference Serving', 'Member of Technical Staff - Post Training'],
+  'isListed=false を除外して抽出');
+
+console.log('parseZookeepHtml (実ページのJSON-LD構造):');
+const zookeepHtml = `<html><head>
+<script type="application/ld+json">{"@context": "https://schema.org/", "@type": "Organization", "name": "Recursive"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org/", "@type": "ItemList", "itemListElement": [
+  {"@type": "ListItem", "position": 1, "name": "Senior Talent Acquisition", "url": "https://app.zookeep.com/career/Recursive/senior-talent-acquisition-10028"},
+  {"@type": "ListItem", "position": 2, "name": "Engineering Lead", "url": "https://app.zookeep.com/career/Recursive/engineering-lead-10064"},
+  {"@type": "ListItem", "position": 3, "name": "Pre-Sales Solutions Architect", "url": "https://app.zookeep.com/career/Recursive/pre-sales-solutions-architect-10061"}
+]}</script>
+</head><body>...</body></html>`;
+assertEq(parseZookeepHtml(zookeepHtml),
+  ['Senior Talent Acquisition', 'Engineering Lead', 'Pre-Sales Solutions Architect'],
+  'ItemListから求人名を抽出（Organization等の他のJSON-LDは無視）');
+assertEq(parseZookeepHtml('<html><body>no jobs here</body></html>'), [], 'JSON-LDなしは空配列');
 
 console.log('dedupeEvents:');
 const events = [

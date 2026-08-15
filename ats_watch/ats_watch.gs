@@ -7,8 +7,9 @@
  *    毎回「現在推薦を依頼されている職種」の全リストが載っているため、
  *    前回スナップショットとの差分で新規/クローズを確定する（メールを取りこぼしても自己修復する）。
  *  - Workable: 「invites you to submit candidates for the ... job」メールの件名から新規求人を検知。
- *    クローズ通知は存在しないため新規のみ。
- *  - Ashby / Zookeep は求人の増減を示すメールを送ってこないため対象外（README参照）。
+ *  - 公開求人ボードのポーリング: Workable(AIRoA)・Ashby(ai&)は公開JSON API、
+ *    Zookeep(Recursive)は公開採用ページの JSON-LD から全求人リストを毎日取得し、
+ *    スナップショット差分で新規/クローズを検知する（メール通知が無いATSをカバー）。
  *
  * 状態: Google Drive 上の ats_watch_state.json に保存。
  * 設定: スクリプトプロパティ SLACK_WEBHOOK_URL が必須。セットアップ手順は README.md 参照。
@@ -22,6 +23,20 @@ var CONFIG = {
   PROP_STATE_FILE_ID: 'ATS_WATCH_STATE_FILE_ID',
   TIMEZONE: 'Asia/Tokyo'
 };
+
+/**
+ * ポーリング対象の公開求人ボード。追加するときはここに1行足すだけ
+ * （kind は 'workable' | 'ashby' | 'zookeep' のいずれか）。
+ * 注意: 公開ボードに載らない非公開求人（エージェント限定案件）は検知できない。
+ */
+var BOARDS = [
+  { ats: 'Workable', company: 'AI Robot Association', kind: 'workable',
+    url: 'https://www.workable.com/api/accounts/ai-robot-association?details=false' },
+  { ats: 'Ashby', company: 'ai&', kind: 'ashby',
+    url: 'https://api.ashbyhq.com/posting-api/job-board/aiand' },
+  { ats: 'Zookeep', company: 'Recursive', kind: 'zookeep',
+    url: 'https://app.zookeep.com/career/Recursive/' }
+];
 
 // ============================================================
 // エントリポイント
@@ -55,11 +70,14 @@ function runWatch(isDryRun) {
     var state = loadState();
     var events = [];    // {ats, company, type: 'new'|'closed', position}
     var firstRuns = []; // {ats, company, count}
+    var warnings = [];  // ボード取得失敗など、人間に見せるべき異常
 
     var herpThreads = processHerp(state, events, firstRuns);
     var workableThreads = processWorkable(state, events, firstRuns);
+    processBoards(state, events, firstRuns, warnings);
+    dedupeEvents(events); // メールとボードの両方で検知された同一求人を1件にまとめる
 
-    var message = buildMessage(events, firstRuns, state);
+    var message = buildMessage(events, firstRuns, state, warnings);
 
     if (isDryRun) {
       Logger.log(message || '(通知イベントなし)');
@@ -137,7 +155,6 @@ function processHerp(state, events, firstRuns) {
     });
   });
 
-  dedupeEvents(events);
   return threads;
 }
 
@@ -244,13 +261,94 @@ function parseWorkableSubject(subject) {
 }
 
 // ============================================================
+// 公開求人ボードのポーリング（Workable / Ashby / Zookeep）
+// ============================================================
+
+function processBoards(state, events, firstRuns, warnings) {
+  if (!state.boards) state.boards = {};
+  BOARDS.forEach(function (board) {
+    var titles;
+    try {
+      var resp = UrlFetchApp.fetch(board.url, {
+        muteHttpExceptions: true,
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (resp.getResponseCode() !== 200) throw new Error('HTTP ' + resp.getResponseCode());
+      titles = parseBoard(board.kind, resp.getContentText());
+    } catch (e) {
+      warnings.push('[' + board.ats + '] ' + board.company + ' のボード取得に失敗: ' + e.message);
+      return;
+    }
+    var key = board.ats + '|' + board.company;
+    var entry = state.boards[key];
+    if (titles.length === 0 && entry && entry.open.length > 0) {
+      // ページ改修やAPI仕様変更で0件になった可能性が高い。全件クローズと誤検知しないよう保留して警告
+      warnings.push('[' + board.ats + '] ' + board.company + ' のボードが突然0件になりました（要確認・差分判定はスキップ）');
+      return;
+    }
+    if (!entry) {
+      state.boards[key] = { open: titles, updatedAt: new Date().toISOString() };
+      firstRuns.push({ ats: board.ats, company: board.company, count: titles.length });
+      return;
+    }
+    var diff = computeDiff(entry.open, titles);
+    diff.added.forEach(function (pos) {
+      events.push({ ats: board.ats, company: board.company, type: 'new', position: pos });
+    });
+    diff.removed.forEach(function (pos) {
+      events.push({ ats: board.ats, company: board.company, type: 'closed', position: pos });
+    });
+    entry.open = titles;
+    entry.updatedAt = new Date().toISOString();
+  });
+}
+
+/** ボードの生レスポンスから求人タイトル一覧を取り出す（純関数） */
+function parseBoard(kind, content) {
+  if (kind === 'workable') {
+    return (JSON.parse(content).jobs || []).map(function (j) { return j.title; });
+  }
+  if (kind === 'ashby') {
+    return (JSON.parse(content).jobs || [])
+      .filter(function (j) { return j.isListed !== false; })
+      .map(function (j) { return j.title; });
+  }
+  if (kind === 'zookeep') {
+    return parseZookeepHtml(content);
+  }
+  throw new Error('未知のボード種別: ' + kind);
+}
+
+/** Zookeep公開採用ページに埋め込まれた schema.org ItemList (JSON-LD) から求人名を抽出（純関数） */
+function parseZookeepHtml(html) {
+  var out = [];
+  var re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
+  var m;
+  while ((m = re.exec(html)) !== null) {
+    try {
+      var data = JSON.parse(m[1]);
+      if (data['@type'] === 'ItemList' && data.itemListElement) {
+        data.itemListElement.forEach(function (item) {
+          if (item.name) out.push(item.name);
+        });
+      }
+    } catch (e) {
+      // JSON-LDでないscriptブロックは無視
+    }
+  }
+  return out;
+}
+
+// ============================================================
 // 通知メッセージ
 // ============================================================
 
-function buildMessage(events, firstRuns, state) {
+function buildMessage(events, firstRuns, state, warnings) {
+  warnings = warnings || [];
   var newEvents = events.filter(function (e) { return e.type === 'new'; });
   var closedEvents = events.filter(function (e) { return e.type === 'closed'; });
-  if (newEvents.length === 0 && closedEvents.length === 0 && firstRuns.length === 0) return '';
+  if (newEvents.length === 0 && closedEvents.length === 0 &&
+      firstRuns.length === 0 && warnings.length === 0) return '';
 
   var today = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyy-MM-dd');
   var lines = ['📋 *ATS求人ウォッチ* (' + today + ')'];
@@ -276,6 +374,11 @@ function buildMessage(events, firstRuns, state) {
       lines.push('• [' + f.ats + '] ' + f.company + ': ' + f.count + '求人');
     });
   }
+  if (warnings.length > 0) {
+    lines.push('');
+    lines.push('⚠️ *取得警告*');
+    warnings.forEach(function (w) { lines.push('• ' + w); });
+  }
 
   lines.push('');
   lines.push(summaryLine(state));
@@ -291,9 +394,12 @@ function summaryLine(state) {
   var herpOpen = herpCompanies.reduce(function (sum, c) {
     return sum + state.herp[c].open.length;
   }, 0);
-  var workableCount = Object.keys(state.workableSeen || {}).length;
-  return '_監視中: HERP ' + herpCompanies.length + '社 ' + herpOpen + '求人 / Workable 累計 ' +
-    workableCount + '求人（Ashby・Zookeepはメール通知なしのため対象外）_';
+  var boardKeys = Object.keys(state.boards || {});
+  var boardOpen = boardKeys.reduce(function (sum, k) {
+    return sum + state.boards[k].open.length;
+  }, 0);
+  return '_監視中: HERP ' + herpCompanies.length + '社 ' + herpOpen + '求人（メール） / ' +
+    'ボード ' + boardKeys.length + '社 ' + boardOpen + '求人（Workable・Ashby・Zookeep）_';
 }
 
 // ============================================================
