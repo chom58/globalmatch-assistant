@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 
 const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'ats_watch.gs'), 'utf8');
 (0, eval)(src); // 間接eval: グローバルスコープで評価し関数宣言を globalThis に載せる
-const { parseHerpEmail, parseWorkableSubject, computeDiff, dedupeEvents } = globalThis;
+const { parseHerpEmail, parseWorkableSubject, computeDiff, dedupeEvents, normalizePosition } = globalThis;
 
 let failed = 0;
 function assertEq(actual, expected, label) {
@@ -131,6 +131,27 @@ console.log('computeDiff (取りこぼし自己修復):');
 const diff2 = computeDiff(['A', 'B'], ['B', 'C', 'D']);
 assertEq(diff2.added, ['C', 'D'], 'メール取りこぼし分も追加検知');
 assertEq(diff2.removed, ['A'], 'メール取りこぼし分もクローズ検知');
+
+console.log('normalizePosition:');
+assertEq(normalizePosition('Product - 02. Applied AI Engineer - BtoC Product'), 'Product - Applied AI Engineer - BtoC Product', '連番を除去');
+assertEq(normalizePosition('AI R&D - 07. Research Engineer - Applied / 顧客協業'), 'AI R&D - Research Engineer - Applied / 顧客協業', '日本語混じりも除去');
+assertEq(normalizePosition('_Open Position'), '_Open Position', '番号なしは不変');
+assertEq(normalizePosition('DZSA-01-Software Engineer, AI Agent & Search - LegalOn'), 'DZSA-01-Software Engineer, AI Agent & Search - LegalOn', '固定求人コード(LegalOn形式)は不変');
+
+console.log('computeDiff (HERPのリナンバリング耐性・2026-08-16 実障害の再現):');
+// クローズに伴い残存職種の番号が振り直されても、新規/クローズの誤検知ペアを出さない
+const renumPrev = [
+  'Product - 04. Applied AI Engineer - BtoC Product',
+  'Product - 10. Senior Marketing Manager',
+  'Corporate - 03. General Affairs'
+];
+const renumSnap = [
+  'Product - 02. Applied AI Engineer - BtoC Product',
+  'Corporate - 02. General Affairs'
+];
+const renumDiff = computeDiff(renumPrev, renumSnap);
+assertEq(renumDiff.added, [], 'リナンバリングを新規と誤検知しない');
+assertEq(renumDiff.removed, ['Product - 10. Senior Marketing Manager'], '本物のクローズだけ検知');
 
 console.log('parseWorkableSubject:');
 assertEq(

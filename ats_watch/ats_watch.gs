@@ -95,12 +95,12 @@ function processHerp(state, events, firstRuns) {
   );
   if (!state.herp) state.herp = {};
 
-  // 全メッセージをパースして日付昇順に処理（同一企業の複数通知を正しい順で反映する）
+  // 全メッセージをパースして日付昇順に整列（同一企業の複数通知を正しい順で反映する）
   var parsed = [];
   threads.forEach(function (thread) {
     thread.getMessages().forEach(function (msg) {
       var p = parseHerpEmail(msg.getSubject(), msg.getPlainBody());
-      if (p) {
+      if (p && p.snapshot.length > 0) { // スナップショット欠落時は判定不能なのでスキップ
         p.date = msg.getDate();
         parsed.push(p);
       }
@@ -108,24 +108,33 @@ function processHerp(state, events, firstRuns) {
   });
   parsed.sort(function (a, b) { return a.date - b.date; });
 
+  // 企業ごとに処理。未知の企業は最新スナップショットで初期化のみ行い、
+  // 過去メールの履歴をイベントとして再生しない（初回通知が過去の増減で汚れるのを防ぐ）
+  var byCompany = {};
   parsed.forEach(function (p) {
-    if (p.snapshot.length === 0) return; // スナップショット欠落時は判定不能なのでスキップ
-    var entry = state.herp[p.company];
+    (byCompany[p.company] = byCompany[p.company] || []).push(p);
+  });
+
+  Object.keys(byCompany).forEach(function (company) {
+    var msgs = byCompany[company];
+    var entry = state.herp[company];
     if (!entry) {
-      // 初回はスナップショット登録のみ（全件を「新規」として通知しない）
-      state.herp[p.company] = { open: p.snapshot, updatedAt: p.date.toISOString() };
-      firstRuns.push({ ats: 'HERP', company: p.company, count: p.snapshot.length });
+      var latest = msgs[msgs.length - 1];
+      state.herp[company] = { open: latest.snapshot, updatedAt: latest.date.toISOString() };
+      firstRuns.push({ ats: 'HERP', company: company, count: latest.snapshot.length });
       return;
     }
-    var diff = computeDiff(entry.open, p.snapshot);
-    diff.added.forEach(function (pos) {
-      events.push({ ats: 'HERP', company: p.company, type: 'new', position: pos });
+    msgs.forEach(function (p) {
+      var diff = computeDiff(entry.open, p.snapshot);
+      diff.added.forEach(function (pos) {
+        events.push({ ats: 'HERP', company: company, type: 'new', position: pos });
+      });
+      diff.removed.forEach(function (pos) {
+        events.push({ ats: 'HERP', company: company, type: 'closed', position: pos });
+      });
+      entry.open = p.snapshot;
+      entry.updatedAt = p.date.toISOString();
     });
-    diff.removed.forEach(function (pos) {
-      events.push({ ats: 'HERP', company: p.company, type: 'closed', position: pos });
-    });
-    entry.open = p.snapshot;
-    entry.updatedAt = p.date.toISOString();
   });
 
   dedupeEvents(events);
@@ -169,15 +178,27 @@ function extractSection(body, header) {
   return out;
 }
 
-/** 前回オープン一覧と最新スナップショットの差分（純関数） */
+/**
+ * 職種ラベルから連番を除去して比較キーにする（純関数）。
+ * HERP は職種がクローズされると残りの番号を振り直すため
+ * （例: "Product - 04. Applied AI Engineer" → "Product - 02. ..."）、
+ * 番号込みで比較すると同一求人がクローズ＋新規のペアとして誤検知される。
+ * "DZSA-01-..." のような固定の求人コード形式には触れない。
+ * 同名職種が複数枠ある場合はキーが衝突し増減を検知できないが、リナンバリング誤検知の方が実害が大きい。
+ */
+function normalizePosition(label) {
+  return label.replace(/^(.+? - )\d+\.\s*/, '$1');
+}
+
+/** 前回オープン一覧と最新スナップショットの差分（純関数・番号リナンバリング耐性あり） */
 function computeDiff(prevOpen, snapshot) {
-  var prevSet = {};
-  var snapSet = {};
-  prevOpen.forEach(function (p) { prevSet[p] = true; });
-  snapshot.forEach(function (p) { snapSet[p] = true; });
+  var prevKeys = {};
+  var snapKeys = {};
+  prevOpen.forEach(function (p) { prevKeys[normalizePosition(p)] = true; });
+  snapshot.forEach(function (p) { snapKeys[normalizePosition(p)] = true; });
   return {
-    added: snapshot.filter(function (p) { return !prevSet[p]; }),
-    removed: prevOpen.filter(function (p) { return !snapSet[p]; })
+    added: snapshot.filter(function (p) { return !prevKeys[normalizePosition(p)]; }),
+    removed: prevOpen.filter(function (p) { return !snapKeys[normalizePosition(p)]; })
   };
 }
 
