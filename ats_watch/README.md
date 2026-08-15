@@ -1,6 +1,7 @@
 # ATS求人ウォッチ（ats_watch）
 
 HERP / Workable の通知メールから求人のオープン/クローズを検知し、**Recruitline への反映漏れ**を毎朝 Slack に通知する Google Apps Script。
+公開ボード経由で検知した新規求人は **JD本文を自動取得してPDF化し、共有ドライブの企業フォルダへ保存**する（フェーズ2）。
 
 ## なぜ Apps Script か
 
@@ -24,6 +25,22 @@ HERP / Workable の通知メールから求人のオープン/クローズを検
 処理済みメールには Gmail ラベル `ats-watch-processed` を付与して二重処理を防ぐ。
 状態は Google Drive の `ats_watch_state.json`（マイドライブ直下に自動作成）に保存。
 
+## JD PDF自動取得（フェーズ2）
+
+公開ボードで検知した新規求人は、JD本文を取得してPDF化し、共有ドライブ（`0ACk_5dIhVkGlUk9PVA`）直下の企業フォルダへ保存する。Slack の 🆕 行に `→ JD PDF` の Drive リンクが付くので、そこから Recruitline へアップロードできる。
+
+| ボード | JD本文の取得元 |
+|---|---|
+| Workable | 一覧API（`details=true`）の `description` |
+| Ashby | 一覧APIの `descriptionHtml` |
+| Zookeep | 求人詳細ページの JSON-LD (`JobPosting.description`) を追加フェッチ |
+| HERP | **自動取得不可**（エージェントポータルはログイン必須）。通知に「JDはHERPポータルから手動取得」と付記 |
+
+- 保存先の企業フォルダは `BOARDS` 配列の `folder`（`AIRoA` / `ai&` / `Recursive`）。見つからなければ作成して警告
+- 同名PDFが既にあれば上書きせず取得日時サフィックスで別ファイルにする
+- 取得失敗は ⚠️ 警告に出し、`state.jdPending` に退避して翌日以降に再試行（3回で打ち切り）。リトライ成功は 📎 セクションで通知される
+- PDF化は `Utilities.newBlob(html).getAs('application/pdf')`（GAS標準機能・Advanced Service 不要）
+
 ## セットアップ（初回のみ・約5分）
 
 1. https://script.google.com で新規プロジェクト作成（名前: `ATS求人ウォッチ`）
@@ -37,9 +54,16 @@ HERP / Workable の通知メールから求人のオープン/クローズを検
 6. 関数 `checkAtsEmails` を一度手動実行 → Slack に「📥 初回スナップショット登録」が届くことを確認
 7. 関数 `setupTrigger` を実行 → 毎朝8時台の日次トリガーが作成される
 
+## コード更新時の再デプロイ
+
+1. script.google.com のプロジェクト「ATS求人ウォッチ」を開き、`ats_watch.gs` の内容を貼り直して保存（`cat ats_watch.gs | pbcopy` でコピー）
+2. `testJdPdf` を手動実行 → ログのURLからマイドライブに保存された3枚のPDFの見た目を確認（確認後は削除してよい）
+3. `dryRun` を手動実行 → エラーなくログが出ることを確認（共有ドライブ書き込みで再承認を求められたら承認）
+
 ## 通知の読み方
 
-- 🆕 **新規求人** → Recruitline の Jobs 画面に JD をアップロードする
+- 🆕 **新規求人** → 行末の `JD PDF` リンクから Recruitline の Jobs 画面にアップロードする（HERP はリンクなし＝ポータルから手動取得）
+- 📎 **JD取得リトライ成功** → 前日以前に検知済みの求人のPDFが保存できた合図。同様にアップロードする
 - 🔒 **クローズ** → Recruitline で該当求人を CLOSED にする
 - 📥 **初回スナップショット登録** → その企業の差分監視が始まった合図（求人名を全件列挙。差分としては通知しない）
 - 📚 **現在の監視対象一覧が見たいとき** → エディタで `sendSnapshot` を手動実行すると全求人リストがSlackに届く
@@ -54,8 +78,8 @@ HERP / Workable の通知メールから求人のオープン/クローズを検
 node test/test_parse.mjs
 ```
 
-## 既知の制約・今後（フェーズ2以降）
+## 既知の制約・今後（フェーズ3以降）
 
 - 公開ボードに載らない**非公開求人**（エージェント限定案件）は Ashby / Zookeep では検知できない（Workable は打診メール、HERP は通知メールでカバーされる）
-- 検知後の JD PDF 取得 → Drive 保存 → Recruitline 一括アップロードの半自動化はフェーズ2
-- Recruitline への完全自動反映は Foundry Labs への依頼が必要（取り込みAPI or Drive フォルダ監視）
+- HERP の JD はログイン必須のため自動取得できない（手動取得のまま）
+- Recruitline への完全自動反映（フェーズ3）は Foundry Labs への依頼が必要（取り込みAPI or Drive フォルダ監視）
