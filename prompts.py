@@ -2378,3 +2378,74 @@ def get_adjust_length_prompt(proposal_text: str, target_chars: int, language: st
 - {lang_directive}
 - Do NOT add any new information not present in the original. When expanding, elaborate on existing facts with more context (team size, duration, scale, tech stack), do not fabricate.
 """
+
+
+def get_rirekisho_extract_prompt(resume_text: str) -> str:
+    """英語CVから JIS 形式履歴書の各欄に流し込む構造化データを抽出するプロンプト（JSON 出力）。
+
+    CV に根拠のない項目は null にする（プレースホルダで埋めない）。
+    不足項目は missing_fields に列挙し、UI 側で候補者に確認を促す。
+    """
+    return f"""You are an assistant that prepares a Japanese 履歴書 (JIS-style rirekisho) from an English resume/CV.
+Extract the information below and return ONLY a JSON object with exactly these keys.
+
+STRICT RULES
+- Use ONLY facts written in the CV. If a value is not in the CV, set it to null. Never invent, guess, or fill placeholders.
+- Exception: "name_kana" may be a best-effort katakana transliteration of the romanized name (mark it in missing_fields as "name_kana" so a human confirms it).
+- All years are Gregorian (西暦) integers, months are integers 1-12. Unknown month → null.
+- "text" values must be written in Japanese using 履歴書 conventions. Keep proper nouns (company names, university names, product names) in their original Latin spelling; do not translate them.
+- Do NOT include personal opinions or evaluations.
+
+FIELD DEFINITIONS
+- name: full name as written in the CV (Latin letters). null if absent.
+- name_kana: katakana reading of the name, family name and given name separated by a full-width space (e.g. "スミス ジョン"). null if the name is absent.
+- birth_date: "YYYY-MM-DD" or null. Do not derive it from age.
+- gender: null unless explicitly written.
+- postal_code: Japanese postal code "123-4567" or null.
+- address: current address. If it is in Japan and written in Japanese, keep it. If written in English, keep the English text (a human will rewrite it). null if absent.
+- address_kana: null (a human fills it in).
+- phone: phone number as written or null.
+- email: email address or null.
+- education: chronological list (oldest first) of objects {{"year": int|null, "month": int|null, "text": str}}.
+  For each school create up to two rows in 履歴書 style:
+    "<School name> <Faculty/Department> 入学"   (only if the start date is in the CV; if the start date is missing, still add the row with year/month null)
+    "<School name> <Faculty/Department> 卒業"   (or "修了" for a master's/doctorate, "中退" if withdrawn)
+  High school and earlier: include only if written in the CV.
+- work_history: chronological list (oldest first) of objects {{"year","month","text"}} in 履歴書 style:
+    "<Company name> 入社（<job title>）"
+    "一身上の都合により退職"  for each ended job (year/month = end date)
+    For the current job add a final row {{"year": null, "month": null, "text": "現在に至る"}}.
+  Freelance/self-employed: "個人事業主として活動開始（<role>）".
+- qualifications: list of {{"year","month","text"}} for certifications, licenses and language tests, in 履歴書 style, e.g.
+    "日本語能力試験 N2 合格", "AWS Certified Solutions Architect – Associate 取得", "普通自動車第一種運転免許 取得".
+  Only items explicitly in the CV. Unknown date → year/month null.
+- motivation_draft: a 150-250 character Japanese draft for the 「志望の動機、特技、好きな学科、アピールポイントなど」 box, written in polite です・ます form in the first person, summarizing the candidate's expertise and strengths from the CV summary/experience. Do not mention a specific company name. null if the CV has no summary/experience to base it on.
+- wishes: null (a human fills it in).
+- missing_fields: array of strings from this fixed set for every field that is null or needs human confirmation:
+  ["name_kana","birth_date","postal_code","address","address_kana","phone","email","education_dates","motivation"]
+  Add "education_dates" if any education row has a null year or month.
+
+OUTPUT JSON SHAPE
+{{
+  "name": string|null,
+  "name_kana": string|null,
+  "birth_date": string|null,
+  "gender": string|null,
+  "postal_code": string|null,
+  "address": string|null,
+  "address_kana": null,
+  "phone": string|null,
+  "email": string|null,
+  "education": [{{"year": int|null, "month": int|null, "text": string}}],
+  "work_history": [{{"year": int|null, "month": int|null, "text": string}}],
+  "qualifications": [{{"year": int|null, "month": int|null, "text": string}}],
+  "motivation_draft": string|null,
+  "wishes": null,
+  "missing_fields": [string]
+}}
+
+CV TEXT:
+\"\"\"
+{resume_text}
+\"\"\"
+"""
