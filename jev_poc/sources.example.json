@@ -1,0 +1,12 @@
+{
+  "_comment": "sources.local.json にコピーして実際の取引先で埋める（sources.local.json は gitignore 済み）",
+  "company_folders": {
+    "株式会社サンプルテック": ["Sample Tech"],
+    "Example Robotics": ["ExampleRobotics", "ＥxampleRobotics"]
+  },
+  "board_apis": {
+    "Example Robotics": ["Workable", "https://www.workable.com/api/accounts/<account>?details=true"],
+    "株式会社サンプルテック": ["Ashby", "https://api.ashbyhq.com/posting-api/job-board/<board>"]
+  },
+  "title_suffixes": ["example robotics", "sample tech"]
+}
