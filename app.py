@@ -11,7 +11,7 @@ import time
 import re
 import calendar
 import html as html_module
-from datetime import datetime
+from datetime import datetime, date
 import pdfplumber
 import io
 import json
@@ -25,6 +25,14 @@ from urllib.parse import urlparse
 import ipaddress
 from translations import TRANSLATIONS, FEATURE_KEYS
 from slides_export import build_cv_proposal_pptx
+from rirekisho_export import (
+    build_rirekisho_xlsx,
+    convert_xlsx_to_pdf,
+    soffice_available,
+    parse_date as parse_rirekisho_date,
+    MAX_HISTORY_ROWS as RIREKISHO_MAX_HISTORY_ROWS,
+    MAX_QUALIFICATION_ROWS as RIREKISHO_MAX_QUALIFICATION_ROWS,
+)
 
 # Supabase設定（オプション）
 try:
@@ -3502,7 +3510,7 @@ def main():
         st.subheader(t("feature_select"))
 
         _feature_categories = {
-            "resume": ["resume_optimize", "resume_anonymize", "resume_pii"],
+            "resume": ["resume_optimize", "resume_anonymize", "resume_pii", "resume_rirekisho"],
             "jd": ["jd_jp_en", "jd_en_jp", "jd_jp_jp", "jd_en_en", "jd_anonymize", "company_intro"],
             "analysis": ["matching", "cv_extract", "email", "batch"],
         }
@@ -3915,6 +3923,206 @@ def main():
                             st.info("💡 上のURLをコピーしてクライアントに共有してください")
                         else:
                             st.error("❌ 共有リンクの作成に失敗しました")
+
+    elif feature == "resume_rirekisho":
+        st.subheader(t("rirekisho_title"))
+        st.caption(t("rirekisho_desc"))
+
+        # 下書きを作り直すたびに rev を進め、フォーム widget の key を切り替えて初期値を反映する
+        if 'rirekisho_rev' not in st.session_state:
+            st.session_state['rirekisho_rev'] = 0
+
+        # ---- ① 英語CV 入力 → AI 下書き ----
+        st.markdown(t("rirekisho_step1"))
+        rk_tab_text, rk_tab_pdf = st.tabs([t("tab_text_input"), t("tab_pdf")])
+        rk_input = ""
+        with rk_tab_text:
+            rk_input_text = st.text_area(
+                t("paste_resume"),
+                height=220,
+                key="rk_input_text",
+                label_visibility="collapsed",
+            )
+        with rk_tab_pdf:
+            rk_pdf = st.file_uploader(t("upload_pdf"), type=["pdf"], key="rk_pdf")
+            if rk_pdf:
+                with st.spinner(t("reading_pdf")):
+                    rk_extracted, rk_err = extract_text_from_pdf(rk_pdf)
+                if rk_err:
+                    st.error(f"❌ {rk_err}")
+                else:
+                    st.success(t("text_extracted").format(count=f"{len(rk_extracted):,}"))
+                    rk_input = rk_extracted
+                    with st.expander(t("view_extracted")):
+                        st.text(rk_extracted[:2000] + ("..." if len(rk_extracted) > 2000 else ""))
+        if not rk_input:
+            rk_input = rk_input_text
+
+        _show_btn_hint(api_key, bool(rk_input))
+        if st.button(
+            t("rirekisho_draft_btn"),
+            type="primary",
+            use_container_width=True,
+            disabled=not api_key or not rk_input,
+            key="rk_draft_btn",
+        ):
+            is_valid, error_msg = validate_input(rk_input, "resume")
+            if not is_valid:
+                st.warning(f"⚠️ {error_msg}")
+            else:
+                try:
+                    with st.spinner(t("rirekisho_drafting")):
+                        start_time = time.time()
+                        rk_draft = call_groq_api_json(
+                            api_key, get_rirekisho_extract_prompt(rk_input), max_tokens=4096
+                        )
+                    st.session_state['rirekisho_data'] = rk_draft
+                    st.session_state['rirekisho_rev'] += 1
+                    st.session_state.pop('rirekisho_xlsx', None)
+                    st.session_state.pop('rirekisho_pdf', None)
+                    st.success(t("rirekisho_draft_done").format(time=f"{time.time() - start_time:.1f}"))
+                except Exception as e:
+                    st.error(f"❌ {e}")
+
+        st.divider()
+
+        # ---- ② フォーム（抽出結果を初期値に、不足項目を補完） ----
+        rk_draft = st.session_state.get('rirekisho_data')
+        if not isinstance(rk_draft, dict):
+            st.info(t("rirekisho_placeholder"))
+        else:
+            rev = st.session_state['rirekisho_rev']
+
+            _rk_missing = [m for m in (rk_draft.get("missing_fields") or []) if isinstance(m, str)]
+            if _rk_missing:
+                _rk_labels = [t(f"rirekisho_f_{m}") for m in _rk_missing]
+                st.warning(t("rirekisho_missing").format(fields="、".join(_rk_labels)))
+
+            def _rk_str(key: str) -> str:
+                v = rk_draft.get(key)
+                return "" if v is None else str(v)
+
+            def _rk_rows(key: str) -> list[dict]:
+                rows = []
+                for r in rk_draft.get(key) or []:
+                    if isinstance(r, dict):
+                        rows.append({"year": r.get("year"), "month": r.get("month"), "text": r.get("text") or ""})
+                return rows or [{"year": None, "month": None, "text": ""}]
+
+            def _rk_clean_rows(rows) -> list[dict]:
+                """data_editor の戻り値を int/None に正規化（NaN・float 混入対策）"""
+                cleaned = []
+                for r in rows or []:
+                    if not isinstance(r, dict):
+                        continue
+                    out = {}
+                    for k in ("year", "month"):
+                        v = r.get(k)
+                        try:
+                            out[k] = None if v is None or v != v or v == "" else int(float(v))
+                        except (TypeError, ValueError):
+                            out[k] = None
+                    out["text"] = (r.get("text") or "").strip() if isinstance(r.get("text"), str) else ""
+                    if out["text"]:
+                        cleaned.append(out)
+                return cleaned
+
+            st.markdown(t("rirekisho_step2"))
+            rk_c1, rk_c2 = st.columns(2)
+            with rk_c1:
+                rk_name = st.text_input(t("rirekisho_f_name"), value=_rk_str("name"), key=f"rk_name_{rev}")
+                rk_birth = st.text_input(
+                    t("rirekisho_f_birth_date"), value=_rk_str("birth_date"),
+                    placeholder="1990-05-14", key=f"rk_birth_{rev}",
+                )
+                rk_postal = st.text_input(t("rirekisho_f_postal_code"), value=_rk_str("postal_code"), placeholder="150-0001", key=f"rk_postal_{rev}")
+                rk_address = st.text_input(t("rirekisho_f_address"), value=_rk_str("address"), key=f"rk_address_{rev}")
+                rk_phone = st.text_input(t("rirekisho_f_phone"), value=_rk_str("phone"), key=f"rk_phone_{rev}")
+            with rk_c2:
+                rk_name_kana = st.text_input(t("rirekisho_f_name_kana"), value=_rk_str("name_kana"), key=f"rk_kana_{rev}")
+                rk_gender = st.text_input(t("rirekisho_f_gender"), value=_rk_str("gender"), key=f"rk_gender_{rev}")
+                rk_date = st.date_input(t("rirekisho_f_date"), value=date.today(), key=f"rk_date_{rev}")
+                rk_address_kana = st.text_input(t("rirekisho_f_address_kana"), value=_rk_str("address_kana"), key=f"rk_addr_kana_{rev}")
+                rk_email = st.text_input(t("rirekisho_f_email"), value=_rk_str("email"), key=f"rk_email_{rev}")
+
+            _rk_col_cfg = {
+                "year": st.column_config.NumberColumn(t("rirekisho_col_year"), min_value=1900, max_value=2100, step=1, format="%d"),
+                "month": st.column_config.NumberColumn(t("rirekisho_col_month"), min_value=1, max_value=12, step=1, format="%d"),
+                "text": st.column_config.TextColumn(t("rirekisho_col_text"), width="large"),
+            }
+            st.markdown(t("rirekisho_form_edu"))
+            rk_edu = st.data_editor(_rk_rows("education"), column_config=_rk_col_cfg, num_rows="dynamic", use_container_width=True, key=f"rk_edu_{rev}")
+            st.markdown(t("rirekisho_form_work"))
+            rk_work = st.data_editor(_rk_rows("work_history"), column_config=_rk_col_cfg, num_rows="dynamic", use_container_width=True, key=f"rk_work_{rev}")
+            st.markdown(t("rirekisho_form_qual"))
+            rk_qual = st.data_editor(_rk_rows("qualifications"), column_config=_rk_col_cfg, num_rows="dynamic", use_container_width=True, key=f"rk_qual_{rev}")
+
+            rk_motivation = st.text_area(t("rirekisho_f_motivation"), value=_rk_str("motivation_draft"), height=160, key=f"rk_motivation_{rev}")
+            rk_wishes = st.text_area(t("rirekisho_f_wishes"), value=_rk_str("wishes") or "貴社規定に従います。", height=80, key=f"rk_wishes_{rev}")
+            rk_photo = st.file_uploader(t("rirekisho_photo"), type=["jpg", "jpeg", "png"], key=f"rk_photo_{rev}")
+
+            # ---- ③ 生成・ダウンロード ----
+            st.divider()
+            st.markdown(t("rirekisho_step3"))
+            if st.button(t("rirekisho_generate_btn"), type="primary", use_container_width=True, key=f"rk_gen_{rev}"):
+                if rk_birth.strip() and parse_rirekisho_date(rk_birth) is None:
+                    st.warning(t("rirekisho_invalid_date"))
+                rk_data = {
+                    "date": rk_date,
+                    "name": rk_name,
+                    "name_kana": rk_name_kana,
+                    "birth_date": rk_birth,
+                    "gender": rk_gender,
+                    "postal_code": rk_postal,
+                    "address": rk_address,
+                    "address_kana": rk_address_kana,
+                    "phone": rk_phone,
+                    "email": rk_email,
+                    "education": _rk_clean_rows(rk_edu),
+                    "work_history": _rk_clean_rows(rk_work),
+                    "qualifications": _rk_clean_rows(rk_qual),
+                    "motivation": rk_motivation,
+                    "wishes": rk_wishes,
+                }
+                try:
+                    rk_xlsx, rk_info = build_rirekisho_xlsx(rk_data, rk_photo.getvalue() if rk_photo else None)
+                except Exception as e:
+                    st.error(f"❌ {e}")
+                else:
+                    if rk_info["history_overflow"]:
+                        st.warning(t("rirekisho_overflow").format(n=rk_info["history_overflow"], max=RIREKISHO_MAX_HISTORY_ROWS))
+                    if rk_info["qualification_overflow"]:
+                        st.warning(t("rirekisho_qual_overflow").format(n=rk_info["qualification_overflow"], max=RIREKISHO_MAX_QUALIFICATION_ROWS))
+                    _rk_safe = re.sub(r"[^A-Za-z0-9]+", "_", rk_name).strip("_") or "candidate"
+                    st.session_state['rirekisho_xlsx'] = rk_xlsx
+                    st.session_state['rirekisho_fname'] = f"rirekisho_{_rk_safe}_{datetime.now().strftime('%Y%m%d')}"
+                    st.session_state['rirekisho_pdf'] = convert_xlsx_to_pdf(rk_xlsx) if soffice_available() else None
+                    st.success(t("rirekisho_generated"))
+
+            if st.session_state.get('rirekisho_xlsx'):
+                _rk_fname = st.session_state.get('rirekisho_fname', 'rirekisho')
+                rk_dl1, rk_dl2 = st.columns(2)
+                with rk_dl1:
+                    st.download_button(
+                        t("rirekisho_dl_xlsx"),
+                        data=st.session_state['rirekisho_xlsx'],
+                        file_name=f"{_rk_fname}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="rk_dl_xlsx",
+                    )
+                with rk_dl2:
+                    if st.session_state.get('rirekisho_pdf'):
+                        st.download_button(
+                            t("rirekisho_dl_pdf"),
+                            data=st.session_state['rirekisho_pdf'],
+                            file_name=f"{_rk_fname}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="rk_dl_pdf",
+                        )
+                    else:
+                        st.caption(t("rirekisho_pdf_unavailable"))
 
     elif feature == "resume_anonymize":
         st.subheader(t("resume_anon_title"))
