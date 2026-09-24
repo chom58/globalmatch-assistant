@@ -5,3 +5,9 @@
 __pycache__/
 *.py[cod]
 .env
+
+# Jev PoC: CV・JD本文、正解データ、採点結果（個人情報を含むため公開リポに置かない）
+jev_poc/data/
+jev_poc/results/
+jev_poc/cache/
+jev_poc/sources.local.json
