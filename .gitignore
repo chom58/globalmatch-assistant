@@ -11,3 +11,7 @@ jev_poc/data/
 jev_poc/results/
 jev_poc/cache/
 jev_poc/sources.local.json
+
+# 個人情報を含む作業フォルダ（CV・匿名化の入出力）。公開リポのためフォルダごと除外する
+/匿名化/
+/outputs/
