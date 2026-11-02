@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jd_sources  # noqa: E402
+from cv_guard import guard_cv, report_lines  # noqa: E402
 from cv_jd_score import DIMENSIONS, DIM_KEYS, redact_cv, score_pair  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -247,6 +248,8 @@ def main() -> None:
     cv_text = read_text(Path(args.cv))
     if not cv_text.strip():
         raise SystemExit(f"CV のテキストを取得できませんでした: {args.cv}")
+    cv_text, guard_findings = guard_cv(cv_text)
+    print("\n".join(report_lines(guard_findings)), flush=True)
 
     t = time.time()
     jds = load_jds(Path(args.jd_dir), args.include_archived)
