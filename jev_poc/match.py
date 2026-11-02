@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jd_sources  # noqa: E402
-import posting_guard  # noqa: E402
+from cv_guard import guard_cv, report_lines  # noqa: E402
 from cv_jd_score import DIMENSIONS, DIM_KEYS, redact_cv, score_pair  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -56,21 +56,6 @@ def pdf_to_text(path: Path, timeout: int = 60) -> str:
 
 def read_text(path: Path) -> str:
     return pdf_to_text(path) if path.suffix.lower() == ".pdf" else path.read_text()
-
-
-# エンジニアの CV では普通に出てくる語（SSH・curl・.env 等）の検出パターンは CV では使わない
-_CV_NOISY_PATTERNS = {r"\b(curl|wget|ssh|scp)\b", r"\.env\b", r"settings\.json"}
-_CV_PATTERNS = [p for p in posting_guard.INSTRUCTION_PATTERNS if p.pattern not in _CV_NOISY_PATTERNS]
-
-
-def guard_cv(text: str) -> tuple[str, dict]:
-    """CV 本文から不可視文字を除き、AI 向けの隠し指示らしき行を拾う（警告のみで止めない）"""
-    cleaned, findings = posting_guard.guard(text, "text")
-    findings["instruction_like"] = [
-        line for line in findings["instruction_like"] if any(p.search(line) for p in _CV_PATTERNS)
-    ]
-    findings["verdict"] = posting_guard.verdict(findings)
-    return cleaned, findings
 
 
 def _cached_text(path: Path) -> str:
@@ -264,9 +249,7 @@ def main() -> None:
     if not cv_text.strip():
         raise SystemExit(f"CV のテキストを取得できませんでした: {args.cv}")
     cv_text, guard_findings = guard_cv(cv_text)
-    print(f"CV 安全チェック: {guard_findings['verdict']}", flush=True)
-    for line in guard_findings["instruction_like"]:
-        print(f"  ⚠ 指示らしき行: {line}")
+    print("\n".join(report_lines(guard_findings)), flush=True)
 
     t = time.time()
     jds = load_jds(Path(args.jd_dir), args.include_archived)
